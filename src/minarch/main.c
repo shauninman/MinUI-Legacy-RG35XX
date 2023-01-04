@@ -739,7 +739,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		GFX_clearAll();
 	}
 	scale(data,width,height,pitch,screen->pixels);
-	// GFX_flip(screen);
+	GFX_flip(screen);
 }
 
 static void audio_sample_callback(int16_t left, int16_t right) {
@@ -752,7 +752,7 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 static uint32_t buttons = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
-	
+
 	// TODO: support remapping
 	
 	buttons = 0;
@@ -926,10 +926,10 @@ int main(int argc , char* argv[]) {
 		// else if (PAD_justPressed(BTN_R1)) State_write();
 		core.run();
 		
-		unsigned long frame_duration = SDL_GetTicks() - frame_start;
-		#define TARGET_FRAME_DURATION 15
-		if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
-		GFX_flip(screen);
+		// unsigned long frame_duration = SDL_GetTicks() - frame_start;
+		// #define TARGET_FRAME_DURATION 15
+		// if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
+		// GFX_flip(screen);
 	}
 	
 	Game_close();
