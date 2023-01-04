@@ -15,7 +15,6 @@
 
 ///////////////////////////////////////
 
-#include <inttypes.h>
 #include <sys/time.h>
 
 static uint64_t GFX_getTicks(void) {
@@ -76,7 +75,7 @@ int main (int argc, char *argv[]) {
 		uint64_t frame_duration_us = GFX_getTicks() - frame_start_us;
 
 // #define TARGET_FRAME_DURATION 17
-#define TARGET_FRAME_DURATION_US 16667
+#define TARGET_FRAME_DURATION_US 16666
 		// if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
 		if (frame_duration_us<TARGET_FRAME_DURATION_US) usleep(TARGET_FRAME_DURATION_US-frame_duration_us);
 
