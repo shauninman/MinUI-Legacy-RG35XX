@@ -59,6 +59,70 @@ void LOG_note(int level, const char* fmt, ...) {
 
 ///////////////////////////////
 
+#define MAX_PRIVATE_DATA_SIZE 40
+struct owlfb_disp_device{
+    __u32 mType;
+    __u32 mState;
+    __u32 mPluginState;
+    __u32 mWidth;
+    __u32 mHeight;
+    __u32 mRefreshRate;
+    __u32 mWidthScale;
+    __u32 mHeightScale;
+    __u32 mCmdMode;
+    __u32 mIcType;
+    __u32 mPrivateInfo[MAX_PRIVATE_DATA_SIZE];
+};
+
+struct display_private_info
+{
+	int LCD_TYPE; // 1
+	int	LCD_LIGHTENESS; // 128
+	int LCD_SATURATION; // 7
+	int LCD_CONSTRAST;  // 5
+};
+
+enum CmdMode
+{
+    SET_LIGHTENESS = 0,
+    SET_SATURATION = 1,
+    SET_CONSTRAST = 2,
+	SET_DEFAULT = 3,
+
+};
+
+struct owlfb_sync_info {
+	__u8 enabled;
+	__u8 disp_id;
+	__u16 reserved2;
+};
+
+struct owlfb_mem_info {
+	__u32 size;
+	__u8  type;
+	__u8  reserved[3];
+};
+
+#define OWL_IOW(num, dtype)	_IOW('O', num, dtype)
+#define OWLFB_WAITFORVSYNC            OWL_IOW(57,long long)
+#define OWLFB_GET_DISPLAY_INFO		  OWL_IOW(74,struct owlfb_disp_device)
+#define OWLFB_SET_DISPLAY_INFO		  OWL_IOW(75,struct owlfb_disp_device)
+#define OWLFB_VSYNC_EVENT_EN	      OWL_IOW(67, struct owlfb_sync_info)
+
+// not implemented?
+#define OWLFB_SETUP_MEM	              OWL_IOW(55, struct owlfb_mem_info)
+#define OWLFB_QUERY_MEM	              OWL_IOW(56, struct owlfb_mem_info)
+
+///////////////////////////////
+
+#define GFX_BUFFER_COUNT 3
+#define GFX_ENABLE_VSYNC
+// #define GFX_ENABLE_BUFFER
+
+// NOTE: even with a buffer vsync blocks without threading
+
+///////////////////////////////
+
 static struct GFX_Context {
 	int fb;
 	int pitch;
@@ -110,9 +174,15 @@ SDL_Surface* GFX_init(void) {
 	gfx.vinfo.xres = SCREEN_WIDTH;
 	gfx.vinfo.yres = SCREEN_HEIGHT;
 	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
-	gfx.vinfo.yres_virtual = SCREEN_HEIGHT * SCREEN_BUFFER_COUNT;
+	gfx.vinfo.yres_virtual = SCREEN_HEIGHT;
+#ifdef GFX_ENABLE_BUFFER
+	gfx.vinfo.yres_virtual *= GFX_BUFFER_COUNT
+#endif
+#if defined (GFX_ENABLE_BUFFER) && !defined (GFX_ENABLE_VSYNC) 
 	gfx.vinfo.xoffset = 0;
+	gfx.vinfo.yoffset = 0;
     gfx.vinfo.activate = FB_ACTIVATE_VBL;
+#endif
     
 	// gfx.vinfo.pixclock		= 0xb7bb;// 0xc350; // 0xc350=56 0xb7e0=59.94 0xb7bb=60
 	// gfx.vinfo.left_margin	= 0x10;
@@ -122,7 +192,9 @@ SDL_Surface* GFX_init(void) {
 	// gfx.vinfo.hsync_len		= 0x1e;
 	// gfx.vinfo.vsync_len		= 0x02;
 	
-	ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo);
+	if (ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo)) {
+		printf("FBIOPUT_VSCREENINFO failed: %s (%i)\n", strerror(errno),  errno);
+	}
 	
 	// printf("pixclock: 0x%04x\n", gfx.vinfo.pixclock);
 	// printf("left_margin:  0x%02x\n", gfx.vinfo.left_margin);
@@ -144,10 +216,88 @@ SDL_Surface* GFX_init(void) {
 	// printf("vcount: %i\n", vblank.vcount);
 	// printf("hcount: %i\n", vblank.hcount);
 	
+	// struct owlfb_disp_device disp;
+	// // memset(&disp, 0, sizeof(struct owlfb_disp_device));
+	// if (ioctl(gfx.fb, OWLFB_GET_DISPLAY_INFO, &disp)) {
+	// 	printf("OWLFB_GET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
+	// }
+	// puts("OWLFB_GET_DISPLAY_INFO");
+	// printf("mType: %i\n", disp.mType);
+	// printf("mState: %i\n", disp.mState);
+	// printf("mPluginState: %i\n", disp.mPluginState);
+	// printf("mWidth: %i\n", disp.mWidth);
+	// printf("mHeight: %i\n", disp.mHeight);
+	// printf("mRefreshRate: %i\n", disp.mRefreshRate);
+	// printf("mHeightScale: %i\n", disp.mHeightScale);
+	// printf("mCmdMode: %i\n", disp.mCmdMode);
+	// printf("mIcType: %i\n", disp.mIcType);
+	//
+	// struct display_private_info* dinfo = (struct display_private_info*)&disp.mPrivateInfo;
+	// printf("LCD_TYPE: %i\n", dinfo->LCD_TYPE);
+	// printf("LCD_LIGHTENESS: %i\n", dinfo->LCD_LIGHTENESS);
+	// printf("LCD_SATURATION: %i\n", dinfo->LCD_SATURATION);
+	// printf("LCD_CONSTRAST: %i\n", dinfo->LCD_CONSTRAST);
+	// // dinfo->LCD_LIGHTENESS = 255;
+	// // disp.mCmdMode = SET_LIGHTENESS;
+	// // dinfo->LCD_SATURATION = 0;
+	// // disp.mCmdMode = SET_SATURATION;
+	// // dinfo->LCD_CONSTRAST = 256;
+	// // disp.mCmdMode = SET_CONSTRAST; // doesn't seem to do anything?
+	// disp.mCmdMode = SET_DEFAULT;
+	//
+	// if (ioctl(gfx.fb, OWLFB_SET_DISPLAY_INFO, &disp)) {
+	// 	printf("OWLFB_SET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
+	// }
+	//
+	// if (ioctl(gfx.fb, OWLFB_GET_DISPLAY_INFO, &disp)) {
+	// 	printf("OWLFB_GET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
+	// }
+	// puts("OWLFB_GET_DISPLAY_INFO (after SET)");
+	// printf("mType: %i\n", disp.mType);
+	// printf("mState: %i\n", disp.mState);
+	// printf("mPluginState: %i\n", disp.mPluginState);
+	// printf("mWidth: %i\n", disp.mWidth);
+	// printf("mHeight: %i\n", disp.mHeight);
+	// printf("mRefreshRate: %i\n", disp.mRefreshRate);
+	// printf("mHeightScale: %i\n", disp.mHeightScale);
+	// printf("mCmdMode: %i\n", disp.mCmdMode);
+	// printf("mIcType: %i\n", disp.mIcType);
+	//
+	// printf("LCD_TYPE: %i\n", dinfo->LCD_TYPE);
+	// printf("LCD_LIGHTENESS: %i\n", dinfo->LCD_LIGHTENESS);
+	// printf("LCD_SATURATION: %i\n", dinfo->LCD_SATURATION);
+	// printf("LCD_CONSTRAST: %i\n", dinfo->LCD_CONSTRAST);
+	
+#ifdef GFX_ENABLE_VSYNC
+	struct owlfb_sync_info sinfo;
+	sinfo.enabled = 1;
+	if (ioctl(gfx.fb, OWLFB_VSYNC_EVENT_EN, &sinfo)) {
+		printf("OWLFB_VSYNC_EVENT_EN failed: %s (%i)\n", strerror(errno),  errno);
+	}
+#endif
+	
+	// struct owlfb_mem_info minfo;
+	// if (ioctl(gfx.fb, OWLFB_QUERY_MEM, &minfo)) {
+	// 	printf("OWLFB_QUERY_MEM failed: %s (%i)\n", strerror(errno),  errno);
+	// }
+	// puts("OWLFB_QUERY_MEM");
+	// printf("size: %i\n", minfo.size);
+	// printf("type: %i\n", minfo.type);
+		
+	// disp.mRefreshRate = 60;
+	// disp.mWidth = SCREEN_WIDTH;
+	// disp.mHeight = SCREEN_HEIGHT;
+	
 	// buffer tracking
 	gfx.buffer = 0;
 	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
-	
+
+#ifdef GFX_ENABLE_BUFFER
+	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size * GFX_BUFFER_COUNT, gfx.map_size, gfx.map_size>=(gfx.buffer_size * GFX_BUFFER_COUNT)?1:0);
+#else
+	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size, gfx.map_size, gfx.map_size>=gfx.buffer_size?1:0);
+#endif
+		
 	// return screen
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
 	return gfx.screen;
@@ -159,30 +309,31 @@ void GFX_clearAll(void) {
 	memset(gfx.map, 0, gfx.map_size);
 }
 
-// #define OWL_IOW(num, dtype)	_IOW('O', num, dtype)
-// #define OWLFB_WAITFORVSYNC            OWL_IOW(57,long long)
-
 void GFX_flip(SDL_Surface* screen) {
 	// struct fb_vblank vblank;
 	// ioctl(gfx.fb, FBIOGET_VBLANK, &vblank);
 	// printf("flags: %i\n", vblank.flags);
 	// printf("count: %i\n", vblank.count);
 	// printf("vcount: %i\n", vblank.vcount);
-	// printf("hcount: %i\n", vblank.hcount);
-	
+	// printf("hcount: %i\n", vblank.hcount);	
+#ifdef GFX_ENABLE_VSYNC
+	int arg = 1;
+	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg); // TODO: this doesn't wait but it also doesn't error out like FBIO_WAITFORVSYNC...
+#endif
+
+#ifdef GFX_ENABLE_BUFFER	
     // TODO: this would be moved to a thread
 	// I'm not clear on why that would be necessary
 	// if it's non-blocking and the pan will wait
 	// until the next vblank...
 	// what if the scaling was also moved to a thread?
 	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
-	int arg = 0;
-	// ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg); // TODO: this doesn't wait but it also doesn't error out like FBIO_WAITFORVSYNC...
 	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
 	
 	gfx.buffer += 1;
-	if (gfx.buffer>=SCREEN_BUFFER_COUNT) gfx.buffer -= SCREEN_BUFFER_COUNT;
+	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
+#endif
 }
 void GFX_quit(void) {
 	GFX_clearAll();

@@ -48,6 +48,10 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
+// SNES (stretched to 4:3)
+// #define SCREEN_WIDTH 1024
+// #define SCREEN_HEIGHT 896
+
 // GBA 
 // #define SCREEN_WIDTH 960
 // #define SCREEN_HEIGHT 720
@@ -59,7 +63,6 @@
 #define SCREEN_DEPTH 16
 #define SCREEN_BPP 2
 #define SCREEN_PITCH SCREEN_WIDTH * SCREEN_BPP
-#define SCREEN_BUFFER_COUNT 3
 
 #define MAIN_ROW_COUNT 7
 
