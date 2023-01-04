@@ -1,386 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <dlfcn.h>
-#include <libgen.h>
-#include <time.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
 #include <SDL/SDL_ttf.h>
 
-#include <linux/fb.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+#include <libgen.h>
+#include <time.h>
+#include <sys/stat.h>
 #include <errno.h>
 
 #include "libretro.h"
 #include "defines.h"
+#include "utils.h"
+#include "api.h"
 #include "scaler_neon.h"
 
-///////////////////////////////
-
-enum {
-	LOG_DEBUG = 0,
-	LOG_INFO,
-	LOG_WARN,
-	LOG_ERROR,
-};
-#define LOG_debug(fmt, ...) LOG_note(LOG_DEBUG, fmt, ##__VA_ARGS__)
-#define LOG_info(fmt, ...) LOG_note(LOG_INFO, fmt, ##__VA_ARGS__)
-#define LOG_warn(fmt, ...) LOG_note(LOG_WARN, fmt, ##__VA_ARGS__)
-#define LOG_error(fmt, ...) LOG_note(LOG_ERROR, fmt, ##__VA_ARGS__)
-void LOG_note(int level, const char* fmt, ...) {
-	char buf[1024] = {0};
-	va_list args;
-	va_start(args, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-
-	switch(level) {
-#ifdef DEBUG
-	case LOG_DEBUG:
-		printf("DEBUG: %s", buf);
-		break;
-#endif
-	case LOG_INFO:
-		printf("INFO: %s", buf);
-		break;
-	case LOG_WARN:
-		fprintf(stderr, "WARN: %s", buf);
-		break;
-	case LOG_ERROR:
-		fprintf(stderr, "ERROR: %s", buf);
-		break;
-	default:
-		break;
-	}
-	fflush(stdout);
-}
-
-///////////////////////////////
-
-static struct GFX_Context {
-	int fb;
-	int pitch;
-	int buffer;
-	int buffer_size;
-	int map_size;
-	void* map;
-	struct fb_var_screeninfo vinfo;
-	struct fb_fix_screeninfo finfo;
-	
-	SDL_Surface* screen;
-} gfx;
-SDL_Surface* GFX_init(void) {
-	SDL_Init(SDL_INIT_VIDEO);
-	
-	// we're drawing to the (triple-buffered) framebuffer directly
-	// but we still need to set video mode to initialize input events
-	SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, SDL_SWSURFACE);
-	SDL_ShowCursor(0);
-	
-	// open framebuffer
-	gfx.fb = open("/dev/fb0", O_RDWR);
-
-	// configure framebuffer
-	ioctl(gfx.fb, FBIOGET_VSCREENINFO, &gfx.vinfo);
-	gfx.vinfo.bits_per_pixel = SCREEN_DEPTH;
-	gfx.vinfo.xres = SCREEN_WIDTH;
-	gfx.vinfo.yres = SCREEN_HEIGHT;
-	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
-	gfx.vinfo.yres_virtual = SCREEN_HEIGHT * SCREEN_BUFFER_COUNT;
-	gfx.vinfo.xoffset = 0;
-    gfx.vinfo.activate = FB_ACTIVATE_VBL;
-    ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo);
-	
-	// get fixed screen info
-   	ioctl(gfx.fb, FBIOGET_FSCREENINFO, &gfx.finfo);
-	gfx.map_size = gfx.finfo.smem_len;
-	gfx.map = mmap(0, gfx.map_size, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb, 0);
-	
-	// buffer tracking
-	gfx.buffer = 0;
-	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
-	
-	// return screen
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
-	return gfx.screen;
-}
-void GFX_clear(SDL_Surface* screen) {
-	memset(screen->pixels, 0, gfx.buffer_size);
-}
-void GFX_clearAll(void) {
-	memset(gfx.map, 0, gfx.map_size);
-}
-void GFX_flip(SDL_Surface* screen) {
-    // TODO: this would be moved to a thread
-	// I'm not clear on why that would be necessary
-	// if it's non-blocking and the pan will wait
-	// until the next vblank...
-	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
-	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
-	
-	gfx.buffer += 1;
-	if (gfx.buffer>=SCREEN_BUFFER_COUNT) gfx.buffer -= SCREEN_BUFFER_COUNT;
-	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);	
-}
-void GFX_quit(void) {
-	GFX_clearAll();
-	munmap(gfx.map, gfx.map_size);
-	close(gfx.fb);
-	SDL_Quit();
-}
-
-///////////////////////////////
-
-// based on picoarch's audio 
-// implementation, rewritten 
-// to understand it better
-
-#define MAX_SAMPLE_RATE 48000
-#define BATCH_SIZE 100
-
-typedef struct SND_Frame {
-	int16_t left;
-	int16_t right;
-} SND_Frame;
-typedef int (*SND_Resampler)(const SND_Frame frame);
-static struct SND_Context {
-	double frame_rate;
-	
-	int sample_rate_in;
-	int sample_rate_out;
-	
-	int buffer_seconds;     // current_audio_buffer_size
-	SND_Frame* buffer;	// buf
-	size_t frame_count; 	// buf_len
-	
-	int frame_in;     // buf_w
-	int frame_out;    // buf_r
-	int frame_filled; // max_buf_w
-	
-	SND_Resampler resample;
-} snd;
-void SND_audioCallback(void* userdata, uint8_t* stream, int len) { // plat_sound_callback
-	if (snd.frame_count==0) return;
-	
-	int16_t *out = (int16_t *)stream;
-	len /= (sizeof(int16_t) * 2);
-	
-	while (snd.frame_out!=snd.frame_in && len>0) {
-		*out++ = snd.buffer[snd.frame_out].left;
-		*out++ = snd.buffer[snd.frame_out].right;
-		
-		snd.frame_filled = snd.frame_out;
-		
-		snd.frame_out += 1;
-		len -= 1;
-		
-		if (snd.frame_out>=snd.frame_count) snd.frame_out = 0;
-	}
-	
-	while (len>0) {
-		*out++ = 0;
-		*out++ = 0;
-		len -= 1;
-	}
-}
-void SND_resizeBuffer(void) { // plat_sound_resize_buffer
-	snd.frame_count = snd.buffer_seconds * snd.sample_rate_in / snd.frame_rate;
-	if (snd.frame_count==0) return;
-	
-	SDL_LockAudio();
-	
-	int buffer_bytes = snd.frame_count * sizeof(SND_Frame);
-	snd.buffer = realloc(snd.buffer, buffer_bytes);
-	
-	memset(snd.buffer, 0, buffer_bytes);
-	
-	snd.frame_in = 0;
-	snd.frame_out = 0;
-	snd.frame_filled = snd.frame_count - 1;
-	
-	SDL_UnlockAudio();
-}
-int SND_resampleNone(SND_Frame frame) { // audio_resample_passthrough
-	snd.buffer[snd.frame_in++] = frame;
-	if (snd.frame_in >= snd.frame_count) snd.frame_in = 0;
-	return 1;
-}
-int SND_resampleNear(SND_Frame frame) { // audio_resample_nearest
-	static int diff = 0;
-	int consumed = 0;
-
-	if (diff < snd.sample_rate_out) {
-		snd.buffer[snd.frame_in++] = frame;
-		if (snd.frame_in >= snd.frame_count) snd.frame_in = 0;
-		diff += snd.sample_rate_in;
-	}
-
-	if (diff >= snd.sample_rate_out) {
-		consumed++;
-		diff -= snd.sample_rate_out;
-	}
-
-	return consumed;
-}
-void SND_selectResampler(void) { // plat_sound_select_resampler
-	if (snd.sample_rate_in==snd.sample_rate_out) {
-		snd.resample =  SND_resampleNone;
-	}
-	else {
-		snd.resample = SND_resampleNear;
-	}
-}
-size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_sound_write / plat_sound_write_resample
-	if (snd.frame_count==0) return 0;
-
-	SDL_LockAudio();
-
-	int consumed = 0;
-	while (frame_count > 0) {
-		int tries = 0;
-		int amount = MIN(BATCH_SIZE, frame_count);
-
-		while (tries < 10 && snd.frame_in==snd.frame_filled) {
-			tries++;
-			SDL_UnlockAudio();
-			SDL_Delay(1);
-			SDL_LockAudio();
-		}
-
-		while (amount && snd.frame_in != snd.frame_filled) {
-			consumed = snd.resample(*frames);
-			frames += consumed;
-			amount -= consumed;
-			frame_count -= consumed;
-		}
-	}
-	SDL_UnlockAudio();
-	
-	return consumed;
-}
-
-void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
-	SDL_InitSubSystem(SDL_INIT_AUDIO);
-	
-	snd.frame_rate = frame_rate;
-
-	SDL_AudioSpec spec_in;
-	SDL_AudioSpec spec_out;
-	
-	spec_in.freq = MIN(sample_rate, MAX_SAMPLE_RATE); // TODO: always MAX_SAMPLE_RATE on Miyoo Mini? use #ifdef PLATFORM_MIYOOMINI?
-	spec_in.format = AUDIO_S16;
-	spec_in.channels = 2;
-	spec_in.samples = 512;
-	spec_in.callback = SND_audioCallback;
-	
-	SDL_OpenAudio(&spec_in, &spec_out);
-	
-	snd.buffer_seconds = 5;
-	snd.sample_rate_in  = sample_rate;
-	snd.sample_rate_out = spec_out.freq;
-	
-	SND_selectResampler();
-	SND_resizeBuffer();
-	
-	SDL_PauseAudio(0);
-}
-void SND_quit(void) { // plat_sound_finish
-	SDL_PauseAudio(1);
-	SDL_CloseAudio();
-	
-	if (snd.buffer) {
-		free(snd.buffer);
-		snd.buffer = NULL;
-	}
-}
-
-///////////////////////////////
-
-enum {
-	BTN_NONE	= 0,
-	BTN_UP 		= 1 << 0,
-	BTN_DOWN	= 1 << 1,
-	BTN_LEFT	= 1 << 2,
-	BTN_RIGHT	= 1 << 3,
-	BTN_A		= 1 << 4,
-	BTN_B		= 1 << 5,
-	BTN_X		= 1 << 6,
-	BTN_Y		= 1 << 7,
-	BTN_START	= 1 << 8,
-	BTN_SELECT	= 1 << 9,
-	BTN_L1		= 1 << 10,
-	BTN_R1		= 1 << 11,
-	BTN_L2		= 1 << 12,
-	BTN_R2		= 1 << 13,
-	BTN_MENU	= 1 << 14,
-	BTN_VOL_UP	= 1 << 15,
-	BTN_VOL_DN	= 1 << 16,
-	BTN_POWER	= 1 << 17,
-};
-static struct PAD_Context {
-	int is_pressed;
-	int just_pressed;
-	int just_released;
-} pad;
-void PAD_poll(void) {
-	// reset transient state
-	pad.just_pressed = 0;
-	pad.just_released = 0;
-	
-	// the actual poll
-	SDL_Event event;
-	while (SDL_PollEvent(&event)) {
-		int btn = BTN_NONE;
-		if (event.type==SDL_KEYDOWN || event.type==SDL_KEYUP) {
-			uint8_t code = event.key.keysym.scancode;
-				 if (code==CODE_UP) 	btn = BTN_UP;
- 			else if (code==CODE_DOWN)	btn = BTN_DOWN;
-			else if (code==CODE_LEFT)	btn = BTN_LEFT;
-			else if (code==CODE_RIGHT)	btn = BTN_RIGHT;
-			else if (code==CODE_A)		btn = BTN_A;
-			else if (code==CODE_B)		btn = BTN_B;
-			else if (code==CODE_X)		btn = BTN_X;
-			else if (code==CODE_Y)		btn = BTN_Y;
-			else if (code==CODE_START)	btn = BTN_START;
-			else if (code==CODE_SELECT)	btn = BTN_SELECT;
-			else if (code==CODE_MENU)	btn = BTN_MENU;
-			else if (code==CODE_L1)		btn = BTN_L1;
-			else if (code==CODE_L2)		btn = BTN_L2;
-			else if (code==CODE_R1)		btn = BTN_R1;
-			else if (code==CODE_R2)		btn = BTN_R2;
-			else if (code==CODE_VOL_UP)	btn = BTN_VOL_UP;
-			else if (code==CODE_VOL_DN)	btn = BTN_VOL_DN;
-			else if (code==CODE_POWER)	btn = BTN_POWER;
-		}
-		
-		if (btn==BTN_NONE) continue;
-		
-		if (event.type==SDL_KEYUP) {
-			pad.is_pressed &= ~btn; // unset
-			pad.just_released |= btn; // set
-		}
-		else if ((pad.is_pressed & btn)==BTN_NONE) {
-			pad.just_pressed |= btn; // set
-			pad.is_pressed 	 |= btn; // set
-		}
-	}
-}
-
-// TODO: switch to macros? not if I want to move it to a separate file
-int PAD_anyPressed(void)		{ return pad.is_pressed!=BTN_NONE; }
-int PAD_justPressed(int btn)	{ return pad.just_pressed & btn; }
-int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
-int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
-
-// #define PAD_anyPressed() (pad.is_pressed!=BTN_NONE)
-// #define PAD_justPressed(btn) (pad.just_pressed & (btn))
-// #define PAD_isPressed(btn) (pad.is_pressed & (btn))
-// #define PAD_justReleased(btn) (pad.just_released & (btn))
+static SDL_Surface* screen;
 
 ///////////////////////////////////////
 
@@ -460,6 +99,7 @@ static void SRAM_read(void) {
 	
 	char filename[MAX_PATH];
 	SRAM_getPath(filename);
+	printf("sav path (read): %s\n", filename);
 	
 	FILE *sram_file = fopen(filename, "r");
 	if (!sram_file) return;
@@ -478,6 +118,7 @@ static void SRAM_write(void) {
 	
 	char filename[MAX_PATH];
 	SRAM_getPath(filename);
+	printf("sav path (write): %s\n", filename);
 		
 	FILE *sram_file = fopen(filename, "w");
 	if (!sram_file) {
@@ -615,6 +256,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			// TODO: core.tag isn't available at this point
 			// TODO: it only becomes available after we open the game...
 			sprintf(sys_dir, SDCARD_PATH "/.userdata/%s/%s-%s", PLATFORM, core.tag, core.name);
+			puts(sys_dir); fflush(stdout);
 			*out = sys_dir;
 		break;
 	}
@@ -752,9 +394,13 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			for (int i=0; vars[i].key; i++) {
 				const struct retro_core_option_definition *var = &vars[i];
 				// printf("set key: %s to value: %s (%s)\n", var->key, var->default_value, var->desc);
-				printf("set core (intl) key: %s to value: %s\n", var->key, var->default_value);
+				char *default_value = (char*)var->default_value;
+				if (!strcmp("gpsp_save_method", var->key)) {
+					default_value = "libretro"; // TODO: tmp, patch or override gpsp
+				}
+				printf("set core (intl) key: %s to value: %s\n", var->key, default_value);
 				strcpy(tmp_options[i].key, var->key);
-				strcpy(tmp_options[i].value, var->default_value);
+				strcpy(tmp_options[i].value, default_value);
 			}
 		}
 		break;
@@ -1019,6 +665,9 @@ static void scale(const void* src, int width, int height, int pitch, void* dst) 
 		
 	dst += (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
 	
+	// TODO: trying to identify source of the framepacing issue
+	// scale1x(width,height,pitch,src,dst); 
+
 	switch (scale) {
 		case 4: scale4x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
 		case 3: scale3x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
@@ -1032,6 +681,52 @@ static void scale(const void* src, int width, int height, int pitch, void* dst) 
 		// case 2: scale2x(width,height,pitch,src,dst); break;
 		// default: scale1x(width,height,pitch,src,dst); break;
 	}
+	
+	// TODO: diagnosing framepacing issues
+	if (1) {
+		static int frame = 0;
+		int w = 8;
+		int h = 16;
+		int fps = 60;
+		int x = frame * w;
+
+		dst -= (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
+		
+		dst += (SCREEN_WIDTH - (w * fps)) / 2 * SCREEN_BPP;
+
+		void* _dst = dst;
+		memset(_dst, 0, (h * SCREEN_PITCH));
+		for (int y=0; y<h; y++) {
+			memset(_dst-SCREEN_BPP, 0xff, SCREEN_BPP);
+			memset(_dst+(w * fps * SCREEN_BPP), 0xff, SCREEN_BPP);
+			_dst += SCREEN_PITCH;
+		}
+
+		dst += (x * SCREEN_BPP);
+
+		for (int y=0; y<h; y++) {
+			memset(dst, 0xff, w * SCREEN_BPP);
+			dst += SCREEN_PITCH;
+		}
+
+		frame += 1;
+		if (frame>=fps) frame -= fps;
+	}
+	
+	if (0) {
+		// measure framerate
+		static int start = -1;
+		static int ticks = 0;
+		ticks += 1;
+		int now = SDL_GetTicks();
+		if (start==-1) start = now;
+		if (now-start>=1000) {
+			start = now;
+			printf("fps: %i\n", ticks);
+			fflush(stdout);
+			ticks = 0;
+		}
+	}
 }
 
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
@@ -1043,8 +738,8 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		last_height = height;
 		GFX_clearAll();
 	}
-	scale(data,width,height,pitch,gfx.screen->pixels);
-	GFX_flip(gfx.screen);
+	scale(data,width,height,pitch,screen->pixels);
+	// GFX_flip(screen);
 }
 
 static void audio_sample_callback(int16_t left, int16_t right) {
@@ -1198,53 +893,19 @@ void Core_close(void) {
 }
 
 int main(int argc , char* argv[]) {
-	// system("touch /tmp/wait");
-
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/gambatte_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Game Boy Color (GBC)/Legend of Zelda, The - Link's Awakening DX (USA, Europe) (Rev 2) (SGB Enhanced) (GB Compatible).gbc";
-	// char* rom_path = "/mnt/sdcard/Roms/Game Boy Color (GBC)/Dragon Warrior I & II (USA) (SGB Enhanced).gbc";
-	// char* tag_name = "GBC";
-	// char* rom_path = "/mnt/sdcard/Roms/Game Boy (GB)/Super Mario Land (World) (Rev A).gb";
-	// char* rom_path = "/mnt/sdcard/Roms/Game Boy (GB)/Dr. Mario (World).gb";
-	// char* tag_name = "GB";
+	char core_path[MAX_PATH];
+	char rom_path[MAX_PATH]; 
+	char tag_name[MAX_PATH];
 	
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/gpsp_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Game Boy Advance (GBA)/Metroid Zero Mission.gba";
-	// char* tag_name = "GBA";
-	
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/fceumm_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Nintendo (FC)/Castlevania 3 - Dracula's Curse (U).nes";
-	// char* rom_path = "/mnt/sdcard/Roms/Nintendo (FC)/Mega Man 2 (U).nes";
-	// char* tag_name = "FC";
-	
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/picodrive_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Genesis (MD)/Sonic The Hedgehog (USA, Europe).md";
-	// char* tag_name = "MD";
-	
-	char* core_path = "/mnt/sdcard/.system/rg35xx/cores/snes9x2005_plus_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Super Nintendo (SFC)/Super Mario World (USA).sfc";
-	// char* rom_path = "/mnt/sdcard/Roms/Super Nintendo (SFC)/Super Mario World 2 - Yoshi's Island (USA, Asia) (Rev 1).sfc";
-	char* rom_path = "/mnt/sdcard/Roms/Super Nintendo (SFC)/Final Fantasy III (USA) (Rev 1).sfc";
-	char* tag_name = "SFC";
-
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/pcsx_rearmed_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/PlayStation (PS)/Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue";
-	// char* rom_path = "/mnt/sdcard/Roms/PlayStation (PS)/Final Fantasy VII (USA)/Final Fantasy VII (USA).m3u";
-	// char* tag_name = "PS";
-	
-	// char* core_path = "/mnt/sdcard/.system/rg35xx/cores/pokemini_libretro.so";
-	// char* rom_path = "/mnt/sdcard/Roms/Pokémon mini (PKM)/Pokemon Tetris (Europe) (En,Ja,Fr).min";
-	// char* tag_name = "PKM";
-	
-	// char core_path[MAX_PATH]; strcpy(core_path, argv[1]);
-	// char rom_path[MAX_PATH]; strcpy(rom_path, argv[2]);
-	// char tag_name[MAX_PATH]; strcpy(tag_name, argv[3]);
+	strcpy(core_path, argv[1]);
+	strcpy(rom_path, argv[2]);
+	getEmuName(rom_path, tag_name);
 	
 	LOG_info("core_path: %s\n", core_path);
 	LOG_info("rom_path: %s\n", rom_path);
 	LOG_info("tag_name: %s\n", tag_name);
 	
-	SDL_Surface* screen = GFX_init();
+	screen = GFX_init();
 	Core_open(core_path, tag_name); 		LOG_info("after Core_open\n");
 	Core_init(); 							LOG_info("after Core_init\n");
 	Game_open(rom_path); 					LOG_info("after Game_open\n");
@@ -1252,16 +913,23 @@ int main(int argc , char* argv[]) {
 	SND_init(core.sample_rate, core.fps);	LOG_info("after SND_init\n");
 	State_read();							LOG_info("after State_read\n");
 	
-	while (1) {		
+	int start = SDL_GetTicks();
+	while (1) {
+		unsigned long frame_start = SDL_GetTicks();
+		
 		if (PAD_justPressed(BTN_POWER)) {
-			system("rm /tmp/minui_exec");
+			// system("rm /tmp/minui_exec");
 			break;
 		}
-		
 		// still not working
 		// if (PAD_justPressed(BTN_L1)) State_read();
 		// else if (PAD_justPressed(BTN_R1)) State_write();
 		core.run();
+		
+		unsigned long frame_duration = SDL_GetTicks() - frame_start;
+		#define TARGET_FRAME_DURATION 15
+		if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
+		GFX_flip(screen);
 	}
 	
 	Game_close();
