@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
@@ -125,6 +126,46 @@ static struct GFX_Context {
 	
 	SDL_Surface* screen;
 } gfx;
+
+///////////////////////////////
+// based on eggs Miyoo Mini GFX lib
+// (any bad decisions are mine)
+
+
+static pthread_t		flip_pt;
+static pthread_mutex_t	flip_mx;
+static pthread_cond_t	flip_req;
+static pthread_cond_t	flip_start;
+static volatile uint32_t now_flipping;
+
+static void* flip_thread(void* param) {
+	int arg = 0;
+	int y_offset = 0;
+	pthread_mutex_lock(&flip_mx);
+	while (1) {
+		while (!now_flipping) {
+			puts("waiting for flip request...");
+			pthread_cond_wait(&flip_req, &flip_mx);
+		}
+		do {
+			y_offset = gfx.vinfo.yoffset + SCREEN_HEIGHT;
+			if (y_offset==GFX_BUFFER_COUNT*SCREEN_HEIGHT) y_offset = 0;
+			gfx.vinfo.yoffset = y_offset;
+			
+			printf("perform flip: %i (%i)\n", y_offset / SCREEN_HEIGHT, now_flipping);
+			
+			pthread_cond_signal(&flip_start);
+			pthread_mutex_unlock(&flip_mx);
+			ioctl(gfx.fb, FBIO_WAITFORVSYNC, &arg); // TODO: disable this when fast forwarding?
+			ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
+			pthread_mutex_lock(&flip_mx);
+		} while (--now_flipping);
+	}
+	return NULL;
+}
+
+///////////////////////////////
+
 SDL_Surface* GFX_init(void) {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
@@ -198,6 +239,7 @@ SDL_Surface* GFX_init(void) {
    	ioctl(gfx.fb, FBIOGET_FSCREENINFO, &gfx.finfo);
 	gfx.map_size = gfx.finfo.smem_len;
 	gfx.map = mmap(0, gfx.map_size, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb, 0);
+	memset(gfx.map, 0, gfx.map_size);
 	
 	// struct fb_vblank vblank;
 	// ioctl(gfx.fb, FBIOGET_VBLANK, &vblank);
@@ -279,17 +321,23 @@ SDL_Surface* GFX_init(void) {
 	// disp.mHeight = SCREEN_HEIGHT;
 	
 	// buffer tracking
-	gfx.buffer = 0;
+	gfx.buffer = 1;
 	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
 
-#ifdef GFX_ENABLE_BUFFER
-	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size * GFX_BUFFER_COUNT, gfx.map_size, gfx.map_size>=(gfx.buffer_size * GFX_BUFFER_COUNT)?1:0);
-#else
-	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size, gfx.map_size, gfx.map_size>=gfx.buffer_size?1:0);
-#endif
+// #ifdef GFX_ENABLE_BUFFER
+// 	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size * GFX_BUFFER_COUNT, gfx.map_size, gfx.map_size>=(gfx.buffer_size * GFX_BUFFER_COUNT)?1:0);
+// #else
+// 	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size, gfx.map_size, gfx.map_size>=gfx.buffer_size?1:0);
+// #endif
+	
+	flip_mx = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+	flip_req = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+	flip_start = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+	now_flipping = 0;
+	// pthread_create(&flip_pt, NULL, flip_thread, NULL);
 		
 	// return screen
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map + gfx.buffer_size, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
 	return gfx.screen;
 }
 void GFX_clear(SDL_Surface* screen) {
@@ -300,18 +348,40 @@ void GFX_clearAll(void) {
 }
 
 void GFX_flip(SDL_Surface* screen) {
+	// pthread_mutex_lock(&flip_mx);
+	// while (now_flipping==2) {
+	// 	puts("waiting for flip to complete...");
+	// 	pthread_cond_wait(&flip_start, &flip_mx);
+	// }
+	//
+	// gfx.buffer += 1;
+	// if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
+	// screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
+	//
+	// printf("request flip: %i (%i)\n", gfx.buffer, now_flipping);
+	//
+	// if (!now_flipping) {
+	// 	now_flipping = 1;
+	// 	pthread_cond_signal(&flip_req);
+	// 	pthread_cond_wait(&flip_start, &flip_mx);
+	// } else {
+	// 	now_flipping = 2;
+	// }
+	//
+	// pthread_mutex_unlock(&flip_mx);
+	
 	// struct fb_vblank vblank;
 	// ioctl(gfx.fb, FBIOGET_VBLANK, &vblank);
 	// printf("flags: %i\n", vblank.flags);
 	// printf("count: %i\n", vblank.count);
 	// printf("vcount: %i\n", vblank.vcount);
-	// printf("hcount: %i\n", vblank.hcount);	
+	// printf("hcount: %i\n", vblank.hcount);
 #ifdef GFX_ENABLE_VSYNC
 	int arg = 1;
 	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg); // TODO: this doesn't wait but it also doesn't error out like FBIO_WAITFORVSYNC...
 #endif
 
-#ifdef GFX_ENABLE_BUFFER	
+#ifdef GFX_ENABLE_BUFFER
     // TODO: this would be moved to a thread
 	// I'm not clear on why that would be necessary
 	// if it's non-blocking and the pan will wait
@@ -319,13 +389,16 @@ void GFX_flip(SDL_Surface* screen) {
 	// what if the scaling was also moved to a thread?
 	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
 	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
-	
+
 	gfx.buffer += 1;
 	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
 #endif
 }
 void GFX_quit(void) {
+	// pthread_cancel(flip_pt);
+	// pthread_join(flip_pt, NULL);
+	
 	GFX_clearAll();
 	munmap(gfx.map, gfx.map_size);
 	close(gfx.fb);
