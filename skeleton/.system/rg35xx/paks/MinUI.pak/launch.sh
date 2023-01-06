@@ -15,17 +15,24 @@ mkdir -p "$LOGS_PATH"
 mkdir -p "$USERDATA_PATH/.mmenu"
 mkdir -p "$USERDATA_PATH/.minui"
 
-echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+CPU_PATH="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
 
 cd $(dirname "$0")
 
 keymon.elf &
 
+./batmon.sh &
+
 export EXEC_PATH=/tmp/minui_exec
 touch "$EXEC_PATH" && sync
 
+echo ondemand > "$CPU_PATH"
 while [ -f "$EXEC_PATH" ]; do
+	echo ondemand > "$CPU_PATH"
+	
 	./minui.elf &> $LOGS_PATH/minui.txt
+	
+	echo performance > "$CPU_PATH"
 	sync
 	
 	NEXT="/tmp/next"
@@ -42,6 +49,3 @@ while [ -f "$EXEC_PATH" ]; do
 		sync
 	fi
 done
-
-# this won't happen automatically because we're chroot-ed
-rm -rf /tmp/*
