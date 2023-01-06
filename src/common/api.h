@@ -4,11 +4,7 @@
 
 ///////////////////////////////
 
-// TODO: tmp
-void powerOff(void);
-void fauxSleep(void);
-int preventAutosleep(void);
-int isCharging();
+// TODO: tmo
 #define PAD_justRepeated PAD_justPressed
 
 ///////////////////////////////
@@ -79,6 +75,14 @@ int PAD_anyPressed(void);
 int PAD_justPressed(int btn);
 int PAD_isPressed(int btn);
 int PAD_justReleased(int btn);
+
+///////////////////////////////
+
+void POW_disablePowerOff(void);
+void POW_powerOff(void);
+void POW_fauxSleep(void);
+int POW_preventAutosleep(void);
+int POW_isCharging();
 
 ///////////////////////////////
 

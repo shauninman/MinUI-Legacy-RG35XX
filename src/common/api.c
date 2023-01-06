@@ -12,20 +12,10 @@
 #include <SDL/SDL_ttf.h>
 #include <errno.h>
 
+#include <msettings.h>
 #include "api.h"
+#include "utils.h"
 #include "defines.h"
-
-///////////////////////////////
-
-// TODO: tmp
-void powerOff(void) {
-	system("echo u > /proc/sysrq-trigger");
-	system("echo s > /proc/sysrq-trigger");
-	system("echo o > /proc/sysrq-trigger");
-}
-void fauxSleep(void) { }
-int preventAutosleep(void) { return 0; }
-int isCharging() { return 0; }
 
 ///////////////////////////////
 
@@ -115,11 +105,11 @@ struct owlfb_mem_info {
 
 ///////////////////////////////
 
+// NOTE: even with a buffer vsync blocks without threading
+
 #define GFX_BUFFER_COUNT 3
 #define GFX_ENABLE_VSYNC
-// #define GFX_ENABLE_BUFFER
-
-// NOTE: even with a buffer vsync blocks without threading
+#define GFX_ENABLE_BUFFER
 
 ///////////////////////////////
 
@@ -176,7 +166,7 @@ SDL_Surface* GFX_init(void) {
 	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
 	gfx.vinfo.yres_virtual = SCREEN_HEIGHT;
 #ifdef GFX_ENABLE_BUFFER
-	gfx.vinfo.yres_virtual *= GFX_BUFFER_COUNT
+	gfx.vinfo.yres_virtual *= GFX_BUFFER_COUNT;
 #endif
 #if defined (GFX_ENABLE_BUFFER) && !defined (GFX_ENABLE_VSYNC) 
 	gfx.vinfo.xoffset = 0;
@@ -564,3 +554,76 @@ int PAD_anyPressed(void)		{ return pad.is_pressed!=BTN_NONE; }
 int PAD_justPressed(int btn)	{ return pad.just_pressed & btn; }
 int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
 int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
+
+///////////////////////////////
+
+static int can_poweroff = 1;
+void POW_disablePowerOff(void) {
+	can_poweroff = 0;
+}
+
+void POW_powerOff(void) {
+	if (can_poweroff) {
+		system("echo u > /proc/sysrq-trigger");
+		system("echo s > /proc/sysrq-trigger");
+		system("echo o > /proc/sysrq-trigger");
+	}
+}
+
+#define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
+#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+static char governor[128];
+
+static void POW_enterSleep(void) {
+	SetRawVolume(0);
+	putInt(BACKLIGHT_PATH, FB_BLANK_POWERDOWN);
+	// save current governor (either ondemand or performance)
+	getFile(GOVERNOR_PATH, governor, 128);
+	trimTrailingNewlines(governor);
+
+	putFile(GOVERNOR_PATH, "powersave");
+	sync();
+}
+static void POW_exitSleep(void) {
+	putInt(BACKLIGHT_PATH, FB_BLANK_UNBLANK);
+	SetVolume(GetVolume());
+	// restore previous governor
+	putFile(GOVERNOR_PATH, governor);
+}
+static void POW_waitForWake(void) {
+	SDL_Event event;
+	int wake = 0;
+	unsigned long sleep_ticks = SDL_GetTicks();
+	while (!wake) {
+		while (SDL_PollEvent(&event)) {
+			if (event.type==SDL_KEYUP) {
+				uint8_t code = event.key.keysym.scancode;
+				if (code==CODE_POWER) {
+					wake = 1;
+					break;
+				}
+			}
+		}
+		SDL_Delay(200);
+		if (can_poweroff && SDL_GetTicks()-sleep_ticks>=120000) { // increased to two minutes
+			if (POW_isCharging()) sleep_ticks += 60000; // check again in a minute
+			else POW_powerOff(); // TODO: not working...
+		}
+	}
+	return;
+}
+void POW_fauxSleep(void) {
+	GFX_clear(gfx.screen);
+	PAD_reset();
+	POW_enterSleep();
+	// TODO: pause keymon
+	POW_waitForWake();
+	// TODO: resume keymon
+	POW_exitSleep();
+}
+int POW_preventAutosleep(void) {
+	return POW_isCharging();
+}
+int POW_isCharging() {
+	return getInt("/sys/class/power_supply/battery/charger_online");
+}

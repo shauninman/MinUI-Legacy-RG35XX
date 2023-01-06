@@ -1239,6 +1239,7 @@ int main (int argc, char *argv[]) {
 	
 	SDL_Surface* screen = GFX_init();
 	InitSettings();
+	PAD_reset();
 	
 	SDL_Surface* version = NULL;
 	
@@ -1249,7 +1250,7 @@ int main (int argc, char *argv[]) {
 	
 	PAD_reset();
 	int dirty = 1;
-	int was_charging = isCharging();
+	int was_charging = POW_isCharging();
 	unsigned long charge_start = SDL_GetTicks();
 	int show_version = 0;
 	int show_setting = 0; // 1=brightness,2=volume
@@ -1399,7 +1400,7 @@ int main (int argc, char *argv[]) {
 		
 		#define CHARGE_DELAY 1000
 		if (dirty || now-charge_start>=CHARGE_DELAY) {
-			int is_charging = isCharging();
+			int is_charging = POW_isCharging();
 			if (was_charging!=is_charging) {
 				was_charging = is_charging;
 				dirty = 1;
@@ -1408,19 +1409,20 @@ int main (int argc, char *argv[]) {
 		}
 		
 		if (power_start && now-power_start>=1000) {
-			powerOff();
-			// return 0; // we should never reach this point
+			POW_powerOff();
+			quit = 1;
+			break;
 		}
 		if (PAD_justPressed(BTN_SLEEP)) {
 			power_start = now;
 		}
 		
 		#define SLEEP_DELAY 30000
-		if (now-cancel_start>=SLEEP_DELAY && preventAutosleep()) cancel_start = now;
+		if (now-cancel_start>=SLEEP_DELAY && POW_preventAutosleep()) cancel_start = now;
 		
 		if (now-cancel_start>=SLEEP_DELAY || PAD_justReleased(BTN_SLEEP)) // || PAD_justPressed(BTN_MENU))
 		{
-			fauxSleep();
+			POW_fauxSleep();
 			cancel_start = SDL_GetTicks();
 			power_start = 0;
 			dirty = 1;
@@ -1553,11 +1555,11 @@ int main (int argc, char *argv[]) {
 		if (dirty) {
 			GFX_flip(screen);
 			dirty = 0;
-		}		
-		// slow down to 60fps
-		unsigned long frame_duration = SDL_GetTicks() - frame_start;
-		#define TARGET_FRAME_DURATION 17
-		if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
+		}
+		// // slow down to 60fps
+		// unsigned long frame_duration = SDL_GetTicks() - frame_start;
+		// #define TARGET_FRAME_DURATION 17
+		// if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
 	}
 	
 	if (version) SDL_FreeSurface(version);
