@@ -60,6 +60,7 @@ static struct Core {
 	const char tag[8]; // eg. GBC
 	const char name[128]; // eg. gambatte
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
+	const char sys_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
 	
 	double fps;
 	double sample_rate;
@@ -218,8 +219,6 @@ error:
 // callbacks
 static struct retro_disk_control_ext_callback disk_control_ext;
 
-static char sys_dir[MAX_PATH]; // TODO: move this somewhere else, maybe core.userdata?
-
 // TODO: tmp, naive options
 static struct {
 	char key[128];
@@ -248,16 +247,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	// TODO: RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL 8
 	case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: { /* 9 */
-		puts("RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY");
-		
 		const char **out = (const char **)data;
 		if (out)
-			// TODO: set this once somewhere else
-			// TODO: core.tag isn't available at this point
-			// TODO: it only becomes available after we open the game...
-			sprintf(sys_dir, SDCARD_PATH "/.userdata/%s/%s-%s", PLATFORM, core.tag, core.name);
-			puts(sys_dir); fflush(stdout);
-			*out = sys_dir;
+			*out = core.sys_dir;
+		
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: { /* 10 */
@@ -753,6 +746,12 @@ static uint32_t buttons = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
+	// TODO: tmp (L)oad and w(R)ite state
+	if (PAD_isPressed(BTN_MENU)) {
+		if (PAD_justPressed(BTN_L1)) State_read();
+		else if (PAD_justPressed(BTN_R1)) State_write();
+	}
+	
 	// TODO: support remapping
 	
 	buttons = 0;
@@ -831,6 +830,11 @@ void Core_open(const char* core_path, const char* tag_name) {
 	Core_getName((char*)core_path, (char*)core.name);
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
+	
+	sprintf((char*)core.sys_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
+	char cmd[512];
+	sprintf(cmd, "mkdir -p \"%s\"", core.sys_dir);
+	system(cmd);
 
 	set_environment_callback(environment_callback);
 	set_video_refresh_callback(video_refresh_callback);
@@ -911,13 +915,14 @@ int main(int argc , char* argv[]) {
 	Game_open(rom_path); 					LOG_info("after Game_open\n");
 	Core_load();  							LOG_info("after Core_load\n");
 	SND_init(core.sample_rate, core.fps);	LOG_info("after SND_init\n");
-	State_read();							LOG_info("after State_read\n");
+	
+	// State_read();							LOG_info("after State_read\n");
 	
 	int start = SDL_GetTicks();
 	while (1) {
 		unsigned long frame_start = SDL_GetTicks();
 		
-		if (PAD_justPressed(BTN_POWER)) {
+		if (PAD_justReleased(BTN_POWER)) {
 			// system("rm /tmp/minui_exec");
 			break;
 		}
