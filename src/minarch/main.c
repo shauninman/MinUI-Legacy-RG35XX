@@ -478,6 +478,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 #define Weight2_3(A, B)  (((((cR(A) << 1) + (cR(B) * 3)) / 5) & 0x1f) << 11 | ((((cG(A) << 1) + (cG(B) * 3)) / 5) & 0x3f) << 5 | ((((cB(A) << 1) + (cB(B) * 3)) / 5) & 0x1f))
 #define Weight3_2(A, B)  (((((cR(B) << 1) + (cR(A) * 3)) / 5) & 0x1f) << 11 | ((((cG(B) << 1) + (cG(A) * 3)) / 5) & 0x3f) << 5 | ((((cB(B) << 1) + (cB(A) * 3)) / 5) & 0x1f))
 
+static int cpu_ticks = 0;
+static int fps_ticks = 0;
+static int sec_start = 0;
+
 // TODO: flesh out
 static void scale1x(int w, int h, int pitch, const void *src, void *dst) {
 	// pitch of src image not src buffer! 
@@ -724,6 +728,8 @@ static void scale(const void* src, int width, int height, int pitch, void* dst) 
 
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) return;
+	fps_ticks += 1;
+	
 	static int last_width = 0;
 	static int last_height = 0;
 	if (width!=last_width || height!=last_height) {
@@ -918,23 +924,19 @@ int main(int argc , char* argv[]) {
 	
 	// State_read();							LOG_info("after State_read\n");
 	
-	int start = SDL_GetTicks();
+	sec_start = SDL_GetTicks();
 	while (1) {
-		unsigned long frame_start = SDL_GetTicks();
-		
-		if (PAD_justReleased(BTN_POWER)) {
-			// system("rm /tmp/minui_exec");
-			break;
-		}
-		// still not working
-		// if (PAD_justPressed(BTN_L1)) State_read();
-		// else if (PAD_justPressed(BTN_R1)) State_write();
+		if (PAD_justReleased(BTN_POWER)) break; // TODO: tmp
 		core.run();
+		cpu_ticks += 1;
 		
-		// unsigned long frame_duration = SDL_GetTicks() - frame_start;
-		// #define TARGET_FRAME_DURATION 15
-		// if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
-		// GFX_flip(screen);
+		int now = SDL_GetTicks();
+		if (now - sec_start>=1000) {
+			printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
+			sec_start = now;
+			cpu_ticks = 0;
+			fps_ticks = 0;
+		}
 	}
 	
 	Game_close();
