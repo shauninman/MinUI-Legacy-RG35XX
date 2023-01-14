@@ -28,6 +28,7 @@ void LOG_note(int level, const char* fmt, ...);
 uint32_t RGB_WHITE;
 uint32_t RGB_BLACK;
 uint32_t RGB_LIGHT_GRAY;
+uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 
 enum {
@@ -40,6 +41,7 @@ enum {
 	ASSET_PAGE,
 	ASSET_BAR,
 	ASSET_BAR_BG,
+	ASSET_UNDERLINE,
 	ASSET_DOT,
 	
 	ASSET_COLORS,
@@ -76,6 +78,7 @@ void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitABButtons(char* a, char* b, SDL_Surface* dst);
+int GFX_blitButtonGroup(char** hints, SDL_Surface* dst, int align_right);
 
 ///////////////////////////////
 

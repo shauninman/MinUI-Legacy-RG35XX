@@ -136,6 +136,7 @@ static SDL_Rect asset_rects[] = {
 	[ASSET_PAGE]			= (SDL_Rect){SCALE4(39,54, 6, 6)},
 	[ASSET_BAR]				= (SDL_Rect){SCALE4(33,58, 4, 4)},
 	[ASSET_BAR_BG]			= (SDL_Rect){SCALE4(15,55, 4, 4)},
+	[ASSET_UNDERLINE]		= (SDL_Rect){SCALE4(85,51, 3, 3)},
 	[ASSET_DOT]				= (SDL_Rect){SCALE4(33,54, 2, 2)},
 	
 	[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4(23,33,19,19)},
@@ -212,6 +213,7 @@ SDL_Surface* GFX_init(void) {
 	RGB_WHITE		= SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK		= SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
 	RGB_LIGHT_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_LIGHT_GRAY);
+	RGB_GRAY		= SDL_MapRGB(gfx.screen->format, TRIAD_GRAY);
 	RGB_DARK_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_DARK_GRAY);
 	
 	asset_rgbs[ASSET_WHITE_PILL]	= RGB_WHITE;
@@ -223,6 +225,7 @@ SDL_Surface* GFX_init(void) {
 	asset_rgbs[ASSET_PAGE]			= RGB_BLACK;
 	asset_rgbs[ASSET_BAR]			= RGB_WHITE;
 	asset_rgbs[ASSET_BAR_BG]		= RGB_BLACK;
+	asset_rgbs[ASSET_UNDERLINE]		= RGB_GRAY;
 	asset_rgbs[ASSET_DOT]			= RGB_LIGHT_GRAY;
 	
 	char asset_path[MAX_PATH];
@@ -448,6 +451,55 @@ void GFX_blitABButtons(char* a, char* b, SDL_Surface* dst) {
 		GFX_blitButton(hints[i].hint, hints[i].button, dst, &(SDL_Rect){ox,oy});
 		ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
 	}
+}
+
+int GFX_blitButtonGroup(char** pairs, SDL_Surface* dst, int align_right) {
+	int ox;
+	int oy;
+	int ow;
+	char* hint;
+	char* button;
+
+	struct Hint {
+		char* hint;
+		char* button;
+		int ow;
+	} hints[2]; 
+	int w = 0; // individual button dimension
+	int h = 0; // hints index
+	ow = 0; // full pill width
+	ox = align_right ? SCREEN_WIDTH - SCALE1(PADDING) : SCALE1(PADDING);
+	oy = SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE);
+	
+	for (int i=0; i<2; i++) {
+		if (!pairs[i*2]) break;
+		
+		button = pairs[i * 2];
+		hint = pairs[i * 2 + 1];
+		w = GFX_getButtonWidth(hint, button);
+		hints[h].hint = hint;
+		hints[h].button = button;
+		hints[h].ow = w;
+		h += 1;
+		ow += SCALE1(BUTTON_MARGIN) + w;
+	}
+	
+	ow += SCALE1(BUTTON_MARGIN);
+	if (align_right) ox -= ow;
+	GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){
+		ox,
+		oy,
+		ow,
+		SCALE1(PILL_SIZE)
+	});
+	
+	ox += SCALE1(BUTTON_MARGIN);
+	oy += SCALE1(BUTTON_MARGIN);
+	for (int i=0; i<h; i++) {
+		GFX_blitButton(hints[i].hint, hints[i].button, dst, &(SDL_Rect){ox,oy});
+		ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
+	}
+	return ow;
 }
 
 ///////////////////////////////
