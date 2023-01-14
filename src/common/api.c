@@ -302,6 +302,8 @@ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	int y = dst_rect->y;
 	int w = dst_rect->w;
 	int h = dst_rect->h;
+
+	if (h==0) h = asset_rects[asset].h;
 	
 	int r = h / 2;
 	if (w < h) w = h;
@@ -390,6 +392,62 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	text = TTF_RenderUTF8_Blended(font.small, hint, COLOR_WHITE);
 	SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
 	SDL_FreeSurface(text);
+}
+
+void GFX_blitABButtons(char* a, char* b, SDL_Surface* dst) {
+	int ox;
+	int oy;
+	int ow;
+	char* hint;
+	char* button;
+
+	struct Hint {
+		char* hint;
+		char* button;
+		int ow;
+	} hints[3]; 
+	int w = 0; // individual button dimension
+	int h = 0; // hints index
+	ow = 0; // full pill width
+	ox = SCREEN_WIDTH - SCALE1(PADDING);
+	oy = SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE);
+	
+	if (b) {
+		hint = b;
+		button = "B";
+		w = GFX_getButtonWidth(hint, button);
+		hints[h].hint = hint;
+		hints[h].button = button;
+		hints[h].ow = w;
+		h += 1;
+		ow += SCALE1(BUTTON_MARGIN) + w;
+	}
+
+
+	hint = a;
+	button = "A";
+	w = GFX_getButtonWidth(hint, button);
+	hints[h].hint = hint;
+	hints[h].button = button;
+	hints[h].ow = w;
+	h += 1;
+	ow += SCALE1(BUTTON_MARGIN) + w;
+
+	ow += SCALE1(BUTTON_MARGIN);
+	ox -= ow;
+	GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){
+		ox,
+		oy,
+		ow,
+		SCALE1(PILL_SIZE)
+	});
+	
+	ox += SCALE1(BUTTON_MARGIN);
+	oy += SCALE1(BUTTON_MARGIN);
+	for (int i=0; i<h; i++) {
+		GFX_blitButton(hints[i].hint, hints[i].button, dst, &(SDL_Rect){ox,oy});
+		ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
+	}
 }
 
 ///////////////////////////////

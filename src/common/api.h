@@ -75,6 +75,7 @@ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
+void GFX_blitABButtons(char* a, char* b, SDL_Surface* dst);
 
 ///////////////////////////////
 

@@ -1582,51 +1582,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 			else {
-				struct Hint {
-					char* hint;
-					char* button;
-					int ow;
-				} hints[3]; 
-				int w = 0; // individual button dimension
-				int h = 0; // hints index
-				ow = 0; // full pill width
-				ox = SCREEN_WIDTH - SCALE1(PADDING);
-
-				if (stack->count>1) {
-					hint = "BACK";
-					button = "B";
-					w = GFX_getButtonWidth(hint, button);
-					hints[h].hint = hint;
-					hints[h].button = button;
-					hints[h].ow = w;
-					h += 1;
-					ow += SCALE1(BUTTON_MARGIN) + w;
-				}
-
-				hint = "OPEN";
-				button = "A";
-				w = GFX_getButtonWidth(hint, button);
-				hints[h].hint = hint;
-				hints[h].button = button;
-				hints[h].ow = w;
-				h += 1;
-				ow += SCALE1(BUTTON_MARGIN) + w;
-
-				ow += SCALE1(BUTTON_MARGIN);
-				ox -= ow;
-				GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
-					ox,
-					oy,
-					ow,
-					SCALE1(PILL_SIZE)
-				});
-				
-				ox += SCALE1(BUTTON_MARGIN);
-				oy += SCALE1(BUTTON_MARGIN);
-				for (int i=0; i<h; i++) {
-					GFX_blitButton(hints[i].hint, hints[i].button, screen, &(SDL_Rect){ox,oy});
-					ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
-				}
+				GFX_blitABButtons("OPEN", stack->count>1?"BACK":NULL, screen);
 			}
 		}
 		
