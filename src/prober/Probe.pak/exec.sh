@@ -1,11 +1,7 @@
 #!/bin/sh
 
-ELF=keymon.elf
+cd $(dirname "$0")
 
-# killall --help
-
-# killall -l
-
-killall -STOP $ELF
-sleep 5
-killall -CONT $ELF
+# date --help
+# date +'%F %T'
+# date -u -s "2023-01-14 01:51:00"; hwclock --utc -w
