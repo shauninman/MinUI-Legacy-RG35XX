@@ -43,10 +43,28 @@
 #define RESUME_SLOT_PATH "/tmp/mmenu_slot.txt"
 #define AUTO_RESUME_PATH USERDATA_PATH "/.miniui/auto_resume.txt"
 #define AUTO_RESUME_SLOT "9"
-#define ENABLE_SIMPLE_MODE_PATH USERDATA_PATH "/enable-simple-mode"
 
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
+#define TRIAD_WHITE 		0xff,0xff,0xff
+#define TRIAD_BLACK 		0x00,0x00,0x00
+#define TRIAD_LIGHT_GRAY 	0x7f,0x7f,0x7f
+#define TRIAD_DARK_GRAY 	0x26,0x26,0x26
+
+#define TRIAD_LIGHT_TEXT 	0xcc,0xcc,0xcc
+#define TRIAD_DARK_TEXT 	0x66,0x66,0x66
+#define TRIAD_BUTTON_TEXT 	0x99,0x99,0x99
+
+#define COLOR_WHITE			(SDL_Color){TRIAD_WHITE}
+#define COLOR_BLACK			(SDL_Color){TRIAD_BLACK}
+#define COLOR_LIGHT_TEXT	(SDL_Color){TRIAD_LIGHT_TEXT}
+#define COLOR_DARK_TEXT		(SDL_Color){TRIAD_DARK_TEXT}
+#define COLOR_BUTTON_TEXT	(SDL_Color){TRIAD_BUTTON_TEXT}
+
+#define SCREEN_WIDTH 	640
+#define SCREEN_HEIGHT 	480
+#define SCREEN_SCALE 	2 // SCREEN_HEIGHT / 240
+
+#define BASE_WIDTH 320
+#define BASE_HEIGHT 240
 
 // SNES (stretched to 4:3)
 // #define SCREEN_WIDTH 1024
@@ -60,11 +78,24 @@
 // #define SCREEN_WIDTH 768
 // #define SCREEN_HEIGHT 576
 
-#define SCREEN_DEPTH 16
-#define SCREEN_BPP 2
-#define SCREEN_PITCH SCREEN_WIDTH * SCREEN_BPP
+#define SCREEN_DEPTH 	16
+#define SCREEN_BPP 		2
+#define SCREEN_PITCH 	(SCREEN_WIDTH * SCREEN_BPP)
 
-#define MAIN_ROW_COUNT 7
+// all before scale
+#define PILL_SIZE 30
+#define BUTTON_SIZE 20
+#define BUTTON_MARGIN ((PILL_SIZE - BUTTON_SIZE) / 2)
+#define SETTINGS_SIZE 4
+#define SETTINGS_WIDTH 80
+
+#define MAIN_ROW_COUNT 6 // SCREEN_HEIGHT / (PILL_SIZE * SCREEN_SCALE) - 2 (floor and subtract 1 if not an integer)
+#define PADDING 10 // PILL_SIZE / 3 (or non-integer part of the previous calculatiom divided by three)
+
+#define FONT_LARGE 16 	// menu
+#define FONT_MEDIUM 14 	// single char button label
+#define FONT_SMALL 12 	// button hint
+#define FONT_TINY 10  	// multi char button label
 
 ///////////////////////////////
 
@@ -73,5 +104,10 @@
 
 #define MAX(a, b) (a) > (b) ? (a) : (b)
 #define MIN(a, b) (a) < (b) ? (a) : (b)
+
+#define SCALE1(a) ((a)*SCREEN_SCALE)
+#define SCALE2(a,b) ((a)*SCREEN_SCALE),((b)*SCREEN_SCALE)
+#define SCALE4(a,b,c,d) ((a)*SCREEN_SCALE),((b)*SCREEN_SCALE),((c)*SCREEN_SCALE),((d)*SCREEN_SCALE)
+
 
 #endif

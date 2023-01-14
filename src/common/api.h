@@ -25,12 +25,56 @@ void LOG_note(int level, const char* fmt, ...);
 
 ///////////////////////////////
 
+uint32_t RGB_WHITE;
+uint32_t RGB_BLACK;
+uint32_t RGB_LIGHT_GRAY;
+uint32_t RGB_DARK_GRAY;
+
+enum {
+	ASSET_WHITE_PILL,
+	ASSET_BLACK_PILL,
+	ASSET_DARK_GRAY_PILL,
+	ASSET_BUTTON,
+	ASSET_PAGE_BG,
+	ASSET_STATE_BG,
+	ASSET_PAGE,
+	ASSET_BAR,
+	ASSET_BAR_BG,
+	ASSET_DOT,
+	
+	ASSET_COLORS,
+	
+	ASSET_BRIGHTNESS,
+	ASSET_VOLUME_MUTE,
+	ASSET_VOLUME,
+	ASSET_BATTERY,
+	ASSET_BATTERY_LOW,
+	ASSET_BATTERY_FILL,
+	ASSET_BATTERY_FILL_LOW,
+	ASSET_BATTERY_BOLT,
+};
+
+typedef struct GFX_Fonts {
+	TTF_Font* large; 	// menu
+	TTF_Font* medium; 	// single char button label
+	TTF_Font* small; 	// button hint
+	TTF_Font* tiny; 	// multi char button label
+} GFX_Fonts;
+extern GFX_Fonts font;
+
 SDL_Surface* GFX_init(void);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);
 void GFX_startFrame(void);
 void GFX_flip(SDL_Surface* screen);
 void GFX_quit(void);
+
+// NOTE: all dimensions should be pre-scaled
+void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
+void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
+void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
+int GFX_getButtonWidth(char* hint, char* button);
+void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
 
 ///////////////////////////////
 
@@ -85,6 +129,7 @@ void POW_powerOff(void);
 void POW_fauxSleep(void);
 int POW_preventAutosleep(void);
 int POW_isCharging(void);
+int POW_getBattery(void);
 
 ///////////////////////////////
 

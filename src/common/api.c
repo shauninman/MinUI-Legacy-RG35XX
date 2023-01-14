@@ -123,7 +123,32 @@ static struct GFX_Context {
 	struct fb_fix_screeninfo finfo;
 	
 	SDL_Surface* screen;
+	SDL_Surface* assets;
 } gfx;
+
+static SDL_Rect asset_rects[] = {
+	[ASSET_WHITE_PILL]		= (SDL_Rect){SCALE4( 1, 1,30,30)},
+	[ASSET_BLACK_PILL]		= (SDL_Rect){SCALE4(33, 1,30,30)},
+	[ASSET_DARK_GRAY_PILL]	= (SDL_Rect){SCALE4(65, 1,30,30)},
+	[ASSET_BUTTON]			= (SDL_Rect){SCALE4( 1,33,20,20)},
+	[ASSET_PAGE_BG]			= (SDL_Rect){SCALE4(64,33,15,15)},
+	[ASSET_STATE_BG]		= (SDL_Rect){SCALE4(23,54, 8, 8)},
+	[ASSET_PAGE]			= (SDL_Rect){SCALE4(39,54, 6, 6)},
+	[ASSET_BAR]				= (SDL_Rect){SCALE4(33,58, 4, 4)},
+	[ASSET_BAR_BG]			= (SDL_Rect){SCALE4(15,55, 4, 4)},
+	[ASSET_DOT]				= (SDL_Rect){SCALE4(33,54, 2, 2)},
+	
+	[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4(23,33,19,19)},
+	[ASSET_VOLUME_MUTE]		= (SDL_Rect){SCALE4(44,33,10,16)},
+	[ASSET_VOLUME]			= (SDL_Rect){SCALE4(44,33,18,16)},
+	[ASSET_BATTERY]			= (SDL_Rect){SCALE4(47,51,17,10)},
+	[ASSET_BATTERY_LOW]		= (SDL_Rect){SCALE4(66,51,17,10)},
+	[ASSET_BATTERY_FILL]	= (SDL_Rect){SCALE4(81,33,12, 6)},
+	[ASSET_BATTERY_FILL_LOW]= (SDL_Rect){SCALE4( 1,55,12, 6)},
+	[ASSET_BATTERY_BOLT]	= (SDL_Rect){SCALE4(81,41,12, 6)},
+};
+static uint32_t asset_rgbs[ASSET_COLORS];
+GFX_Fonts font;
 
 ///////////////////////////////
 
@@ -183,8 +208,47 @@ SDL_Surface* GFX_init(void) {
 
 	// return screen
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map + gfx.buffer_size * gfx.buffer, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
+	
+	RGB_WHITE		= SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
+	RGB_BLACK		= SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
+	RGB_LIGHT_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_LIGHT_GRAY);
+	RGB_DARK_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_DARK_GRAY);
+	
+	asset_rgbs[ASSET_WHITE_PILL]	= RGB_WHITE;
+	asset_rgbs[ASSET_BLACK_PILL]	= RGB_BLACK;
+	asset_rgbs[ASSET_DARK_GRAY_PILL]= RGB_DARK_GRAY;
+	asset_rgbs[ASSET_BUTTON]		= RGB_WHITE;
+	asset_rgbs[ASSET_PAGE_BG]		= RGB_WHITE;
+	asset_rgbs[ASSET_STATE_BG]		= RGB_WHITE;
+	asset_rgbs[ASSET_PAGE]			= RGB_BLACK;
+	asset_rgbs[ASSET_BAR]			= RGB_WHITE;
+	asset_rgbs[ASSET_BAR_BG]		= RGB_BLACK;
+	asset_rgbs[ASSET_DOT]			= RGB_LIGHT_GRAY;
+	
+	char asset_path[MAX_PATH];
+	sprintf(asset_path, RES_PATH "/assets@%ix.png", SCREEN_SCALE);
+	gfx.assets = IMG_Load(asset_path);
+	
+	font.large 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_LARGE));
+	font.medium = TTF_OpenFont(FONT_PATH, SCALE1(FONT_MEDIUM));
+	font.small 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_SMALL));
+	font.tiny 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_TINY));
+	
 	return gfx.screen;
 }
+void GFX_quit(void) {
+	TTF_CloseFont(font.large);
+	TTF_CloseFont(font.medium);
+	TTF_CloseFont(font.small);
+	TTF_CloseFont(font.tiny);
+	
+	SDL_FreeSurface(gfx.assets);
+	GFX_clearAll();
+	munmap(gfx.map, gfx.map_size);
+	close(gfx.fb);
+	SDL_Quit();
+}
+
 void GFX_clear(SDL_Surface* screen) {
 	memset(screen->pixels, 0, gfx.buffer_size);
 }
@@ -216,11 +280,116 @@ void GFX_flip(SDL_Surface* screen) {
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
 #endif
 }
-void GFX_quit(void) {
-	GFX_clearAll();
-	munmap(gfx.map, gfx.map_size);
-	close(gfx.fb);
-	SDL_Quit();
+
+void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	SDL_Rect* rect = &asset_rects[asset];
+	SDL_Rect adj_rect = {
+		.x = rect->x,
+		.y = rect->y,
+		.w = rect->w,
+		.h = rect->h,
+	};
+	if (src_rect) {
+		adj_rect.x += src_rect->x;
+		adj_rect.y += src_rect->y;
+		adj_rect.w  = src_rect->w;
+		adj_rect.h  = src_rect->h;
+	}
+	SDL_BlitSurface(gfx.assets, &adj_rect, dst, dst_rect);
+}
+void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	int x = dst_rect->x;
+	int y = dst_rect->y;
+	int w = dst_rect->w;
+	int h = dst_rect->h;
+	
+	int r = h / 2;
+	if (w < h) w = h;
+	w -= h;
+	
+	GFX_blitAsset(asset, &(SDL_Rect){0,0,r,h}, dst, &(SDL_Rect){x,y});
+	x += r;
+	if (w>0) {
+		SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, asset_rgbs[asset]);
+		x += w;
+	}
+	GFX_blitAsset(asset, &(SDL_Rect){r,0,r,h}, dst, &(SDL_Rect){x,y});
+}
+void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
+	SDL_Rect rect = asset_rects[ASSET_BATTERY];
+	int x = dst_rect->x;
+	int y = dst_rect->y;
+	x += (SCALE1(PILL_SIZE) - (rect.w + SCREEN_SCALE)) / 2;
+	y += (SCALE1(PILL_SIZE) - rect.h) / 2;
+	
+	if (POW_isCharging()) {
+		GFX_blitAsset(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
+		GFX_blitAsset(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)});
+	}
+	else {
+		int percent = POW_getBattery();
+		GFX_blitAsset(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
+		
+		rect = asset_rects[ASSET_BATTERY_FILL];
+		SDL_Rect clip = rect;
+		clip.w *= percent;
+		clip.w /= 100;
+		if (clip.w<=0) return;
+		clip.x = rect.w - clip.w;
+		clip.y = 0;
+		
+		GFX_blitAsset(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)});
+	}
+}
+int GFX_getButtonWidth(char* hint, char* button) {
+	int button_width = 0;
+	int width;
+	
+	if (strlen(button)==1) {
+		button_width += SCALE1(BUTTON_SIZE);
+	}
+	else {
+		button_width += SCALE1(BUTTON_SIZE) / 2;
+		TTF_SizeUTF8(font.tiny, button, &width, NULL);
+		button_width += width;
+	}
+	button_width += SCALE1(BUTTON_MARGIN);
+	
+	TTF_SizeUTF8(font.small, hint, &width, NULL);
+	button_width += width + SCALE1(BUTTON_MARGIN);
+	return button_width;
+}
+void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	SDL_Surface* text;
+	int ox = 0;
+	
+	// button
+	if (strlen(button)==1) {
+		GFX_blitAsset(ASSET_BUTTON, NULL, dst, dst_rect);
+
+		// label
+		text = TTF_RenderUTF8_Blended(font.medium, button, COLOR_BUTTON_TEXT);
+		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){dst_rect->x+(SCALE1(BUTTON_SIZE)-text->w)/2,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2});
+		ox += SCALE1(BUTTON_SIZE);
+		SDL_FreeSurface(text);
+	}
+	else {
+		text = TTF_RenderUTF8_Blended(font.tiny, button, COLOR_BUTTON_TEXT);
+		GFX_blitPill(ASSET_BUTTON, dst, &(SDL_Rect){dst_rect->x,dst_rect->y,SCALE1(BUTTON_SIZE)/2+text->w,SCALE1(BUTTON_SIZE)});
+		ox += SCALE1(BUTTON_SIZE)/4;
+		
+		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
+		ox += text->w;
+		ox += SCALE1(BUTTON_SIZE)/4;
+		SDL_FreeSurface(text);
+	}
+	
+	ox += SCALE1(BUTTON_MARGIN);
+
+	// hint text
+	text = TTF_RenderUTF8_Blended(font.small, hint, COLOR_WHITE);
+	SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
+	SDL_FreeSurface(text);
 }
 
 ///////////////////////////////
@@ -507,9 +676,9 @@ void POW_fauxSleep(void) {
 	GFX_clear(gfx.screen);
 	PAD_reset();
 	POW_enterSleep();
-	// TODO: pause keymon
+	system("killall -STOP keymon.elf");
 	POW_waitForWake();
-	// TODO: resume keymon
+	system("killall -CONT keymon.elf");
 	POW_exitSleep();
 }
 int POW_preventAutosleep(void) {
@@ -517,4 +686,19 @@ int POW_preventAutosleep(void) {
 }
 int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
+}
+int POW_getBattery(void) {
+	// return getInt("/sys/class/power_supply/battery/capacity"); // this is really inaccurate
+	
+	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // ~320-420
+	i = MIN(MAX(0, i-320), 100); // TODO: smooth this value before returning ala Mini
+
+	// eh
+	// if (i>80) return 100;
+	// else if (i>60) return 80;
+	// else if (i>40) return 60;
+	// else if (i>20) return 40;
+	// else if (i>10) return 20;
+	// else if (i>5)  return 10;
+	return i;
 }
