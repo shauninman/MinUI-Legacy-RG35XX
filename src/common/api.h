@@ -84,7 +84,7 @@ void POW_disablePowerOff(void);
 void POW_powerOff(void);
 void POW_fauxSleep(void);
 int POW_preventAutosleep(void);
-int POW_isCharging();
+int POW_isCharging(void);
 
 ///////////////////////////////
 

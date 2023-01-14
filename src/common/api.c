@@ -515,6 +515,6 @@ void POW_fauxSleep(void) {
 int POW_preventAutosleep(void) {
 	return POW_isCharging();
 }
-int POW_isCharging() {
+int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
