@@ -126,16 +126,6 @@ int main (int argc, char *argv[]) {
 					default:
 						break;
 				}
-				
-				// TODO: not necessary, has reset button
-				// but the system call will be good for long-press shutdown
-				// if (menu_pressed && power_pressed) {
-				// 	menu_pressed = power_pressed = 0;
-				// 	// NOTE: we don't have access to a working reboot inside chroot
-				// 	// so use /proc/sysrq-trigger to (s)ync, (u)nmount, and then power (o)ff
-				// 	system("echo s > /proc/sysrq-trigger; echo u > /proc/sysrq-trigger; echo o > /proc/sysrq-trigger");
-				// 	while (1) pause();
-				// }
 			}
 		}
 		usleep(16666); // 60fps

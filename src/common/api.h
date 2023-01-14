@@ -1,10 +1,11 @@
 #ifndef __API_H__
 #define __API_H__
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
 
 ///////////////////////////////
 
-// TODO: tmo
+// TODO: tmp
 #define PAD_justRepeated PAD_justPressed
 
 ///////////////////////////////

@@ -106,8 +106,6 @@ struct owlfb_mem_info {
 
 ///////////////////////////////
 
-// NOTE: even with a buffer vsync blocks without threading
-
 #define GFX_BUFFER_COUNT 3
 #define GFX_ENABLE_VSYNC
 #define GFX_ENABLE_BUFFER
@@ -133,28 +131,7 @@ SDL_Surface* GFX_init(void) {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	TTF_Init();
-	
-	// char namebuf[MAX_PATH];
-	// if (SDL_VideoDriverName(namebuf, MAX_PATH)) {
-	// 	printf("SDL_VideoDriverName: %s\n", namebuf);
-	// }
-	
-	// SDL_Rect **modes = SDL_ListModes(NULL, SDL_HWSURFACE);
-	// if(modes == (SDL_Rect **)0){
-	//   puts("No modes available!");
-	//   exit(-1);
-	// }
-	//
-	// if(modes == (SDL_Rect **)-1){
-	//   puts("All resolutions available.");
-	// }
-	// else{
-	// 	puts("Available Modes");
-	//   	for(int i=0; modes[i]; ++i) {
-	// 		printf("\t%d x %d\n", modes[i]->w, modes[i]->h);
-	//   	}
-	// }
-	
+		
 	// we're drawing to the (triple-buffered) framebuffer directly
 	// but we still need to set video mode to initialize input events
 	SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, SDL_HWSURFACE);
@@ -178,90 +155,15 @@ SDL_Surface* GFX_init(void) {
     gfx.vinfo.activate = FB_ACTIVATE_VBL;
 #endif
     
-	// gfx.vinfo.pixclock		= 0xb7bb;// 0xc350; // 0xc350=56 0xb7e0=59.94 0xb7bb=60
-	// gfx.vinfo.left_margin	= 0x10;
-	// gfx.vinfo.right_margin	= 0x14;
-	// gfx.vinfo.upper_margin	= 0x0f;
-	// gfx.vinfo.lower_margin	= 0x05;
-	// gfx.vinfo.hsync_len		= 0x1e;
-	// gfx.vinfo.vsync_len		= 0x02;
-	
 	if (ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo)) {
 		printf("FBIOPUT_VSCREENINFO failed: %s (%i)\n", strerror(errno),  errno);
 	}
-	
-	// printf("pixclock: 0x%04x\n", gfx.vinfo.pixclock);
-	// printf("left_margin:  0x%02x\n", gfx.vinfo.left_margin);
-	// printf("right_margin: 0x%02x\n", gfx.vinfo.right_margin);
-	// printf("upper_margin: 0x%02x\n", gfx.vinfo.upper_margin);
-	// printf("lower_margin: 0x%02x\n", gfx.vinfo.lower_margin);
-	// printf("hsync_len: 0x%02x\n", gfx.vinfo.hsync_len);
-	// printf("vsync_len: 0x%02x\n", gfx.vinfo.vsync_len);
 	
 	// get fixed screen info
    	ioctl(gfx.fb, FBIOGET_FSCREENINFO, &gfx.finfo);
 	gfx.map_size = gfx.finfo.smem_len;
 	gfx.map = mmap(0, gfx.map_size, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb, 0);
 	memset(gfx.map, 0, gfx.map_size);
-	
-	// struct fb_vblank vblank;
-	// ioctl(gfx.fb, FBIOGET_VBLANK, &vblank);
-	// printf("flags: %i\n", vblank.flags);
-	// printf("count: %i\n", vblank.count);
-	// printf("vcount: %i\n", vblank.vcount);
-	// printf("hcount: %i\n", vblank.hcount);
-	
-	// struct owlfb_disp_device disp;
-	// // memset(&disp, 0, sizeof(struct owlfb_disp_device));
-	// if (ioctl(gfx.fb, OWLFB_GET_DISPLAY_INFO, &disp)) {
-	// 	printf("OWLFB_GET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
-	// }
-	// puts("OWLFB_GET_DISPLAY_INFO");
-	// printf("mType: %i\n", disp.mType);
-	// printf("mState: %i\n", disp.mState);
-	// printf("mPluginState: %i\n", disp.mPluginState);
-	// printf("mWidth: %i\n", disp.mWidth);
-	// printf("mHeight: %i\n", disp.mHeight);
-	// printf("mRefreshRate: %i\n", disp.mRefreshRate);
-	// printf("mHeightScale: %i\n", disp.mHeightScale);
-	// printf("mCmdMode: %i\n", disp.mCmdMode);
-	// printf("mIcType: %i\n", disp.mIcType);
-	//
-	// struct display_private_info* dinfo = (struct display_private_info*)&disp.mPrivateInfo;
-	// printf("LCD_TYPE: %i\n", dinfo->LCD_TYPE);
-	// printf("LCD_LIGHTENESS: %i\n", dinfo->LCD_LIGHTENESS);
-	// printf("LCD_SATURATION: %i\n", dinfo->LCD_SATURATION);
-	// printf("LCD_CONSTRAST: %i\n", dinfo->LCD_CONSTRAST);
-	// // dinfo->LCD_LIGHTENESS = 255;
-	// // disp.mCmdMode = SET_LIGHTENESS;
-	// // dinfo->LCD_SATURATION = 0;
-	// // disp.mCmdMode = SET_SATURATION;
-	// // dinfo->LCD_CONSTRAST = 256;
-	// // disp.mCmdMode = SET_CONSTRAST; // doesn't seem to do anything?
-	// disp.mCmdMode = SET_DEFAULT;
-	//
-	// if (ioctl(gfx.fb, OWLFB_SET_DISPLAY_INFO, &disp)) {
-	// 	printf("OWLFB_SET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
-	// }
-	//
-	// if (ioctl(gfx.fb, OWLFB_GET_DISPLAY_INFO, &disp)) {
-	// 	printf("OWLFB_GET_DISPLAY_INFO failed: %s (%i)\n", strerror(errno),  errno);
-	// }
-	// puts("OWLFB_GET_DISPLAY_INFO (after SET)");
-	// printf("mType: %i\n", disp.mType);
-	// printf("mState: %i\n", disp.mState);
-	// printf("mPluginState: %i\n", disp.mPluginState);
-	// printf("mWidth: %i\n", disp.mWidth);
-	// printf("mHeight: %i\n", disp.mHeight);
-	// printf("mRefreshRate: %i\n", disp.mRefreshRate);
-	// printf("mHeightScale: %i\n", disp.mHeightScale);
-	// printf("mCmdMode: %i\n", disp.mCmdMode);
-	// printf("mIcType: %i\n", disp.mIcType);
-	//
-	// printf("LCD_TYPE: %i\n", dinfo->LCD_TYPE);
-	// printf("LCD_LIGHTENESS: %i\n", dinfo->LCD_LIGHTENESS);
-	// printf("LCD_SATURATION: %i\n", dinfo->LCD_SATURATION);
-	// printf("LCD_CONSTRAST: %i\n", dinfo->LCD_CONSTRAST);
 	
 #ifdef GFX_ENABLE_VSYNC
 	struct owlfb_sync_info sinfo;
@@ -271,18 +173,6 @@ SDL_Surface* GFX_init(void) {
 	}
 #endif
 	
-	// struct owlfb_mem_info minfo;
-	// if (ioctl(gfx.fb, OWLFB_QUERY_MEM, &minfo)) {
-	// 	printf("OWLFB_QUERY_MEM failed: %s (%i)\n", strerror(errno),  errno);
-	// }
-	// puts("OWLFB_QUERY_MEM");
-	// printf("size: %i\n", minfo.size);
-	// printf("type: %i\n", minfo.type);
-		
-	// disp.mRefreshRate = 60;
-	// disp.mWidth = SCREEN_WIDTH;
-	// disp.mHeight = SCREEN_HEIGHT;
-	
 	// buffer tracking
 #ifdef GFX_ENABLE_BUFFER
 	gfx.buffer = 1;
@@ -291,12 +181,6 @@ SDL_Surface* GFX_init(void) {
 #endif
 	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
 
-// #ifdef GFX_ENABLE_BUFFER
-// 	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size * GFX_BUFFER_COUNT, gfx.map_size, gfx.map_size>=(gfx.buffer_size * GFX_BUFFER_COUNT)?1:0);
-// #else
-// 	printf("buffer needs: %i available: %i joy: %i\n", gfx.buffer_size, gfx.map_size, gfx.map_size>=gfx.buffer_size?1:0);
-// #endif
-	
 	// return screen
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map + gfx.buffer_size * gfx.buffer, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
 	return gfx.screen;
@@ -309,12 +193,6 @@ void GFX_clearAll(void) {
 }
 
 void GFX_flip(SDL_Surface* screen) {
-	// struct fb_vblank vblank;
-	// ioctl(gfx.fb, FBIOGET_VBLANK, &vblank);
-	// printf("flags: %i\n", vblank.flags);
-	// printf("count: %i\n", vblank.count);
-	// printf("vcount: %i\n", vblank.vcount);
-	// printf("hcount: %i\n", vblank.hcount);
 #ifdef GFX_ENABLE_VSYNC
 	int arg = 1;
 	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg); // TODO: this doesn't wait but it also doesn't error out like FBIO_WAITFORVSYNC...
