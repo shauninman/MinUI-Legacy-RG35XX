@@ -46,6 +46,7 @@ int main(int argc , char* argv[]) {
 	int32_t hour_selected = tm.tm_hour;
 	int32_t minute_selected = tm.tm_min;
 	int32_t seconds_selected = tm.tm_sec;
+	int am_selected = hour_selected < 12;
 
 	#define kSlash 10
 	#define kColon 11
@@ -54,8 +55,8 @@ int main(int argc , char* argv[]) {
 		SDL_BlitSurface(digits, &(SDL_Rect){i*20,0,20,32}, screen, &(SDL_Rect){x,y});
 		return x + 20;
 	}
-	void blitBar(int x, int y, int len) {
-		GFX_blitPill(ASSET_UNDERLINE, screen, &(SDL_Rect){ x,y,len * 20});
+	void blitBar(int x, int y, int w) {
+		GFX_blitPill(ASSET_UNDERLINE, screen, &(SDL_Rect){ x,y,w});
 	}
 	int blitNumber(int num, int x, int y) {
 		int n;
@@ -119,6 +120,8 @@ int main(int argc , char* argv[]) {
 		else if (seconds_selected < 0) seconds_selected += 60;
 	}
 	
+	int option_count = 7;
+	
 	int dirty = 1;
 	while(!quit) {
 		unsigned long frame_start = SDL_GetTicks();
@@ -146,6 +149,9 @@ int main(int argc , char* argv[]) {
 				case 5:
 					seconds_selected++;
 				break;
+				case 6:
+					hour_selected += 12;
+				break;
 			}
 		}
 		else if (PAD_justRepeated(BTN_DOWN)) {
@@ -169,17 +175,21 @@ int main(int argc , char* argv[]) {
 				case 5:
 					seconds_selected--;
 				break;
+				case 6:
+					hour_selected -= 12;
+				break;
+				
 			}
 		}
 		else if (PAD_justRepeated(BTN_LEFT)) {
 			dirty = 1;
 			select_cursor--;
-			if (select_cursor < 0) select_cursor += 6;
+			if (select_cursor < 0) select_cursor += option_count;
 		}
 		else if (PAD_justRepeated(BTN_RIGHT)) {
 			dirty = 1;
 			select_cursor++;
-			if (select_cursor > 5) select_cursor -= 6;
+			if (select_cursor >= option_count) select_cursor -= option_count;
 		}
 		else if (PAD_justPressed(BTN_A)) {
 			save_changes = 1;
@@ -191,6 +201,8 @@ int main(int argc , char* argv[]) {
 		else if (PAD_justPressed(BTN_SELECT)) {
 			dirty = 1;
 			show_24hour = !show_24hour;
+			option_count = show_24hour ? 6 : 7;
+			if (select_cursor >= option_count) select_cursor -= option_count;
 		}
 		
 		if (dirty) {
@@ -214,11 +226,13 @@ int main(int argc , char* argv[]) {
 			x = blitNumber(day_selected, x,y);
 			x += 20; // space
 			
-			int am = hour_selected < 12;
+			am_selected = hour_selected < 12;
 			if (show_24hour) {
 				 x = blitNumber(hour_selected, x,y);
 			}
 			else {
+				// if (select_cursor==3) blitNumber(hour_selected, x,233);
+				
 				// 12 hour
 				int hour = hour_selected;
 				if (hour==0) hour = 12;
@@ -230,9 +244,11 @@ int main(int argc , char* argv[]) {
 			x = blit(kColon, x,y);
 			x = blitNumber(seconds_selected, x,y);
 			
+			int ampm_w;
 			if (!show_24hour) {
 				x += 20; // space
-				SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, am ? "AM" : "PM", COLOR_WHITE);
+				SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, am_selected ? "AM" : "PM", COLOR_WHITE);
+				ampm_w = text->w;
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){x,y-6});
 				SDL_FreeSurface(text);
 			}
@@ -244,7 +260,7 @@ int main(int argc , char* argv[]) {
 				x += 100; // YYYY/
 				x += (select_cursor - 1) * 60;
 			}
-			blitBar(x,y, (select_cursor>0 ? 2 : 4));
+			blitBar(x,y, (select_cursor==0 ? 80 : (select_cursor==6 ? ampm_w : 40)));
 		
 			GFX_flip(screen);
 		}
