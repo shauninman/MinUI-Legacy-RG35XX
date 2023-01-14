@@ -19,7 +19,7 @@ CPU_PATH="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
 
 cd $(dirname "$0")
 
-keymon.elf &
+keymon.elf & # &> /mnt/sdcard/keymon.txt &
 
 ./batmon.sh &
 

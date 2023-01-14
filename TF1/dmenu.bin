@@ -28,7 +28,7 @@ fi
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.img
 if [ ! -f $ROOTFS_IMAGE ]; then
 	# fallback to stock demenu.bin
-	# TODO: embed dmenu_ln here
+	# TODO: embed dmenu_ln loop here
 	/mnt/vendor/bin/dmenu.bin
 	# reboot -p
 	exit
@@ -42,7 +42,7 @@ mount -r -w -o loop -t ext4 $LOOPDEVICE $ROOTFS_MOUNTPOINT
 rm -rf $ROOTFS_MOUNTPOINT/tmp/*
 mkdir $ROOTFS_MOUNTPOINT/mnt/mmc
 mkdir $ROOTFS_MOUNTPOINT/mnt/sdcard
-for f in dev dev/pts proc sys run mnt/mmc mnt/sdcard
+for f in dev dev/pts proc sys mnt/mmc mnt/sdcard # tmp doesn't work for some reason?
 do
 	mount -o bind /$f $ROOTFS_MOUNTPOINT/$f
 done
