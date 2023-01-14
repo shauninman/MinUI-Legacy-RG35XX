@@ -926,6 +926,7 @@ int main(int argc , char* argv[]) {
 	
 	sec_start = SDL_GetTicks();
 	while (1) {
+		GFX_startFrame();
 		if (PAD_justReleased(BTN_POWER)) break; // TODO: tmp
 		core.run();
 		cpu_ticks += 1;

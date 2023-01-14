@@ -1262,6 +1262,7 @@ int main (int argc, char *argv[]) {
 	unsigned long cancel_start = SDL_GetTicks();
 	unsigned long power_start = 0;
 	while (!quit) {
+		GFX_startFrame();
 		unsigned long frame_start = SDL_GetTicks();
 		
 		PAD_poll();
@@ -1556,10 +1557,12 @@ int main (int argc, char *argv[]) {
 			GFX_flip(screen);
 			dirty = 0;
 		}
-		// // slow down to 60fps
-		// unsigned long frame_duration = SDL_GetTicks() - frame_start;
-		// #define TARGET_FRAME_DURATION 17
-		// if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
+		else {
+			// slow down to 60fps
+			unsigned long frame_duration = SDL_GetTicks() - frame_start;
+			#define TARGET_FRAME_DURATION 17
+			if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
+		}
 	}
 	
 	if (version) SDL_FreeSurface(version);

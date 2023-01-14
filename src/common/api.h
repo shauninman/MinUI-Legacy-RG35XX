@@ -28,6 +28,7 @@ void LOG_note(int level, const char* fmt, ...);
 SDL_Surface* GFX_init(void);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);
+void GFX_startFrame(void);
 void GFX_flip(SDL_Surface* screen);
 void GFX_quit(void);
 

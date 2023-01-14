@@ -192,18 +192,22 @@ void GFX_clearAll(void) {
 	memset(gfx.map, 0, gfx.map_size);
 }
 
+static int frame_start = 0;
+void GFX_startFrame(void) {
+	frame_start = SDL_GetTicks();
+}
 void GFX_flip(SDL_Surface* screen) {
+	static int ticks = 0;
+	ticks += 1;
 #ifdef GFX_ENABLE_VSYNC
-	int arg = 1;
-	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg); // TODO: this doesn't wait but it also doesn't error out like FBIO_WAITFORVSYNC...
+#define FRAME_BUDGET 17 // 60fps
+	if (frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
+		int arg = 1;
+		ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+	}
 #endif
 
 #ifdef GFX_ENABLE_BUFFER
-    // TODO: this would be moved to a thread
-	// I'm not clear on why that would be necessary
-	// if it's non-blocking and the pan will wait
-	// until the next vblank...
-	// what if the scaling was also moved to a thread?
 	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
 	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
 
