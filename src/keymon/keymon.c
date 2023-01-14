@@ -65,17 +65,31 @@ int main (int argc, char *argv[]) {
 		inputs[i] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	}
 	
-	register uint32_t input;
-	register uint32_t val;
-	register uint32_t menu_pressed = 0;
-	register uint32_t power_pressed = 0;
+	uint32_t input;
+	uint32_t val;
+	uint32_t menu_pressed = 0;
+	uint32_t power_pressed = 0;
 	uint32_t repeat_volume = 0;
+	
+	uint8_t ignore;
+	uint64_t then;
+	uint64_t now;
+	struct timeval tod;
+	
+	gettimeofday(&tod, NULL);
+	then = tod.tv_sec * 1000 + tod.tv_usec / 1000;
+	ignore = 0;
 	
 	// TODO: enable key repeat (not supported natively)
 	while (1) {
+		gettimeofday(&tod, NULL);
+		now = tod.tv_sec * 1000 + tod.tv_usec / 1000;
+		if ((int)(now-then)>20) ignore = 1; // ignore input that arrived during sleep
+		
 		for (int i=0; i<INPUT_COUNT; i++) {
 			input = inputs[i];
 			while(read(input, &ev, sizeof(ev))==sizeof(ev)) {
+				if (ignore) continue;
 				val = ev.value;
 				if (( ev.type != EV_KEY ) || ( val > REPEAT )) continue;
 				switch (ev.code) {
@@ -128,6 +142,9 @@ int main (int argc, char *argv[]) {
 				}
 			}
 		}
+		then = now;
+		ignore = 0;
+		
 		usleep(16666); // 60fps
 	}
 }
