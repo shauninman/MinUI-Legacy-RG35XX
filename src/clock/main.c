@@ -47,7 +47,7 @@ int main(int argc , char* argv[]) {
 	int quit = 0;
 	int save_changes = 0;
 	int select_cursor = 0;
-	int show_24hour = 0; // TODO: exists(USERDATA_PATH "/show_24hour");
+	int show_24hour = exists(USERDATA_PATH "/show_24hour");
 	
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
@@ -215,6 +215,13 @@ int main(int argc , char* argv[]) {
 			show_24hour = !show_24hour;
 			option_count = (show_24hour ? CURSOR_SECOND : CURSOR_AMPM) + 1;
 			if (select_cursor >= option_count) select_cursor -= option_count;
+			
+			if (show_24hour) {
+				system("touch " USERDATA_PATH "/show_24hour");
+			}
+			else {
+				system("rm " USERDATA_PATH "/show_24hour");
+			}
 		}
 		
 		if (dirty) {
