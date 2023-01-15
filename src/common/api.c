@@ -284,6 +284,13 @@ void GFX_flip(SDL_Surface* screen) {
 #endif
 }
 
+SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
+	int buffer = gfx.buffer - 1;
+	if (buffer<0) buffer += GFX_BUFFER_COUNT;
+	SDL_Surface* copy = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_DEPTH,0,0,0,0);
+	memcpy(copy->pixels, (gfx.map + gfx.buffer_size * buffer), (SCREEN_HEIGHT * SCREEN_PITCH));
+	return copy;
+}
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	SDL_Rect* rect = &asset_rects[asset];
 	SDL_Rect adj_rect = {

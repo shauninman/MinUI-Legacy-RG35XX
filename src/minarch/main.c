@@ -20,6 +20,8 @@
 #include "scaler_neon.h"
 
 static SDL_Surface* screen;
+static int quit;
+static int show_menu;
 
 ///////////////////////////////////////
 
@@ -771,6 +773,15 @@ static void input_poll_callback(void) {
 		else if (PAD_justPressed(BTN_R1)) State_write();
 	}
 	
+	// TODO: tmp
+	if (PAD_justReleased(BTN_POWER)) {
+		quit = 1;
+	}
+	
+	if (PAD_justReleased(BTN_MENU)) {
+		show_menu = 1;
+	}
+	
 	// TODO: support remapping
 	
 	buttons = 0;
@@ -915,6 +926,87 @@ void Core_close(void) {
 	if (core.handle) dlclose(core.handle);
 }
 
+///////////////////////////////////////
+
+static struct Menu {
+	int initialized;
+	SDL_Surface* overlay;
+} menu;
+
+void Menu_init(void) {
+	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, 0, 0, 0, 0);
+	SDL_SetAlpha(menu.overlay, SDL_SRCALPHA, 0x80);
+	SDL_FillRect(menu.overlay, NULL, 0);
+}
+void Menu_quit(void) {
+	SDL_FreeSurface(menu.overlay);
+}
+void Menu_loop(void) {
+	PAD_reset();
+	
+	// current screen is on the previous buffer
+	// TODO: copy current screen to restore before exiting
+	// TODO: create a second copy to use as backdrop with static elements? (eg. 50% black overlay, button hints, etc)
+	
+	SDL_Surface* backing = GFX_getBufferCopy();
+	SDL_BlitSurface(backing, NULL, screen, NULL);
+	SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
+	
+	// battery
+	int ow = SCALE1(PILL_SIZE);
+	int ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
+	int oy = SCALE1(PADDING);
+	GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
+		ox,
+		oy,
+		ow,
+		SCALE1(PILL_SIZE)
+	});
+	GFX_blitBattery(screen, &(SDL_Rect){ox,oy});
+	
+	// title
+	char display_name[MAX_PATH];
+	getDisplayName(game.name, display_name);
+	
+	SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
+	int max_width = MIN(SCREEN_WIDTH - SCALE1(PADDING * 2) - ow, text->w+SCALE1(12*2));
+	GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
+		SCALE1(PADDING),
+		SCALE1(PADDING),
+		max_width,
+		SCALE1(PILL_SIZE)
+	});
+	
+	SDL_BlitSurface(text, &(SDL_Rect){
+		0,
+		0,
+		max_width-SCALE1(12*2),
+		text->h
+	}, screen, &(SDL_Rect){
+		SCALE1(PADDING+12),
+		SCALE1(PADDING+4)
+	});
+	SDL_FreeSurface(text);
+	
+	// TODO: these need an overlay mode to use a BLACK background
+	GFX_blitButtonGroup((char*[]){ "POWER","SLEEP", NULL }, screen, 0);
+	GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, screen, 1);
+	
+	GFX_flip(screen);
+	
+	while (show_menu) {
+		PAD_poll();
+		if (PAD_anyPressed()) show_menu = 0;
+	}
+	
+	PAD_reset();
+
+	GFX_clearAll();
+	SDL_BlitSurface(backing, NULL, screen, NULL);
+	SDL_FreeSurface(backing);
+	GFX_flip(screen);
+}
+
 int main(int argc , char* argv[]) {
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 
@@ -924,40 +1016,47 @@ int main(int argc , char* argv[]) {
 	strcpy(rom_path, argv[2]);
 	getEmuName(rom_path, tag_name);
 	
-	LOG_info("core_path: %s\n", core_path);
-	LOG_info("rom_path: %s\n", rom_path);
-	LOG_info("tag_name: %s\n", tag_name);
+	// LOG_info("core_path: %s\n", core_path);
+	// LOG_info("rom_path: %s\n", rom_path);
+	// LOG_info("tag_name: %s\n", tag_name);
 	
 	screen = GFX_init();
-	Core_open(core_path, tag_name); 		LOG_info("after Core_open\n");
-	Core_init(); 							LOG_info("after Core_init\n");
-	Game_open(rom_path); 					LOG_info("after Game_open\n");
-	Core_load();  							LOG_info("after Core_load\n");
-	SND_init(core.sample_rate, core.fps);	LOG_info("after SND_init\n");
+	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
+	Core_init(); 							// LOG_info("after Core_init\n");
+	Game_open(rom_path); 					// LOG_info("after Game_open\n");
+	Core_load();  							// LOG_info("after Core_load\n");
+	SND_init(core.sample_rate, core.fps);	// LOG_info("after SND_init\n");
+	
+	Menu_init();
 	
 	// State_read();							LOG_info("after State_read\n");
 	
 	sec_start = SDL_GetTicks();
-	while (1) {
+	while (!quit) {
 		GFX_startFrame();
-		if (PAD_justReleased(BTN_POWER)) break; // TODO: tmp
 		core.run();
-		cpu_ticks += 1;
 		
-		int now = SDL_GetTicks();
-		if (now - sec_start>=1000) {
-			printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
-			sec_start = now;
-			cpu_ticks = 0;
-			fps_ticks = 0;
+		if (show_menu) Menu_loop();
+		
+		if (0) {
+			cpu_ticks += 1;
+			int now = SDL_GetTicks();
+			if (now - sec_start>=1000) {
+				printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
+				sec_start = now;
+				cpu_ticks = 0;
+				fps_ticks = 0;
+			}
 		}
 	}
+	
+	Menu_quit();
 	
 	Game_close();
 	Core_unload();
 
 	Core_quit();
-	Core_close(); LOG_info("after Core_close\n");
+	Core_close(); // LOG_info("after Core_close\n");
 	
 	SDL_FreeSurface(screen);
 	GFX_quit();

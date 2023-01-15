@@ -66,6 +66,8 @@ void GFX_startFrame(void);
 void GFX_flip(SDL_Surface* screen);
 void GFX_quit(void);
 
+SDL_Surface* GFX_getBufferCopy(void); // must be freed by caller
+
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
