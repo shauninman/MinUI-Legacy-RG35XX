@@ -1416,8 +1416,8 @@ int main (int argc, char *argv[]) {
 		int old_setting = show_setting;
 		int old_value = setting_value;
 		
-		#define BRIGHTNESS_DELAY 500
-		if (show_setting && now-setting_start>=BRIGHTNESS_DELAY && !PAD_isPressed(BTN_MENU)) {
+		#define SETTING_DELAY 500
+		if (show_setting && now-setting_start>=SETTING_DELAY && !PAD_isPressed(BTN_MENU)) {
 			show_setting = 0;
 			dirty = 1;
 		}

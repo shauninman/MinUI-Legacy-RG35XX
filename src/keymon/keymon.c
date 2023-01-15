@@ -29,10 +29,8 @@ static struct input_event ev;
 static int jack_fd;
 static pthread_t jack_pt;
 
-// TODO: HDMI?
-
 #define JACK_STATE_PATH "/sys/class/switch/h2w/state"
-#define HDMI_STATE_PATH "/sys/class/switch/hdmi/state"
+#define HDMI_STATE_PATH "/sys/class/switch/hdmi/state" // TODO:
 
 static void* watchJack(void *arg) {
 	uint32_t has_headphones;
