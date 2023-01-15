@@ -10,8 +10,6 @@
 #include "utils.h"
 #include "api.h"
 
-#define TICK_CLOCK 1 // behaves erratically, especially
-
 enum {
 	CURSOR_YEAR,
 	CURSOR_MONTH,
@@ -61,29 +59,6 @@ int main(int argc , char* argv[]) {
 	int32_t minute_selected = tm.tm_min;
 	int32_t seconds_selected = tm.tm_sec;
 	int32_t am_selected = tm.tm_hour < 12;
-
-#ifdef TICK_CLOCK
-	void syncTime(void) {
-		int32_t day_diff 		= day_selected - tm.tm_mday;
-		int32_t month_diff		= month_selected - (tm.tm_mon + 1);
-		int32_t year_diff		= year_selected - (tm.tm_year + 1900);
-		int32_t hour_diff		= hour_selected - tm.tm_hour;
-		int32_t minute_diff 	= minute_selected - tm.tm_min;
-		int32_t seconds_diff 	= seconds_selected - tm.tm_sec;
-		int32_t am_diff			= am_selected == (tm.tm_hour < 12);
-		
-		t = time(NULL);
-		tm = *localtime(&t);
-	
-		day_selected		= day_diff + tm.tm_mday;
-		month_selected		= month_diff + (tm.tm_mon + 1);
-		year_selected		= year_diff + (tm.tm_year + 1900);
-		hour_selected		= hour_diff + tm.tm_hour;
-		minute_selected		= minute_diff + tm.tm_min;
-		seconds_selected	= seconds_diff + tm.tm_sec;
-		am_selected			= am_diff + (tm.tm_hour < 12);
-	}
-#endif
 	
 	int blit(int i, int x, int y) {
 		SDL_BlitSurface(digits, &(SDL_Rect){i*20,0,20,32}, screen, &(SDL_Rect){x,y});
@@ -113,10 +88,6 @@ int main(int argc , char* argv[]) {
 		return x;
 	}
 	void validate(void) {
-#ifdef TICK_CLOCK
-		syncTime();
-#endif
-		
 		// leap year
 		uint32_t february_days = 28;
 		if ( ((year_selected % 4 == 0) && (year_selected % 100 != 0)) || (year_selected % 400 == 0)) february_days = 29;
@@ -160,9 +131,6 @@ int main(int argc , char* argv[]) {
 	
 	int option_count = 7;
 
-#ifdef TICK_CLOCK	
-	unsigned long second_start = SDL_GetTicks();
-#endif
 	int dirty = 1;
 	while(!quit) {
 		unsigned long frame_start = SDL_GetTicks();
@@ -187,11 +155,9 @@ int main(int argc , char* argv[]) {
 				case CURSOR_MINUTE:
 					minute_selected++;
 				break;
-#ifndef TICK_CLOCK
 				case CURSOR_SECOND:
 					seconds_selected++;
 				break;
-#endif
 				case CURSOR_AMPM:
 					hour_selected += 12;
 				break;
@@ -217,11 +183,9 @@ int main(int argc , char* argv[]) {
 				case CURSOR_MINUTE:
 					minute_selected--;
 				break;
-#ifndef TICK_CLOCK
 				case CURSOR_SECOND:
 					seconds_selected--;
 				break;
-#endif
 				case CURSOR_AMPM:
 					hour_selected -= 12;
 				break;
@@ -233,16 +197,10 @@ int main(int argc , char* argv[]) {
 			dirty = 1;
 			select_cursor--;
 			if (select_cursor < 0) select_cursor += option_count;
-#ifdef TICK_CLOCK
-			if (select_cursor==CURSOR_SECOND) select_cursor--;
-#endif
 		}
 		else if (PAD_justRepeated(BTN_RIGHT)) {
 			dirty = 1;
 			select_cursor++;
-#ifdef TICK_CLOCK
-			if (select_cursor==CURSOR_SECOND) select_cursor++;
-#endif
 			if (select_cursor >= option_count) select_cursor -= option_count;
 		}
 		else if (PAD_justPressed(BTN_A)) {
@@ -258,14 +216,6 @@ int main(int argc , char* argv[]) {
 			option_count = (show_24hour ? CURSOR_SECOND : CURSOR_AMPM) + 1;
 			if (select_cursor >= option_count) select_cursor -= option_count;
 		}
-		
-#ifdef TICK_CLOCK
-		unsigned long now = SDL_GetTicks();
-		if (now-second_start>=1000) {
-			dirty = 1;
-			second_start = now;
-		}
-#endif
 		
 		if (dirty) {
 			dirty = 0;
