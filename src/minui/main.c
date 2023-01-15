@@ -1535,54 +1535,28 @@ int main (int argc, char *argv[]) {
 				// GFX_blitBodyCopy("Empty folder", screen, &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT});
 			}
 			
-			char* hint;
-			char* button;
 			if (show_setting) {
-				hint = "BRIGHTNESS";
-				button = "MENU";
+				GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
 			}
 			else if (can_resume) {
-				hint = "RESUME";
-				button = "X";
+				GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, screen, 0);
 			}
 			else {
-				hint = "SLEEP";
-				button = "POWER";
+				GFX_blitButtonGroup((char*[]){ "POWER","SLEEP",  NULL }, screen, 0);
 			}
-			ox = SCALE1(PADDING);
-			oy = SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE);
-			GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
-				ox,
-				oy,
-				SCALE1(BUTTON_MARGIN * 2) + GFX_getButtonWidth(hint, button),
-				SCALE1(PILL_SIZE)
-			});
-			GFX_blitButton(hint, button, screen, &(SDL_Rect){
-				ox + SCALE1(BUTTON_MARGIN),
-				oy + SCALE1(BUTTON_MARGIN)
-			});
 			
 			if (total==0) {
 				if (stack->count>1) {
-					hint = "BACK";
-					button = "B";
-					ow = GFX_getButtonWidth(hint, button);
-					ox = SCREEN_WIDTH - ow - SCALE1(PADDING);
-					oy = SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE);
-					GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
-						ox,
-						oy,
-						SCALE1(BUTTON_MARGIN * 2) + ow,
-						SCALE1(PILL_SIZE)
-					});
-					GFX_blitButton(hint, button, screen, &(SDL_Rect){
-						ox + SCALE1(BUTTON_MARGIN),
-						oy + SCALE1(BUTTON_MARGIN)
-					});
+					GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, screen, 1);
 				}
 			}
 			else {
-				GFX_blitABButtons("OPEN", stack->count>1?"BACK":NULL, screen);
+				if (stack->count>1) {
+					GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, screen, 1);
+				}
+				else {
+					GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, screen, 1);
+				}
 			}
 		}
 		
