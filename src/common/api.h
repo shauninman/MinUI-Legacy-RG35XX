@@ -5,11 +5,6 @@
 
 ///////////////////////////////
 
-// TODO: tmp
-#define PAD_justRepeated PAD_justPressed
-
-///////////////////////////////
-
 enum {
 	LOG_DEBUG = 0,
 	LOG_INFO,
@@ -94,25 +89,47 @@ void SND_quit(void);
 ///////////////////////////////
 
 enum {
+	BTN_ID_UP,
+	BTN_ID_DOWN,
+	BTN_ID_LEFT,
+	BTN_ID_RIGHT,
+	BTN_ID_A,
+	BTN_ID_B,
+	BTN_ID_X,
+	BTN_ID_Y,
+	BTN_ID_START,
+	BTN_ID_SELECT,
+	BTN_ID_L1,
+	BTN_ID_R1,
+	BTN_ID_L2,
+	BTN_ID_R2,
+	BTN_ID_MENU,
+	BTN_ID_VOL_UP,
+	BTN_ID_VOL_DN,
+	BTN_ID_POWER,
+	BTN_ID_COUNT,
+};
+
+enum {
 	BTN_NONE	= 0,
-	BTN_UP 		= 1 << 0,
-	BTN_DOWN	= 1 << 1,
-	BTN_LEFT	= 1 << 2,
-	BTN_RIGHT	= 1 << 3,
-	BTN_A		= 1 << 4,
-	BTN_B		= 1 << 5,
-	BTN_X		= 1 << 6,
-	BTN_Y		= 1 << 7,
-	BTN_START	= 1 << 8,
-	BTN_SELECT	= 1 << 9,
-	BTN_L1		= 1 << 10,
-	BTN_R1		= 1 << 11,
-	BTN_L2		= 1 << 12,
-	BTN_R2		= 1 << 13,
-	BTN_MENU	= 1 << 14,
-	BTN_VOL_UP	= 1 << 15,
-	BTN_VOL_DN	= 1 << 16,
-	BTN_POWER	= 1 << 17,
+	BTN_UP 		= 1 << BTN_ID_UP,
+	BTN_DOWN	= 1 << BTN_ID_DOWN,
+	BTN_LEFT	= 1 << BTN_ID_LEFT,
+	BTN_RIGHT	= 1 << BTN_ID_RIGHT,
+	BTN_A		= 1 << BTN_ID_A,
+	BTN_B		= 1 << BTN_ID_B,
+	BTN_X		= 1 << BTN_ID_X,
+	BTN_Y		= 1 << BTN_ID_Y,
+	BTN_START	= 1 << BTN_ID_START,
+	BTN_SELECT	= 1 << BTN_ID_SELECT,
+	BTN_L1		= 1 << BTN_ID_L1,
+	BTN_R1		= 1 << BTN_ID_R1,
+	BTN_L2		= 1 << BTN_ID_L2,
+	BTN_R2		= 1 << BTN_ID_R2,
+	BTN_MENU	= 1 << BTN_ID_MENU,
+	BTN_VOL_UP	= 1 << BTN_ID_VOL_UP,
+	BTN_VOL_DN	= 1 << BTN_ID_VOL_DN,
+	BTN_POWER	= 1 << BTN_ID_POWER,
 };
 
 // TODO: this belongs in defines.h or better yet a platform.h
@@ -125,6 +142,7 @@ int PAD_anyPressed(void);
 int PAD_justPressed(int btn);
 int PAD_isPressed(int btn);
 int PAD_justReleased(int btn);
+int PAD_justRepeated(int btn);
 
 ///////////////////////////////
 

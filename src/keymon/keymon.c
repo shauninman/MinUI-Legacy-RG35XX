@@ -69,22 +69,30 @@ int main (int argc, char *argv[]) {
 	uint32_t val;
 	uint32_t menu_pressed = 0;
 	uint32_t power_pressed = 0;
-	uint32_t repeat_volume = 0;
+	
+	uint32_t up_pressed = 0;
+	uint32_t up_just_pressed = 0;
+	uint32_t up_repeat_at = 0;
+	
+	uint32_t down_pressed = 0;
+	uint32_t down_just_pressed = 0;
+	uint32_t down_repeat_at = 0;
 	
 	uint8_t ignore;
-	uint64_t then;
-	uint64_t now;
+	uint32_t then;
+	uint32_t now;
 	struct timeval tod;
 	
 	gettimeofday(&tod, NULL);
-	then = tod.tv_sec * 1000 + tod.tv_usec / 1000;
+	then = tod.tv_sec * 1000 + tod.tv_usec / 1000; // essential SDL_GetTicks()
 	ignore = 0;
+	
 	
 	// TODO: enable key repeat (not supported natively)
 	while (1) {
 		gettimeofday(&tod, NULL);
 		now = tod.tv_sec * 1000 + tod.tv_usec / 1000;
-		if ((int)(now-then)>20) ignore = 1; // ignore input that arrived during sleep
+		if (now-then>100) ignore = 1; // ignore input that arrived during sleep
 		
 		for (int i=0; i<INPUT_COUNT; i++) {
 			input = inputs[i];
@@ -94,54 +102,53 @@ int main (int argc, char *argv[]) {
 				if (( ev.type != EV_KEY ) || ( val > REPEAT )) continue;
 				switch (ev.code) {
 					case CODE_MENU:
-						if ( val != REPEAT ) menu_pressed = val;
-						break;
+						menu_pressed = val;
+					break;
 					case CODE_POWER:
-						if ( val != REPEAT ) power_pressed = val;
-						break;
-					case CODE_VOL_DN:
-						if ( val == REPEAT ) {
-							// Adjust repeat speed to 1/2
-							val = repeat_volume;
-							repeat_volume ^= PRESSED;
-						} else {
-							repeat_volume = 0;
-						}
-						if ( val == PRESSED ) {
-							if (menu_pressed) {
-								val = GetBrightness();
-								if (val>BRIGHTNESS_MIN) SetBrightness(--val);
-							}
-							else {
-								val = GetVolume();
-								if (val>VOLUME_MIN) SetVolume(--val);
-							}
-						}
-						break;
+						power_pressed = val;
+					break;
 					case CODE_VOL_UP:
-						if ( val == REPEAT ) {
-							// Adjust repeat speed to 1/2
-							val = repeat_volume;
-							repeat_volume ^= PRESSED;
-						} else {
-							repeat_volume = 0;
-						}
-						if ( val == PRESSED ) {
-							if (menu_pressed) {
-								val = GetBrightness();
-								if (val<BRIGHTNESS_MAX) SetBrightness(++val);
-							}
-							else {
-								val = GetVolume();
-								if (val<VOLUME_MAX) SetVolume(++val);
-							}
-						}
-						break;
+						up_pressed = up_just_pressed = val;
+						if (val) up_repeat_at = now + 300;
+					break;
+					case CODE_VOL_DN:
+						down_pressed = down_just_pressed = val;
+						if (val) down_repeat_at = now + 300;
+					break;
 					default:
-						break;
+					break;
 				}
 			}
 		}
+		
+		if (up_just_pressed || (up_pressed && now>=up_repeat_at)) {
+			if (menu_pressed) {
+				val = GetBrightness();
+				if (val<BRIGHTNESS_MAX) SetBrightness(++val);
+			}
+			else {
+				val = GetVolume();
+				if (val<VOLUME_MAX) SetVolume(++val);
+			}
+			
+			if (up_just_pressed) up_just_pressed = 0;
+			else up_repeat_at += 100;
+		}
+		
+		if (down_just_pressed || (down_pressed && now>=down_repeat_at)) {
+			if (menu_pressed) {
+				val = GetBrightness();
+				if (val>BRIGHTNESS_MIN) SetBrightness(--val);
+			}
+			else {
+				val = GetVolume();
+				if (val>VOLUME_MIN) SetVolume(--val);
+			}
+			
+			if (down_just_pressed) down_just_pressed = 0;
+			else down_repeat_at += 100;
+		}
+		
 		then = now;
 		ignore = 0;
 		

@@ -1422,7 +1422,7 @@ int main (int argc, char *argv[]) {
 			dirty = 1;
 		}
 		
-		if (PAD_justPressed(BTN_VOL_UP) || PAD_justPressed(BTN_VOL_DN) || PAD_justPressed(BTN_MENU)) {
+		if (PAD_justRepeated(BTN_VOL_UP) || PAD_justRepeated(BTN_VOL_DN) || PAD_justPressed(BTN_MENU)) {
 			setting_start = now;
 			if (PAD_isPressed(BTN_MENU)) {
 				show_setting = 1;

@@ -669,7 +669,11 @@ static struct PAD_Context {
 	int is_pressed;
 	int just_pressed;
 	int just_released;
+	int just_repeated;
+	int repeat_at[BTN_ID_COUNT];
 } pad;
+#define PAD_REPEAT_DELAY	300
+#define PAD_REPEAT_INTERVAL 100
 void PAD_reset(void) {
 	pad.just_pressed = BTN_NONE;
 	pad.is_pressed = BTN_NONE;
@@ -679,42 +683,56 @@ void PAD_poll(void) {
 	// reset transient state
 	pad.just_pressed = BTN_NONE;
 	pad.just_released = BTN_NONE;
+	pad.just_repeated = BTN_NONE;
+
+	int tick = SDL_GetTicks();
+	for (int i=0; i<BTN_ID_COUNT; i++) {
+		int btn = 1 << i;
+		if ((pad.is_pressed & btn) && (tick>=pad.repeat_at[i])) {
+			pad.just_repeated |= btn; // set
+			pad.repeat_at[i] += PAD_REPEAT_INTERVAL;
+		}
+	}
 	
 	// the actual poll
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		int btn = BTN_NONE;
+		int id = -1;
 		if (event.type==SDL_KEYDOWN || event.type==SDL_KEYUP) {
 			uint8_t code = event.key.keysym.scancode;
-				 if (code==CODE_UP) 	btn = BTN_UP;
- 			else if (code==CODE_DOWN)	btn = BTN_DOWN;
-			else if (code==CODE_LEFT)	btn = BTN_LEFT;
-			else if (code==CODE_RIGHT)	btn = BTN_RIGHT;
-			else if (code==CODE_A)		btn = BTN_A;
-			else if (code==CODE_B)		btn = BTN_B;
-			else if (code==CODE_X)		btn = BTN_X;
-			else if (code==CODE_Y)		btn = BTN_Y;
-			else if (code==CODE_START)	btn = BTN_START;
-			else if (code==CODE_SELECT)	btn = BTN_SELECT;
-			else if (code==CODE_MENU)	btn = BTN_MENU;
-			else if (code==CODE_L1)		btn = BTN_L1;
-			else if (code==CODE_L2)		btn = BTN_L2;
-			else if (code==CODE_R1)		btn = BTN_R1;
-			else if (code==CODE_R2)		btn = BTN_R2;
-			else if (code==CODE_VOL_UP)	btn = BTN_VOL_UP;
-			else if (code==CODE_VOL_DN)	btn = BTN_VOL_DN;
-			else if (code==CODE_POWER)	btn = BTN_POWER;
+				 if (code==CODE_UP) 	{ btn = BTN_UP; 		id = BTN_ID_UP; }
+ 			else if (code==CODE_DOWN)	{ btn = BTN_DOWN; 		id = BTN_ID_DOWN; }
+			else if (code==CODE_LEFT)	{ btn = BTN_LEFT; 		id = BTN_ID_LEFT; }
+			else if (code==CODE_RIGHT)	{ btn = BTN_RIGHT; 		id = BTN_ID_RIGHT; }
+			else if (code==CODE_A)		{ btn = BTN_A; 			id = BTN_ID_A; }
+			else if (code==CODE_B)		{ btn = BTN_B; 			id = BTN_ID_B; }
+			else if (code==CODE_X)		{ btn = BTN_X; 			id = BTN_ID_X; }
+			else if (code==CODE_Y)		{ btn = BTN_Y; 			id = BTN_ID_Y; }
+			else if (code==CODE_START)	{ btn = BTN_START; 		id = BTN_ID_START; }
+			else if (code==CODE_SELECT)	{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
+			else if (code==CODE_MENU)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
+			else if (code==CODE_L1)		{ btn = BTN_L1; 		id = BTN_ID_L1; }
+			else if (code==CODE_L2)		{ btn = BTN_L2; 		id = BTN_ID_L2; }
+			else if (code==CODE_R1)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
+			else if (code==CODE_R2)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
+			else if (code==CODE_VOL_UP)	{ btn = BTN_VOL_UP; 	id = BTN_ID_VOL_UP; }
+			else if (code==CODE_VOL_DN)	{ btn = BTN_VOL_DN; 	id = BTN_ID_VOL_DN; }
+			else if (code==CODE_POWER)	{ btn = BTN_POWER; 		id = BTN_ID_POWER; }
 		}
 		
 		if (btn==BTN_NONE) continue;
 		
 		if (event.type==SDL_KEYUP) {
-			pad.is_pressed &= ~btn; // unset
-			pad.just_released |= btn; // set
+			pad.is_pressed		&= ~btn; // unset
+			pad.just_repeated	&= ~btn; // unset
+			pad.just_released	|= btn; // set
 		}
 		else if ((pad.is_pressed & btn)==BTN_NONE) {
-			pad.just_pressed |= btn; // set
-			pad.is_pressed 	 |= btn; // set
+			pad.just_pressed	|= btn; // set
+			pad.just_repeated	|= btn; // set
+			pad.is_pressed		|= btn; // set
+			pad.repeat_at[id]	= tick + PAD_REPEAT_DELAY;
 		}
 	}
 }
@@ -724,6 +742,7 @@ int PAD_anyPressed(void)		{ return pad.is_pressed!=BTN_NONE; }
 int PAD_justPressed(int btn)	{ return pad.just_pressed & btn; }
 int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
 int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
+int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
 ///////////////////////////////
 
@@ -801,14 +820,5 @@ int POW_getBattery(void) {
 	// return getInt("/sys/class/power_supply/battery/capacity"); // this is really inaccurate
 	
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // ~320-420
-	i = MIN(MAX(0, i-320), 100); // TODO: smooth this value before returning ala Mini
-
-	// eh
-	// if (i>80) return 100;
-	// else if (i>60) return 80;
-	// else if (i>40) return 60;
-	// else if (i>20) return 40;
-	// else if (i>10) return 20;
-	// else if (i>5)  return 10;
-	return i;
+	return MIN(MAX(0, i-320), 100); // TODO: smooth this value before returning ala Mini
 }
