@@ -387,10 +387,22 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			for (int i=0; vars[i].key; i++) {
 				const struct retro_core_option_definition *var = &vars[i];
 				// printf("set key: %s to value: %s (%s)\n", var->key, var->default_value, var->desc);
+
+				// TODO: tmp, patch or override cores
 				char *default_value = (char*)var->default_value;
 				if (!strcmp("gpsp_save_method", var->key)) {
-					default_value = "libretro"; // TODO: tmp, patch or override gpsp
+					default_value = "libretro";
 				}
+				else if (!strcmp("gambatte_gb_colorization", var->key)) {
+					default_value = "internal";
+				}
+				else if (!strcmp("gambatte_gb_internal_palette", var->key)) {
+					default_value = "TWB64 - Pack 1";
+				}
+				else if (!strcmp("gambatte_gb_palette_twb64_1", var->key)) {
+					default_value = "TWB64 038 - Pokemon mini Ver.";
+				}
+				
 				printf("set core (intl) key: %s to value: %s\n", var->key, default_value);
 				strcpy(tmp_options[i].key, var->key);
 				strcpy(tmp_options[i].value, default_value);
@@ -652,6 +664,7 @@ static void scale4x(int w, int h, int pitch, const void *src, void *dst) {
 	}
 }
 static void scale(const void* src, int width, int height, int pitch, void* dst) {
+	// TODO: this should be selectScaler()
 	int scale_x = SCREEN_WIDTH / width;
 	int scale_y = SCREEN_HEIGHT / height;
 	int scale = MIN(scale_x,scale_y);
@@ -679,8 +692,7 @@ static void scale(const void* src, int width, int height, int pitch, void* dst) 
 		// default: scale1x(width,height,pitch,src,dst); break;
 	}
 	
-	// TODO: diagnosing framepacing issues
-	if (1) {
+	if (0) {
 		static int frame = 0;
 		int w = 8;
 		int h = 16;
@@ -736,6 +748,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		last_width = width;
 		last_height = height;
 		GFX_clearAll();
+		// TODO: selectScaler(width,height,pitch);
 	}
 	scale(data,width,height,pitch,screen->pixels);
 	GFX_flip(screen);
