@@ -999,9 +999,13 @@ int POW_preventAutosleep(void) {
 int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
-int POW_getBattery(void) {
+int POW_getBattery(void) { // 0-100 in 5% increments
 	// return getInt("/sys/class/power_supply/battery/capacity"); // this is really inaccurate
 	
+	// TODO: smooth this value before returning ala Mini?
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // ~320-420
-	return MIN(MAX(0, i-320), 100); // TODO: smooth this value before returning ala Mini
+	i = MIN(MAX(0, i-320), 100);
+	i /= 5;
+	i *= 5;
+	return i;
 }
