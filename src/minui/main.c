@@ -1377,12 +1377,15 @@ int main (int argc, char *argv[]) {
 				int selected_row = top->selected - top->start;
 				for (int i=top->start,j=0; i<top->end; i++,j++) {
 					Entry* entry = top->entries->items[i];
-					char* display_name = entry->unique ? entry->unique : entry->name;
+					char* entry_name = entry->unique ? entry->unique : entry->name;
 					int max_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
-					if (i==top->start) max_width -= ow; // + SCALE1(PADDING);
+					if (i==top->start) max_width -= ow;
 					
 					SDL_Color text_color = COLOR_WHITE;
 					
+					char display_name[256];
+					int text_width = GFX_truncateDisplayName(entry_name, display_name, max_width);
+					max_width = MIN(max_width, text_width);
 					if (j==selected_row) {
 						GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
@@ -1393,7 +1396,6 @@ int main (int argc, char *argv[]) {
 						text_color = COLOR_BLACK;
 					}
 					SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
-					// TODO: handle auto-scrolling
 					SDL_BlitSurface(text, &(SDL_Rect){
 						0,
 						0,

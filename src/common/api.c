@@ -300,6 +300,25 @@ SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
 	memcpy(copy->pixels, (gfx.map + gfx.buffer_size * buffer), (SCREEN_HEIGHT * SCREEN_PITCH));
 	return copy;
 }
+int GFX_truncateDisplayName(const char* in_name, char* out_name, int max_width) {
+	int text_width;
+	strcpy(out_name, in_name);
+	TTF_SizeUTF8(font.large, out_name, &text_width, NULL);
+	text_width += SCALE1(12*2);
+	
+	while (text_width>max_width) {
+		int len = strlen(out_name);
+		out_name[len-1] = '\0';
+		out_name[len-2] = '.';
+		out_name[len-3] = '.';
+		out_name[len-4] = '.';
+		TTF_SizeUTF8(font.large, out_name, &text_width, NULL);
+		text_width += SCALE1(12*2);
+	}
+	
+	return text_width;
+}
+
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	SDL_Rect* rect = &asset_rects[asset];
 	SDL_Rect adj_rect = {

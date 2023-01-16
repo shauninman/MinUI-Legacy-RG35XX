@@ -73,6 +73,7 @@ void GFX_flip(SDL_Surface* screen);
 void GFX_quit(void);
 
 SDL_Surface* GFX_getBufferCopy(void); // must be freed by caller
+int GFX_truncateDisplayName(const char* in_name, char* out_name, int max_width); // returns final width (including pill padding)
 
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
