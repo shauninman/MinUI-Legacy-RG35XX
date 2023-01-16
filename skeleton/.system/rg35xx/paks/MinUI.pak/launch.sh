@@ -12,7 +12,6 @@ export PATH=$SYSTEM_PATH/bin:$PATH
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
 
 mkdir -p "$LOGS_PATH"
-mkdir -p "$USERDATA_PATH/.mmenu"
 mkdir -p "$USERDATA_PATH/.minui"
 
 CPU_PATH="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"

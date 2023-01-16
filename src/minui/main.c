@@ -485,7 +485,7 @@ static int Entry_useAlt(Entry* self) {
 		if (tmp) strcpy(rom_name, tmp+1);
 		
 		char use_alt[256];
-		sprintf(use_alt, "%s/.mmenu/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
+		sprintf(use_alt, "%s/.minui/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
 		
 		self->use_alt = exists(use_alt);
 	}
@@ -504,7 +504,7 @@ static int Entry_toggleAlt(Entry* self) {
 	if (tmp) strcpy(rom_name, tmp+1);
 	
 	char use_alt_path[256];
-	sprintf(use_alt_path, "%s/.mmenu/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
+	sprintf(use_alt_path, "%s/.minui/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
 	
 	if (self->use_alt==1) touch(use_alt_path);
 	else unlink(use_alt_path);
@@ -954,7 +954,7 @@ static void readyResumePath(char* rom_path, int type) {
 	tmp = strrchr(path, '/') + 1;
 	strcpy(rom_file, tmp);
 	
-	sprintf(slot_path, "%s/.mmenu/%s/%s.txt", USERDATA_PATH, emu_name, rom_file); // /.userdata/.mmenu/<EMU>/<romname>.ext.txt
+	sprintf(slot_path, "%s/.minui/%s/%s.txt", USERDATA_PATH, emu_name, rom_file); // /.userdata/.minui/<EMU>/<romname>.ext.txt
 	
 	can_resume = exists(slot_path);
 }
@@ -990,10 +990,10 @@ static int autoResume(void) {
 	if (!exists(emu_path)) return 0;
 	
 	// putFile(LAST_PATH, FAUX_RECENT_PATH); // saveLast() will crash here because top is NULL
-
+	
 	char cmd[256];
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), escapeSingleQuotes(sd_path));
-	putFile(RESUME_SLOT_PATH, AUTO_RESUME_SLOT);
+	putInt(RESUME_SLOT_PATH, AUTO_RESUME_SLOT);
 	queueNext(cmd);
 	return 1;
 }
@@ -1039,7 +1039,7 @@ static void openRom(char* path, char* last) {
 			
 			// get disc for state
 			char disc_path_path[256];
-			sprintf(disc_path_path, "%s/.mmenu/%s/%s.%s.txt", USERDATA_PATH, emu_name, rom_file, slot); // /.userdata/.mmenu/<EMU>/<romname>.ext.0.txt
+			sprintf(disc_path_path, "%s/.minui/%s/%s.%s.txt", USERDATA_PATH, emu_name, rom_file, slot); // /.userdata/.minui/<EMU>/<romname>.ext.0.txt
 
 			if (exists(disc_path_path)) {
 				// switch to disc path
