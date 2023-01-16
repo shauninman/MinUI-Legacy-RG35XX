@@ -59,7 +59,12 @@ typedef struct GFX_Fonts {
 } GFX_Fonts;
 extern GFX_Fonts font;
 
-SDL_Surface* GFX_init(void);
+enum {
+	MODE_MAIN,
+	MODE_MENU,
+};
+
+SDL_Surface* GFX_init(int mode);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);
 void GFX_startFrame(void);
@@ -74,7 +79,9 @@ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
-void GFX_blitABButtons(char* a, char* b, SDL_Surface* dst);
+void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
+
+int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 int GFX_blitButtonGroup(char** hints, SDL_Surface* dst, int align_right);
 
 ///////////////////////////////
@@ -148,6 +155,9 @@ int PAD_justRepeated(int btn);
 
 ///////////////////////////////
 
+// TODO: rename PLAT_*?
+typedef void (*POW_callback_t)(void);
+void POW_update(int* dirty, int* show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep);
 void POW_disablePowerOff(void);
 void POW_powerOff(void);
 void POW_fauxSleep(void);

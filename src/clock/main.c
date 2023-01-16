@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
+#include <msettings.h>
 
 #include "defines.h"
 #include "utils.h"
@@ -21,7 +22,8 @@ enum {
 };
 
 int main(int argc , char* argv[]) {
-	SDL_Surface* screen = GFX_init();
+	SDL_Surface* screen = GFX_init(MODE_MAIN);
+	InitSettings();
 	
 	// TODO: make use of SCALE1()
 	SDL_Surface* digits = SDL_CreateRGBSurface(SDL_SWSURFACE, 240,32, 16, 0,0,0,0);
@@ -132,6 +134,7 @@ int main(int argc , char* argv[]) {
 	int option_count = 7;
 
 	int dirty = 1;
+	int show_setting = 0;
 	while(!quit) {
 		unsigned long frame_start = SDL_GetTicks();
 		
@@ -224,6 +227,8 @@ int main(int argc , char* argv[]) {
 			}
 		}
 		
+		POW_update(&dirty, &show_setting);
+		
 		if (dirty) {
 			dirty = 0;
 			
@@ -231,6 +236,9 @@ int main(int argc , char* argv[]) {
 		
 			// render
 			GFX_clear(screen);
+			
+			GFX_blitHardwareGroup(screen, show_setting);
+			
 			GFX_blitButtonGroup((char*[]){ "SELECT",show_24hour?"12 HOUR":"24 HOUR", NULL }, screen, 0);
 			GFX_blitButtonGroup((char*[]){ "B","CANCEL", "A","SET", NULL }, screen, 1);
 		
@@ -294,6 +302,8 @@ int main(int argc , char* argv[]) {
 	SDL_FreeSurface(digits);
 
 	GFX_quit();
+	
+	// TODO: if (seconds_selected==tm.tm_sec) refresh tm and update seconds_selected
 	
 	if (save_changes) {
 		char cmd[512];

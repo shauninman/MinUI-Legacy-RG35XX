@@ -1234,7 +1234,7 @@ int main (int argc, char *argv[]) {
 	
 	dump("MinUI");
 	
-	SDL_Surface* screen = GFX_init();
+	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	InitSettings();
 	PAD_reset();
 	
@@ -1244,18 +1244,7 @@ int main (int argc, char *argv[]) {
 	
 	PAD_reset();
 	int dirty = 1;
-	int was_charging = POW_isCharging();
-	unsigned long charge_start = SDL_GetTicks();
 	int show_setting = 0; // 1=brightness,2=volume
-	unsigned long setting_start = 0;
-	int setting_value = 0;
-	int setting_min = 0;
-	int setting_max = 0;
-	int delay_select = 0;
-	int autoscroll_id = -1;
-	int autoscroll_ox = 0;
-	unsigned long cancel_start = SDL_GetTicks();
-	unsigned long power_start = 0;
 	while (!quit) {
 		GFX_startFrame();
 		unsigned long frame_start = SDL_GetTicks();
@@ -1320,31 +1309,29 @@ int main (int argc, char *argv[]) {
 			}
 		}
 		
-		if (!PAD_isPressed(BTN_START) && !PAD_isPressed(BTN_SELECT)) { 
-			if (PAD_justRepeated(BTN_L1)) { // previous alpha
-				Entry* entry = top->entries->items[selected];
-				int i = entry->alpha-1;
-				if (i>=0) {
-					selected = top->alphas->items[i];
-					if (total>MAIN_ROW_COUNT) {
-						top->start = selected;
-						top->end = top->start + MAIN_ROW_COUNT;
-						if (top->end>total) top->end = total;
-						top->start = top->end - MAIN_ROW_COUNT;
-					}
+		if (PAD_justRepeated(BTN_L1)) { // previous alpha
+			Entry* entry = top->entries->items[selected];
+			int i = entry->alpha-1;
+			if (i>=0) {
+				selected = top->alphas->items[i];
+				if (total>MAIN_ROW_COUNT) {
+					top->start = selected;
+					top->end = top->start + MAIN_ROW_COUNT;
+					if (top->end>total) top->end = total;
+					top->start = top->end - MAIN_ROW_COUNT;
 				}
 			}
-			else if (PAD_justRepeated(BTN_R1)) { // next alpha
-				Entry* entry = top->entries->items[selected];
-				int i = entry->alpha+1;
-				if (i<top->alphas->count) {
-					selected = top->alphas->items[i];
-					if (total>MAIN_ROW_COUNT) {
-						top->start = selected;
-						top->end = top->start + MAIN_ROW_COUNT;
-						if (top->end>total) top->end = total;
-						top->start = top->end - MAIN_ROW_COUNT;
-					}
+		}
+		else if (PAD_justRepeated(BTN_R1)) { // next alpha
+			Entry* entry = top->entries->items[selected];
+			int i = entry->alpha+1;
+			if (i<top->alphas->count) {
+				selected = top->alphas->items[i];
+				if (total>MAIN_ROW_COUNT) {
+					top->start = selected;
+					top->end = top->start + MAIN_ROW_COUNT;
+					if (top->end>total) top->end = total;
+					top->start = top->end - MAIN_ROW_COUNT;
 				}
 			}
 		}
@@ -1356,12 +1343,10 @@ int main (int argc, char *argv[]) {
 	
 		if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-		if (total>0 && PAD_justReleased(BTN_RESUME)) {
-			if (can_resume) {
-				should_resume = 1;
-				Entry_open(top->entries->items[top->selected]);
-				dirty = 1;
-			}
+		if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+			should_resume = 1;
+			Entry_open(top->entries->items[top->selected]);
+			dirty = 1;
 		}
 		else if (total>0 && PAD_justPressed(BTN_A)) {
 			Entry_open(top->entries->items[top->selected]);
@@ -1378,126 +1363,16 @@ int main (int argc, char *argv[]) {
 			if (total>0) readyResume(top->entries->items[top->selected]);
 		}
 		
-		unsigned long now = SDL_GetTicks();
-		if (PAD_anyPressed()) cancel_start = now;
-		
-		#define CHARGE_DELAY 1000
-		if (dirty || now-charge_start>=CHARGE_DELAY) {
-			int is_charging = POW_isCharging();
-			if (was_charging!=is_charging) {
-				was_charging = is_charging;
-				dirty = 1;
-			}
-			charge_start = now;
-		}
-		
-		if (power_start && now-power_start>=1000) {
-			POW_powerOff();
-			quit = 1;
-			break;
-		}
-		if (PAD_justPressed(BTN_SLEEP)) {
-			power_start = now;
-		}
-		
-		#define SLEEP_DELAY 30000
-		if (now-cancel_start>=SLEEP_DELAY && POW_preventAutosleep()) cancel_start = now;
-		
-		if (now-cancel_start>=SLEEP_DELAY || PAD_justReleased(BTN_SLEEP))
-		{
-			POW_fauxSleep();
-			cancel_start = SDL_GetTicks();
-			power_start = 0;
-			dirty = 1;
-		}
-		
-		int was_dirty = dirty; // dirty list (not including settings/battery)
-		
-		int old_setting = show_setting;
-		int old_value = setting_value;
-		
-		#define SETTING_DELAY 500
-		if (show_setting && now-setting_start>=SETTING_DELAY && !PAD_isPressed(BTN_MENU)) {
-			show_setting = 0;
-			dirty = 1;
-		}
-		
-		if (PAD_justRepeated(BTN_VOL_UP) || PAD_justRepeated(BTN_VOL_DN) || PAD_justPressed(BTN_MENU)) {
-			setting_start = now;
-			if (PAD_isPressed(BTN_MENU)) {
-				show_setting = 1;
-			}
-			else {
-				show_setting = 2;
-			}
-		}
-		if (show_setting) dirty = 1; // shm is slow or keymon is catching input on the next frame
+		POW_update(&dirty, &show_setting, NULL, NULL);
 		
 		if (dirty) {
 			GFX_clear(screen);
 			
 			int ox;
 			int oy;
-			int ow = 0;
-			
-			if (show_setting) {
-				ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + 4);
-				ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
-				oy = SCALE1(PADDING);
-				GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
-					ox,
-					oy,
-					ow,
-					SCALE1(PILL_SIZE)
-				});
-				
-				int asset = show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
-				int ax = ox + (show_setting==1 ? SCALE1(6) : SCALE1(8));
-				int ay = oy + (show_setting==1 ? SCALE1(5) : SCALE1(7));
-				GFX_blitAsset(asset, NULL, screen, &(SDL_Rect){ax,ay});
-				
-				ox += SCALE1(PILL_SIZE);
-				oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-				GFX_blitPill(ASSET_BAR_BG, screen, &(SDL_Rect){
-					ox,
-					oy,
-					SCALE1(SETTINGS_WIDTH),
-					SCALE1(SETTINGS_SIZE)
-				});
-				
-				if (show_setting==1) {
-					setting_value = GetBrightness();
-					setting_min = BRIGHTNESS_MIN;
-					setting_max = BRIGHTNESS_MAX;
-				}
-				else {
-					setting_value = GetVolume();
-					setting_min = VOLUME_MIN;
-					setting_max = VOLUME_MAX;
-				}
-				float percent = ((float)(setting_value-setting_min) / (setting_max-setting_min));
-				if (show_setting==1 || setting_value>0) {
-					GFX_blitPill(ASSET_BAR, screen, &(SDL_Rect){
-						ox,
-						oy,
-						SCALE1(SETTINGS_WIDTH) * percent,
-						SCALE1(SETTINGS_SIZE)
-					});
-				}
-			}
-			else {
-				ow = SCALE1(PILL_SIZE);
-				ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
-				oy = SCALE1(PADDING);
-				GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
-					ox,
-					oy,
-					ow,
-					SCALE1(PILL_SIZE)
-				});
-				GFX_blitBattery(screen, &(SDL_Rect){ox,oy});
-			}
+			int ow = GFX_blitHardwareGroup(screen, show_setting);
 		
+			// list
 			if (total>0) {
 				int selected_row = top->selected - top->start;
 				for (int i=top->start,j=0; i<top->end; i++,j++) {
@@ -1532,9 +1407,10 @@ int main (int argc, char *argv[]) {
 				}
 			}
 			else {
-				// GFX_blitBodyCopy("Empty folder", screen, &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT});
+				GFX_blitMessage("Empty folder", screen, NULL);
 			}
 			
+			// buttons
 			if (show_setting) {
 				GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
 			}

@@ -4,6 +4,7 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
 #include <SDL/SDL_ttf.h>
+#include <msettings.h>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -214,6 +215,21 @@ error:
 	if (state_file) fclose(state_file);
 
 	sync();
+}
+static void State_autosave(void) {
+	int last_state_slot = state_slot;
+	state_slot = AUTO_RESUME_SLOT;
+	State_write();
+	state_slot = last_state_slot;
+}
+static void State_resume(void) {
+	if (!exists(RESUME_SLOT_PATH)) return;
+	
+	int last_state_slot = state_slot;
+	state_slot = getInt(RESUME_SLOT_PATH);
+	unlink(RESUME_SLOT_PATH);
+	State_read();
+	state_slot = last_state_slot;
 }
 
 ///////////////////////////////
@@ -763,20 +779,23 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 	return SND_batchSamples((const SND_Frame*)data, frames);
 };
 
+static void Menu_beforeSleep(void);
+static void Menu_afterSleep(void);
+
 static uint32_t buttons = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
-	// TODO: tmp (L)oad and w(R)ite state
-	if (PAD_isPressed(BTN_MENU)) {
-		if (PAD_justPressed(BTN_L1)) State_read();
-		else if (PAD_justPressed(BTN_R1)) State_write();
-	}
-	
-	// TODO: tmp
-	if (PAD_justReleased(BTN_POWER)) {
-		quit = 1;
-	}
+
+
+
+	// TODO: too heavy? maybe but regardless,
+	// this will cause it to go to sleep after 
+	// 30 seconds--even while playing!
+	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
+
+
+
 	
 	if (PAD_justReleased(BTN_MENU)) {
 		show_menu = 1;
@@ -941,68 +960,90 @@ void Menu_init(void) {
 void Menu_quit(void) {
 	SDL_FreeSurface(menu.overlay);
 }
+void Menu_beforeSleep(void) {
+	State_autosave();
+	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
+}
+void Menu_afterSleep(void) {
+	unlink(AUTO_RESUME_PATH);
+}
 void Menu_loop(void) {
 	PAD_reset();
 	
 	// current screen is on the previous buffer
-	// TODO: copy current screen to restore before exiting
-	// TODO: create a second copy to use as backdrop with static elements? (eg. 50% black overlay, button hints, etc)
-	
 	SDL_Surface* backing = GFX_getBufferCopy();
-	SDL_BlitSurface(backing, NULL, screen, NULL);
-	SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
 	
-	// battery
-	int ow = SCALE1(PILL_SIZE);
-	int ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
-	int oy = SCALE1(PADDING);
-	GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
-		ox,
-		oy,
-		ow,
-		SCALE1(PILL_SIZE)
-	});
-	GFX_blitBattery(screen, &(SDL_Rect){ox,oy});
+	// displau name
+	char rom_name[MAX_PATH];
+	getDisplayName(game.path, rom_name);
 	
-	// title
-	char display_name[MAX_PATH];
-	getDisplayName(game.name, display_name);
-	
-	SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
-	int max_width = MIN(SCREEN_WIDTH - SCALE1(PADDING * 2) - ow, text->w+SCALE1(12*2));
-	GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
-		SCALE1(PADDING),
-		SCALE1(PADDING),
-		max_width,
-		SCALE1(PILL_SIZE)
-	});
-	
-	SDL_BlitSurface(text, &(SDL_Rect){
-		0,
-		0,
-		max_width-SCALE1(12*2),
-		text->h
-	}, screen, &(SDL_Rect){
-		SCALE1(PADDING+12),
-		SCALE1(PADDING+4)
-	});
-	SDL_FreeSurface(text);
-	
-	// TODO: these need an overlay mode to use a BLACK background
-	GFX_blitButtonGroup((char*[]){ "POWER","SLEEP", NULL }, screen, 0);
-	GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, screen, 1);
-	
-	GFX_flip(screen);
-	
+	int show_setting = 0;
+	int menu_dirty = 1;
+	int menu_start = SDL_GetTicks();
 	while (show_menu) {
 		PAD_poll();
-		if (PAD_anyPressed()) show_menu = 0;
+		
+		// TODO: tmp (L)oad and w(R)ite state
+		if (PAD_justPressed(BTN_L1)) {
+			State_read();
+			show_menu = 0;
+		}
+		else if (PAD_justPressed(BTN_R1)) {
+			State_write();
+			show_menu = 0;
+		}
+		
+		if (PAD_justPressed(BTN_B)) show_menu = 0;
+		if (PAD_justPressed(BTN_X)) {
+			show_menu = 0;
+			quit = 1; // TODO: tmp
+		}
+
+		POW_update(&menu_dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
+		
+		if (menu_dirty) {
+			SDL_BlitSurface(backing, NULL, screen, NULL);
+			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
+	
+			int ow = GFX_blitHardwareGroup(screen, show_setting);
+	
+			SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, rom_name, COLOR_WHITE);
+			int max_width = MIN(SCREEN_WIDTH - SCALE1(PADDING * 2) - ow, text->w+SCALE1(12*2));
+			GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
+				SCALE1(PADDING),
+				SCALE1(PADDING),
+				max_width,
+				SCALE1(PILL_SIZE)
+			});
+			SDL_BlitSurface(text, &(SDL_Rect){
+				0,
+				0,
+				max_width-SCALE1(12*2),
+				text->h
+			}, screen, &(SDL_Rect){
+				SCALE1(PADDING+12),
+				SCALE1(PADDING+4)
+			});
+			SDL_FreeSurface(text);
+			
+			GFX_blitButtonGroup((char*[]){ "POWER","SLEEP", NULL }, screen, 0);
+			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, screen, 1);
+	
+			GFX_flip(screen);
+			menu_dirty = 0;
+		}
+		else {
+			// slow down to 60fps
+			unsigned long frame_duration = SDL_GetTicks() - menu_start;
+			#define kTargetFrameDuration 17
+			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
+		}
 	}
 	
 	PAD_reset();
 
 	GFX_clearAll();
-	SDL_BlitSurface(backing, NULL, screen, NULL);
+	if (!quit) SDL_BlitSurface(backing, NULL, screen, NULL);
 	SDL_FreeSurface(backing);
 	GFX_flip(screen);
 }
@@ -1020,7 +1061,9 @@ int main(int argc , char* argv[]) {
 	// LOG_info("rom_path: %s\n", rom_path);
 	// LOG_info("tag_name: %s\n", tag_name);
 	
-	screen = GFX_init();
+	screen = GFX_init(MODE_MENU);
+	InitSettings();
+	
 	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
 	Core_init(); 							// LOG_info("after Core_init\n");
 	Game_open(rom_path); 					// LOG_info("after Game_open\n");
@@ -1029,11 +1072,13 @@ int main(int argc , char* argv[]) {
 	
 	Menu_init();
 	
+	State_resume();
 	// State_read();							LOG_info("after State_read\n");
 	
 	sec_start = SDL_GetTicks();
 	while (!quit) {
 		GFX_startFrame();
+		
 		core.run();
 		
 		if (show_menu) Menu_loop();
