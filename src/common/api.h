@@ -161,6 +161,8 @@ void POW_update(int* dirty, int* show_setting, POW_callback_t before_sleep, POW_
 void POW_disablePowerOff(void);
 void POW_powerOff(void);
 void POW_fauxSleep(void);
+void POW_disableAutosleep(void);
+void POW_enableAutosleep(void);
 int POW_preventAutosleep(void);
 int POW_isCharging(void);
 int POW_getBattery(void);

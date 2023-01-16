@@ -968,6 +968,7 @@ void Menu_afterSleep(void) {
 	unlink(AUTO_RESUME_PATH);
 }
 void Menu_loop(void) {
+	POW_enableAutosleep();
 	PAD_reset();
 	
 	// current screen is on the previous buffer
@@ -1046,6 +1047,8 @@ void Menu_loop(void) {
 	if (!quit) SDL_BlitSurface(backing, NULL, screen, NULL);
 	SDL_FreeSurface(backing);
 	GFX_flip(screen);
+	
+	POW_disableAutosleep();
 }
 
 int main(int argc , char* argv[]) {
@@ -1075,6 +1078,7 @@ int main(int argc , char* argv[]) {
 	State_resume();
 	// State_read();							LOG_info("after State_read\n");
 	
+	POW_disableAutosleep();
 	sec_start = SDL_GetTicks();
 	while (!quit) {
 		GFX_startFrame();

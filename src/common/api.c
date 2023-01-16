@@ -964,8 +964,16 @@ void POW_fauxSleep(void) {
 	system("killall -CONT keymon.elf");
 	POW_exitSleep();
 }
+
+static int can_autosleep = 1;
+void POW_disableAutosleep(void) {
+	can_autosleep = 0;
+}
+void POW_enableAutosleep(void) {
+	can_autosleep = 1;
+}
 int POW_preventAutosleep(void) {
-	return POW_isCharging();
+	return POW_isCharging() || !can_autosleep;
 }
 int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
