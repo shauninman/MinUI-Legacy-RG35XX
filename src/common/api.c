@@ -137,6 +137,7 @@ static SDL_Rect asset_rects[] = {
 	[ASSET_PAGE]			= (SDL_Rect){SCALE4(39,54, 6, 6)},
 	[ASSET_BAR]				= (SDL_Rect){SCALE4(33,58, 4, 4)},
 	[ASSET_BAR_BG]			= (SDL_Rect){SCALE4(15,55, 4, 4)},
+	[ASSET_BAR_BG_MENU]		= (SDL_Rect){SCALE4(85,56, 4, 4)},
 	[ASSET_UNDERLINE]		= (SDL_Rect){SCALE4(85,51, 3, 3)},
 	[ASSET_DOT]				= (SDL_Rect){SCALE4(33,54, 2, 2)},
 	
@@ -228,6 +229,7 @@ SDL_Surface* GFX_init(int mode) {
 	asset_rgbs[ASSET_PAGE]			= RGB_BLACK;
 	asset_rgbs[ASSET_BAR]			= RGB_WHITE;
 	asset_rgbs[ASSET_BAR_BG]		= RGB_BLACK;
+	asset_rgbs[ASSET_BAR_BG_MENU]	= RGB_DARK_GRAY;
 	asset_rgbs[ASSET_UNDERLINE]		= RGB_GRAY;
 	asset_rgbs[ASSET_DOT]			= RGB_LIGHT_GRAY;
 	
@@ -495,7 +497,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 		
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-		GFX_blitPill(ASSET_BAR_BG, dst, &(SDL_Rect){
+		GFX_blitPill(gfx.mode==MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){
 			ox,
 			oy,
 			SCALE1(SETTINGS_WIDTH),
