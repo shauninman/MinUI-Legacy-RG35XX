@@ -20,7 +20,7 @@ cd $(dirname "$0")
 
 keymon.elf & # &> /mnt/sdcard/keymon.txt &
 
-./batmon.sh &
+# ./batmon.sh &>
 
 export EXEC_PATH=/tmp/minui_exec
 touch "$EXEC_PATH" && sync
@@ -39,12 +39,6 @@ while [ -f "$EXEC_PATH" ]; do
 		CMD=`cat $NEXT`
 		eval $CMD
 		rm -f $NEXT
-		# if [ -f "/tmp/using-swap" ]; then
-		# 	swapoff $USERDATA_PATH/swapfile
-		# 	rm -f "/tmp/using-swap"
-		# fi
-		
-		# echo `date +'%F %T'` > "$DATETIME_PATH"
 		sync
 	fi
 done
