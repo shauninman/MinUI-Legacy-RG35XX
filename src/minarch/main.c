@@ -29,6 +29,7 @@ static int show_menu;
 static struct Game {
 	char path[MAX_PATH];
 	char name[MAX_PATH]; // TODO: rename to basename?
+	char m3u_path[MAX_PATH];
 	void* data;
 	size_t size;
 } game;
@@ -50,9 +51,58 @@ static void Game_open(char* path) {
 	fread(game.data, sizeof(uint8_t), game.size, file);
 	
 	fclose(file);
+	
+	// m3u-based?
+	char* tmp;
+	char m3u_path[256];
+	char base_path[256];
+	char dir_name[256];
+
+	strcpy(m3u_path, game.path);
+	tmp = strrchr(m3u_path, '/') + 1;
+	tmp[0] = '\0';
+	
+	strcpy(base_path, m3u_path);
+	
+	tmp = strrchr(m3u_path, '/');
+	tmp[0] = '\0';
+
+	tmp = strrchr(m3u_path, '/');
+	strcpy(dir_name, tmp);
+	
+	tmp = m3u_path + strlen(m3u_path); 
+	strcpy(tmp, dir_name);
+	
+	tmp = m3u_path + strlen(m3u_path);
+	strcpy(tmp, ".m3u");
+	
+	if (exists(m3u_path)) {
+		strcpy(game.m3u_path, m3u_path);
+		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
+	}
+	else {
+		game.m3u_path[0] = '\0';
+	}
 }
 static void Game_close(void) {
 	free(game.data);
+}
+
+static struct retro_disk_control_ext_callback disk_control_ext;
+static void Game_changeDisc(char* path) {
+	
+	if (exactMatch(game.path, path) || !exists(path)) return;
+	
+	Game_close();
+	Game_open(path);
+	
+	struct retro_game_info game_info = {};
+	game_info.path = game.path;
+	game_info.data = game.data;
+	game_info.size = game.size;
+	
+	disk_control_ext.replace_image_index(0, &game_info);
+	putFile(CHANGE_DISC_PATH, path); // MinUI still needs to know this to update recents.txt
 }
 
 ///////////////////////////////
@@ -235,7 +285,6 @@ static void State_resume(void) {
 ///////////////////////////////
 
 // callbacks
-static struct retro_disk_control_ext_callback disk_control_ext;
 
 // TODO: tmp, naive options
 static struct {
@@ -930,6 +979,9 @@ void Core_load(void) {
 	printf("%f\n%f\n", core.fps, core.sample_rate);
 	fflush(stdout);
 }
+void Core_reset(void) {
+	core.reset();
+}
 void Core_unload(void) {
 	SND_quit();
 }
@@ -947,10 +999,76 @@ void Core_close(void) {
 
 ///////////////////////////////////////
 
+#define MENU_ITEM_COUNT 5
+#define MENU_SLOT_COUNT 8
+
+enum {
+	ITEM_CONT,
+	ITEM_SAVE,
+	ITEM_LOAD,
+	ITEM_OPTS,
+	ITEM_QUIT,
+};
+
+enum {
+	STATUS_CONT =  0,
+	STATUS_SAVE =  1,
+	STATUS_LOAD = 11,
+	STATUS_OPTS = 23,
+	STATUS_DISC = 24,
+	STATUS_QUIT = 30
+};
+
 static struct Menu {
 	int initialized;
 	SDL_Surface* overlay;
-} menu;
+	char* items[MENU_ITEM_COUNT];
+	int slot;
+} menu = {
+	.items = {
+		[ITEM_CONT] = "Continue",
+		[ITEM_SAVE] = "Save",
+		[ITEM_LOAD] = "Load",
+		[ITEM_OPTS] = "Reset",
+		[ITEM_QUIT] = "Quit",
+	}
+};
+
+typedef struct __attribute__((__packed__)) uint24_t {
+	uint8_t a,b,c;
+} uint24_t;
+static SDL_Surface* Menu_thumbnail(SDL_Surface* src_img) {
+	SDL_Surface* dst_img = SDL_CreateRGBSurface(0,SCREEN_WIDTH/2, SCREEN_HEIGHT/2,src_img->format->BitsPerPixel,src_img->format->Rmask,src_img->format->Gmask,src_img->format->Bmask,src_img->format->Amask);
+
+	uint8_t* src_px = src_img->pixels;
+	uint8_t* dst_px = dst_img->pixels;
+	int step = dst_img->format->BytesPerPixel;
+	int step2 = step * 2;
+	int stride = src_img->pitch;
+	for (int y=0; y<dst_img->h; y++) {
+		for (int x=0; x<dst_img->w; x++) {
+			switch(step) {
+				case 1:
+					*dst_px = *src_px;
+					break;
+				case 2:
+					*(uint16_t*)dst_px = *(uint16_t*)src_px;
+					break;
+				case 3:
+					*(uint24_t*)dst_px = *(uint24_t*)src_px;
+					break;
+				case 4:
+					*(uint32_t*)dst_px = *(uint32_t*)src_px;
+					break;
+			}
+			dst_px += step;
+			src_px += step2;
+		}
+		src_px += stride;
+	}
+
+	return dst_img;
+}
 
 void Menu_init(void) {
 	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, 0, 0, 0, 0);
@@ -974,42 +1092,222 @@ void Menu_loop(void) {
 	// current screen is on the previous buffer
 	SDL_Surface* backing = GFX_getBufferCopy();
 	
-	// displau name
-	char rom_name[MAX_PATH];
-	getDisplayName(game.path, rom_name);
+	// path and string things
+	char* tmp;
+	char rom_name[256]; // without extension or cruft
+	char slot_path[256];
+	char emu_name[256];
+	char minui_dir[256];
+		
+	getEmuName(game.path, emu_name);
+	sprintf(minui_dir, USERDATA_PATH "/.minui/%s", emu_name);
+	mkdir(minui_dir, 0755);
 	
+	int rom_disc = -1;
+	int disc = rom_disc;
+	int total_discs = 0;
+	char disc_name[16];
+	char* disc_paths[9]; // up to 9 paths, Arc the Lad Collection is 7 discs
+	char base_path[256]; // used below too when status==kItemSave
+	
+	if (game.m3u_path[0]) {
+		strcpy(base_path, game.m3u_path);
+		tmp = strrchr(base_path, '/') + 1;
+		tmp[0] = '\0';
+		
+		//read m3u file
+		FILE* file = fopen(game.m3u_path, "r");
+		if (file) {
+			char line[256];
+			while (fgets(line,256,file)!=NULL) {
+				normalizeNewline(line);
+				trimTrailingNewlines(line);
+				if (strlen(line)==0) continue; // skip empty lines
+		
+				char disc_path[256];
+				strcpy(disc_path, base_path);
+				tmp = disc_path + strlen(disc_path);
+				strcpy(tmp, line);
+				
+				// found a valid disc path
+				if (exists(disc_path)) {
+					disc_paths[total_discs] = strdup(disc_path);
+					// matched our current disc
+					if (exactMatch(disc_path, game.path)) {
+						rom_disc = total_discs;
+						disc = rom_disc;
+						sprintf(disc_name, "Disc %i", disc+1);
+					}
+					total_discs += 1;
+				}
+			}
+			fclose(file);
+		}
+	}
+	
+	// shares saves across multi-disc games too
+	sprintf(slot_path, "%s/%s.txt", minui_dir, game.name);
+	getDisplayName(game.name, rom_name);
+	
+	puts("slot_path");
+	puts(slot_path);
+	fflush(stdout);
+	
+	//
+	int selected = 0; // resets every launch
+	if (exists(slot_path)) menu.slot = getInt(slot_path);
+	if (menu.slot==8) menu.slot = 0;
+	
+	char save_path[256];
+	char bmp_path[256];
+	char txt_path[256];
+	int save_exists = 0;
+	int preview_exists = 0;
+	
+	int status = STATUS_CONT; // TODO: tmp 
 	int show_setting = 0;
-	int menu_dirty = 1;
-	int menu_start = SDL_GetTicks();
+	int dirty = 1;
 	while (show_menu) {
+		GFX_startFrame();
+		int frame_start = SDL_GetTicks();
+
 		PAD_poll();
 		
-		// TODO: tmp (L)oad and w(R)ite state
-		if (PAD_justPressed(BTN_L1)) {
-			State_read();
-			show_menu = 0;
+		if (PAD_justPressed(BTN_UP)) {
+			selected -= 1;
+			if (selected<0) selected += MENU_ITEM_COUNT;
+			dirty = 1;
 		}
-		else if (PAD_justPressed(BTN_R1)) {
-			State_write();
-			show_menu = 0;
+		else if (PAD_justPressed(BTN_DOWN)) {
+			selected += 1;
+			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			dirty = 1;
+		}
+		else if (PAD_justPressed(BTN_LEFT)) {
+			if (total_discs>1 && selected==ITEM_CONT) {
+				disc -= 1;
+				if (disc<0) disc += total_discs;
+				dirty = 1;
+				sprintf(disc_name, "Disc %i", disc+1);
+			}
+			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+				menu.slot -= 1;
+				if (menu.slot<0) menu.slot += MENU_SLOT_COUNT;
+				dirty = 1;
+			}
+		}
+		else if (PAD_justPressed(BTN_RIGHT)) {
+			if (total_discs>1 && selected==ITEM_CONT) {
+				disc += 1;
+				if (disc==total_discs) disc -= total_discs;
+				dirty = 1;
+				sprintf(disc_name, "Disc %i", disc+1);
+			}
+			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+				menu.slot += 1;
+				if (menu.slot>=MENU_SLOT_COUNT) menu.slot -= MENU_SLOT_COUNT;
+				dirty = 1;
+			}
 		}
 		
-		if (PAD_justPressed(BTN_B)) show_menu = 0;
-		if (PAD_justPressed(BTN_X)) {
+		if (dirty && (selected==ITEM_SAVE || selected==ITEM_LOAD)) {
+			int last_slot = state_slot;
+			state_slot = menu.slot;
+			State_getPath(save_path);
+			state_slot = last_slot;
+			sprintf(bmp_path, "%s/%s.%d.bmp", minui_dir, game.name, menu.slot);
+			sprintf(txt_path, "%s/%s.%d.txt", minui_dir, game.name, menu.slot);
+		
+			save_exists = exists(save_path);
+			preview_exists = save_exists && exists(bmp_path);
+			// printf("save_path: %s (%i)\n", save_path, save_exists);
+			// printf("bmp_path: %s (%i)\n", bmp_path, preview_exists);
+		}
+		
+		if (PAD_justPressed(BTN_B)) { // TODO: ignore BTN_MENU release if VOL_* buttons were pressed while it was pressed?
+			status = STATUS_CONT;
 			show_menu = 0;
-			quit = 1; // TODO: tmp
+		}
+		else if (PAD_justPressed(BTN_A)) {
+			switch(selected) {
+				case ITEM_CONT:
+				if (total_discs && rom_disc!=disc) {
+						status = STATUS_DISC;
+						char* disc_path = disc_paths[disc];
+						Game_changeDisc(disc_path);
+					}
+					else {
+						status = STATUS_CONT;
+					}
+					show_menu = 0;
+				break;
+				
+				case ITEM_SAVE: {
+					state_slot = menu.slot;
+					State_write();
+					status = STATUS_SAVE;
+					SDL_Surface* preview = Menu_thumbnail(backing);
+					SDL_RWops* out = SDL_RWFromFile(bmp_path, "wb");
+					if (total_discs) {
+						char* disc_path = disc_paths[disc];
+						putFile(txt_path, disc_path + strlen(base_path));
+						sprintf(bmp_path, "%s/%s.%d.bmp", minui_dir, game.name, menu.slot);
+					}
+					SDL_SaveBMP_RW(preview, out, 1);
+					SDL_FreeSurface(preview);
+					putInt(slot_path, menu.slot);
+					show_menu = 0;
+				}
+				break;
+				case ITEM_LOAD: {
+					if (save_exists && total_discs) {
+						char slot_disc_name[256];
+						getFile(txt_path, slot_disc_name, 256);
+						char slot_disc_path[256];
+						if (slot_disc_name[0]=='/') strcpy(slot_disc_path, slot_disc_name);
+						else sprintf(slot_disc_path, "%s%s", base_path, slot_disc_name);
+						char* disc_path = disc_paths[disc];
+						if (!exactMatch(slot_disc_path, disc_path)) {
+							Game_changeDisc(slot_disc_path);
+						}
+					}
+					state_slot = menu.slot;
+					State_read();
+					status = STATUS_LOAD;
+					putInt(slot_path, menu.slot);
+					show_menu = 0;
+				}
+				break;
+				case ITEM_OPTS:
+					Core_reset(); // TODO: tmp?
+					status = STATUS_OPTS;
+					show_menu = 0;
+				break;
+				case ITEM_QUIT:
+					status = STATUS_QUIT;
+					show_menu = 0;
+					quit = 1; // TODO: tmp?
+				break;
+			}
+			if (!show_menu) break;
 		}
 
-		POW_update(&menu_dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
+		POW_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
 		
-		if (menu_dirty) {
+		if (dirty) {
 			SDL_BlitSurface(backing, NULL, screen, NULL);
 			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
-	
+
+			int ox, oy;
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
-	
-			SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, rom_name, COLOR_WHITE);
-			int max_width = MIN(SCREEN_WIDTH - SCALE1(PADDING * 2) - ow, text->w+SCALE1(12*2));
+			int max_width = SCREEN_WIDTH - SCALE1(PADDING * 2) - ow;
+			
+			char display_name[256];
+			int text_width = GFX_truncateDisplayName(rom_name, display_name, max_width);
+			max_width = MIN(max_width, text_width);
+
+			SDL_Surface* text;
+			text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
 			GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
 				SCALE1(PADDING),
 				SCALE1(PADDING),
@@ -1029,13 +1327,117 @@ void Menu_loop(void) {
 			
 			GFX_blitButtonGroup((char*[]){ "POWER","SLEEP", NULL }, screen, 0);
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, screen, 1);
+			
+			// list
+			TTF_SizeUTF8(font.large, menu.items[ITEM_CONT], &ow, NULL);
+			ow += SCALE1(12*2);
+			oy = 35;
+			for (int i=0; i<MENU_ITEM_COUNT; i++) {
+				char* item = menu.items[i];
+				SDL_Color text_color = COLOR_WHITE;
+				
+				if (i==selected) {
+					// disc change
+					if (total_discs>1 && i==ITEM_CONT) {				
+						GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
+							SCALE1(PADDING),
+							SCALE1(oy + PADDING),
+							SCREEN_WIDTH - SCALE1(PADDING * 2),
+							SCALE1(PILL_SIZE)
+						});
+						text = TTF_RenderUTF8_Blended(font.large, disc_name, COLOR_WHITE);
+						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+							SCREEN_WIDTH - SCALE1(PADDING + 12) - text->w,
+							SCALE1(oy + PADDING + 4)
+						});
+						SDL_FreeSurface(text);
+					}
+					
+					// pill
+					GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
+						SCALE1(PADDING),
+						SCALE1(oy + PADDING + (i * PILL_SIZE)),
+						ow,
+						SCALE1(PILL_SIZE)
+					});
+					text_color = COLOR_BLACK;
+					
+					// TODO: draw arrow?
+				}
+				else {
+					// shadow
+					text = TTF_RenderUTF8_Blended(font.large, item, COLOR_BLACK);
+					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+						SCALE1(2 + PADDING + 12),
+						SCALE1(1 + PADDING + oy + (i * PILL_SIZE) + 4)
+					});
+					SDL_FreeSurface(text);
+				}
+				
+				// text
+				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
+				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+					SCALE1(PADDING + 12),
+					SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
+				});
+				SDL_FreeSurface(text);
+			}
+			
+			// slot preview
+			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
+				// unscaled
+				ox = 146;
+				oy = 54;
+				int hw = SCREEN_WIDTH / 2;
+				int hh = SCREEN_HEIGHT / 2;
+				
+				// preview window
+				// GFX_blitWindow(screen, Screen.menu.preview.x, Screen.menu.preview.y, Screen.menu.preview.width, Screen.menu.preview.height, 1);
+				
+				// window
+				GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){SCALE2(ox-WINDOW_RADIUS,oy-WINDOW_RADIUS),hw+SCALE1(WINDOW_RADIUS*2),hh+SCALE1(WINDOW_RADIUS*3+6)});
+				
+				if (preview_exists) { // has save, has preview
+					SDL_Surface* preview = IMG_Load(bmp_path);
+					if (!preview) printf("IMG_Load: %s\n", IMG_GetError());
+					SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){SCALE2(ox,oy)});
+					SDL_FreeSurface(preview);
+				}
+				else {
+					SDL_Rect preview_rect = {SCALE2(ox,oy),hw,hh};
+					SDL_FillRect(screen, &preview_rect, 0);
+					if (save_exists) { // has save but no preview
+						GFX_blitMessage("No Preview", screen, &preview_rect);
+					}
+					else { // no save
+						GFX_blitMessage("Empty Slot", screen, &preview_rect);
+					}
+				}
+				
+				// pagination
+				ox += 24;
+				oy += 124;
+				for (int i=0; i<MENU_SLOT_COUNT; i++) {
+					if (i==menu.slot) {
+						GFX_blitAsset(ASSET_PAGE, NULL, screen, &(SDL_Rect){SCALE2(ox+(i*15),oy)});
+					}
+					else {
+						GFX_blitAsset(ASSET_DOT, NULL, screen, &(SDL_Rect){SCALE2(ox+(i*15)+4,oy+2)});
+					}
+				}
+				
+				// SDL_BlitSurface(slot_overlay, NULL, screen, &preview_rect);
+				// SDL_BlitSurface(slot_dots, NULL, screen, &(SDL_Rect){Screen.menu.slots.x,Screen.menu.slots.y});
+				// SDL_BlitSurface(slot_dot_selected, NULL, screen, &(SDL_Rect){Screen.menu.slots.x+(Screen.menu.slots.ox*slot),Screen.menu.slots.y});
+			}
 	
 			GFX_flip(screen);
-			menu_dirty = 0;
+			dirty = 0;
 		}
 		else {
 			// slow down to 60fps
-			unsigned long frame_duration = SDL_GetTicks() - menu_start;
+			unsigned long frame_duration = SDL_GetTicks() - frame_start;
 			#define kTargetFrameDuration 17
 			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
 		}
