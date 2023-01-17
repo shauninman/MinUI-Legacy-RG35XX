@@ -355,6 +355,25 @@ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	}
 	GFX_blitAsset(asset, &(SDL_Rect){r,0,r,h}, dst, &(SDL_Rect){x,y});
 }
+void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	int x = dst_rect->x;
+	int y = dst_rect->y;
+	int w = dst_rect->w;
+	int h = dst_rect->h;
+	int c = asset_rgbs[asset];
+	
+	SDL_Rect* rect = &asset_rects[asset];
+	int d = rect->w;
+	int r = d / 2;
+
+	GFX_blitAsset(asset, &(SDL_Rect){0,0,r,r}, dst, &(SDL_Rect){x,y});
+	SDL_FillRect(dst, &(SDL_Rect){x+r,y,w-d,r}, c);
+	GFX_blitAsset(asset, &(SDL_Rect){r,0,r,r}, dst, &(SDL_Rect){x+w-r,y});
+	SDL_FillRect(dst, &(SDL_Rect){x,y+r,w,h-d}, c);
+	GFX_blitAsset(asset, &(SDL_Rect){0,r,r,r}, dst, &(SDL_Rect){x,y+h-r});
+	SDL_FillRect(dst, &(SDL_Rect){x+r,y+h-r,w-d,r}, c);
+	GFX_blitAsset(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r});
+}
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
 	SDL_Rect rect = asset_rects[ASSET_BATTERY];
 	int x = dst_rect->x;
