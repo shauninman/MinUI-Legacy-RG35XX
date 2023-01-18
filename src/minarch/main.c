@@ -86,6 +86,7 @@ static void Game_open(char* path) {
 }
 static void Game_close(void) {
 	free(game.data);
+	POW_setRumble(0); // just in case
 }
 
 static struct retro_disk_control_ext_callback disk_control_ext;
@@ -293,6 +294,10 @@ static struct {
 	char key[128];
 	char value[128];
 } tmp_options[128];
+static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
+	// TODO: handle other args? not sure I can
+	POW_setRumble(strength);
+}
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// printf("environment_callback: %i\n", cmd); fflush(stdout);
 	
@@ -391,14 +396,13 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		}
 		break;
 	}
-	// case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
-	//         struct retro_rumble_interface *iface =
-	//            (struct retro_rumble_interface*)data;
-	//
-	//         PA_INFO("Setup rumble interface.\n");
-	//         iface->set_rumble_state = pa_set_rumble_state;
-	// 	break;
-	// }
+	case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
+	        struct retro_rumble_interface *iface = (struct retro_rumble_interface*)data;
+
+	        LOG_info("Setup rumble interface.\n");
+	        iface->set_rumble_state = set_rumble_state;
+		break;
+	}
 	case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: { /* 27 */
 		struct retro_log_callback *log_cb = (struct retro_log_callback *)data;
 		if (log_cb)

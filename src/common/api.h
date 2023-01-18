@@ -169,6 +169,7 @@ void POW_enableAutosleep(void);
 int POW_preventAutosleep(void);
 int POW_isCharging(void);
 int POW_getBattery(void);
+void POW_setRumble(int strength); // 0-100
 
 ///////////////////////////////
 

@@ -1028,3 +1028,6 @@ int POW_getBattery(void) { // 0-100 in 5% increments
 	i *= 5;
 	return i;
 }
+void POW_setRumble(int strength) {
+	putInt("/sys/class/power_supply/battery/moto", strength);
+}
