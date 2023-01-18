@@ -117,6 +117,7 @@ static struct Core {
 	
 	double fps;
 	double sample_rate;
+	double aspect_ratio;
 	
 	void* handle;
 	void (*init)(void);
@@ -554,7 +555,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			break;
 		}
 
-		int *out = (bool *)data;
+		int *out = (int *)data;
 		if (out) *out = 1;
 		
 		break;
@@ -588,15 +589,18 @@ static int fps_ticks = 0;
 static int sec_start = 0;
 
 // TODO: flesh out
-static void scale1x(int w, int h, int pitch, const void *src, void *dst) {
-	// pitch of src image not src buffer! 
+static scale_neon_t scaler;
+static int dst_offset,dst_w,dst_h;
+static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
+static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	// pitch of src image not src buffer!
 	// eg. gb has a 160 pixel wide image but 
 	// gambatte uses a 256 pixel wide buffer
 	// (only matters when using memcpy) 
 	int src_pitch = w * SCREEN_BPP; 
 	int src_stride = pitch / SCREEN_BPP;
-	int dst_stride = SCREEN_PITCH / SCREEN_BPP;
-	int cpy_pitch = MIN(src_pitch, SCREEN_PITCH);
+	int dst_stride = dst_pitch / SCREEN_BPP;
+	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t* restrict src_row = (uint16_t*)src;
 	uint16_t* restrict dst_row = (uint16_t*)dst;
@@ -607,10 +611,10 @@ static void scale1x(int w, int h, int pitch, const void *src, void *dst) {
 	}
 	
 }
-static void scale2x(int w, int h, int pitch, const void *src, void *dst) {
+static void scale2x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
-		uint16_t* restrict dst_row = (void*)dst + y * SCREEN_PITCH * 2;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 2;
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t s = *src_row;
 			
@@ -627,11 +631,48 @@ static void scale2x(int w, int h, int pitch, const void *src, void *dst) {
 		}
 	}
 }
-static void scale3x(int w, int h, int pitch, const void *src, void *dst) {
+static void scale2x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	uint16_t k = 0x0000;
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 2;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t s = *src_row;
+            uint16_t r = (s & 0b1111100000000000);
+            uint16_t g = (s & 0b0000011111100000);
+            uint16_t b = (s & 0b0000000000011111);
+			
+			*(dst_row                       ) = r;
+			*(dst_row + 1                   ) = b;
+			
+			*(dst_row + SCREEN_WIDTH * 1    ) = g;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = k;
+			
+			src_row += 1;
+			dst_row += 2;
+		}
+	}
+}
+static void scale2x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 2;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t s = *src_row;
+			
+			*(dst_row     ) = s;
+			*(dst_row + 1 ) = s;
+			
+			src_row += 1;
+			dst_row += 2;
+		}
+	}
+}
+static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
-		uint16_t* restrict dst_row = (void*)dst + y * SCREEN_PITCH * 3;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t s = *src_row;
 			
@@ -655,12 +696,12 @@ static void scale3x(int w, int h, int pitch, const void *src, void *dst) {
 		}
 	}
 }
-static void scale3x_lcd(int w, int h, int pitch, const void *src, void *dst) {
+static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t k = 0x0000;
 	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
-		uint16_t* restrict dst_row = (void*)dst + y * SCREEN_PITCH * 3;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t s = *src_row;
             uint16_t r = (s & 0b1111100000000000);
@@ -687,12 +728,12 @@ static void scale3x_lcd(int w, int h, int pitch, const void *src, void *dst) {
 		}
 	}
 }
-static void scale3x_dmg(int w, int h, int pitch, const void *src, void *dst) {
+static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t g = 0xffff;
 	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
-		uint16_t* restrict dst_row = (void*)dst + y * SCREEN_PITCH * 3;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t a = *src_row;
             uint16_t b = Weight3_2( a, g);
@@ -718,12 +759,40 @@ static void scale3x_dmg(int w, int h, int pitch, const void *src, void *dst) {
 		}
 	}
 }
-static void scale4x(int w, int h, int pitch, const void *src, void *dst) {
+static void scale3x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	// uint16_t k = 0x0000;
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t s = *src_row;
+			
+			// row 1
+			*(dst_row                       ) = s;
+			*(dst_row                    + 1) = s;
+			// *(dst_row                    + 2) = k;
+			
+			// row 2
+			*(dst_row + SCREEN_WIDTH * 1    ) = s;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = s;
+			// *(dst_row + SCREEN_WIDTH * 1 + 2) = k;
+
+			// row 3
+			// *(dst_row + SCREEN_WIDTH * 2    ) = k;
+			// *(dst_row + SCREEN_WIDTH * 2 + 1) = k;
+			// *(dst_row + SCREEN_WIDTH * 2 + 2) = k;
+
+			src_row += 1;
+			dst_row += 3;
+		}
+	}
+}
+static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	int row3 = SCREEN_WIDTH * 2;
 	int row4 = SCREEN_WIDTH * 3;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
-		uint16_t* restrict dst_row = (void*)dst + y * SCREEN_PITCH * 4;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 4;
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t s = *src_row;
 			
@@ -756,77 +825,253 @@ static void scale4x(int w, int h, int pitch, const void *src, void *dst) {
 		}
 	}
 }
-static void scale(const void* src, int width, int height, int pitch, void* dst) {
-	// TODO: this should be selectScaler()
+static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int dy = -dst_h;
+	unsigned lines = h;
+	bool copy = false;
+	size_t cpy_w = dst_w * SCREEN_BPP;
+
+	while (lines) {
+		int dx = -dst_w;
+		const uint16_t *psrc16 = src;
+		uint16_t *pdst16 = dst;
+
+		if (copy) {
+			copy = false;
+			memcpy(dst, dst - dst_pitch, cpy_w);
+			dst += dst_pitch;
+			dy += h;
+		} else if (dy < 0) {
+			int col = w;
+			while(col--) {
+				while (dx < 0) {
+					*pdst16++ = *psrc16;
+					dx += w;
+				}
+
+				dx -= dst_w;
+				psrc16++;
+			}
+
+			dst += dst_pitch;
+			dy += h;
+		}
+
+		if (dy >= 0) {
+			dy -= dst_h;
+			src += pitch;
+			lines--;
+		} else {
+			copy = true;
+		}
+	}
+}
+static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int dy = -dst_h;
+	unsigned lines = h;
+	int row = 0;
+	
+	while (lines) {
+		int dx = -dst_w;
+		const uint16_t *psrc16 = src;
+		uint16_t *pdst16 = dst;
+		
+		if (row%2==0) {
+			int col = w;
+			while(col--) {
+				while (dx < 0) {
+					*pdst16++ = *psrc16;
+					dx += w;
+				}
+
+				dx -= dst_w;
+				psrc16++;
+			}
+		}
+
+		dst += dst_pitch;
+		dy += h;
+				
+		if (dy >= 0) {
+			dy -= dst_h;
+			src += pitch;
+			lines--;
+		}
+		row += 1;
+	}
+}
+static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int dy = -dst_h;
+	unsigned lines = h;
+	bool copy = false;
+
+	size_t cpy_w = dst_w * SCREEN_BPP;
+	
+	int safe = w - 1; // don't look behind when there's nothing to see
+	uint16_t l1,l2;
+	while (lines) {
+		int dx = -dst_w;
+		const uint16_t *psrc16 = src;
+		uint16_t *pdst16 = dst;
+		l1 = l2 = 0x0;
+		
+		if (copy) {
+			copy = false;
+			memcpy(dst, dst - SCREEN_PITCH, cpy_w);
+			dst += SCREEN_PITCH;
+			dy += h;
+		} else if (dy < 0) {
+			int col = w;
+			while(col--) {
+				int d = 0;
+				if (col<safe && l1!=l2) {
+					// https://stackoverflow.com/a/71086522/145965
+					uint16_t r = (l1 >> 10) & 0x3E;
+					uint16_t g = (l1 >> 5) & 0x3F;
+					uint16_t b = (l1 << 1) & 0x3E;
+					uint16_t luma = (r * 218) + (g * 732) + (b * 74);
+					luma = (luma >> 10) + ((luma >> 9) & 1); // 0-63
+					d = luma > 24;
+				}
+
+				uint16_t s = *psrc16;
+				
+				while (dx < 0) {
+					*pdst16++ = d ? l1 : s;
+					dx += w;
+
+					l2 = l1;
+					l1 = s;
+					d = 0;
+				}
+
+				dx -= dst_w;
+				psrc16++;
+			}
+
+			dst += SCREEN_PITCH;
+			dy += h;
+		}
+
+		if (dy >= 0) {
+			dy -= dst_h;
+			src += pitch;
+			lines--;
+		} else {
+			copy = true;
+		}
+	}
+}
+static void selectScaler(int width, int height, int pitch) {
+	scaler = scaleNull;
+	int use_nearest = 0;
+	
 	int scale_x = SCREEN_WIDTH / width;
 	int scale_y = SCREEN_HEIGHT / height;
 	int scale = MIN(scale_x,scale_y);
-	int scale_w = width * scale;
-	int scale_h = height * scale;
-	int ox = (SCREEN_WIDTH - scale_w) / 2;
-	int oy = (SCREEN_HEIGHT - scale_h) / 2;
-		
-	dst += (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
+	double near_ratio;
 	
-	// TODO: trying to identify source of the framepacing issue
-	// scale1x(width,height,pitch,src,dst); 
-
-	switch (scale) {
-		case 4: scale4x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
-		case 3: scale3x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
-		case 2: scale2x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
-		default: scale1x_n16((void*)src,dst,width,height,pitch,SCREEN_PITCH); break;
+	if (scale<=1) {
+		use_nearest = 1;
+		if (scale_y>scale_x) { printf("NN:A %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			dst_h = height * scale_y;
+			
+			// if the aspect ratio of an unmodified
+			// w to dst_h is within 20% of the target
+			// aspect_ratio don't force
+			near_ratio = (double)width / dst_h / core.aspect_ratio;
+			if (near_ratio>=0.79 && near_ratio<=1.21) {
+				dst_w = width;
+			}
+			else {
+				dst_w = dst_h * core.aspect_ratio;
+				dst_w -= dst_w % 2;
+			}
+			
+			if (dst_w>SCREEN_WIDTH) {
+				dst_w = SCREEN_WIDTH;
+				dst_h = dst_w / core.aspect_ratio;
+				dst_h -= dst_w % 2;
+				if (dst_h>SCREEN_HEIGHT) dst_h = SCREEN_HEIGHT;
+			}
+		}
+		else if (scale_x>scale_y) {  printf("NN:B %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			dst_w = width * scale_x;
+			
+			// see above
+			near_ratio = (double)dst_w / height / core.aspect_ratio;
+			if (near_ratio>=0.79 && near_ratio<=1.21) {
+				dst_h = height;
+			}
+			else {
+				dst_h = dst_w / core.aspect_ratio;
+				dst_h -= dst_w % 2;
+			}
 		
-		// case 4: scale4x(width,height,pitch,src,dst); break;
-		// case 3: scale3x(width,height,pitch,src,dst); break;
-		// case 3: scale3x_lcd(width,height,pitch,src,dst); break;
-		// case 3: scale3x_dmg(width,height,pitch,src,dst); break;
-		// case 2: scale2x(width,height,pitch,src,dst); break;
-		// default: scale1x(width,height,pitch,src,dst); break;
+			if (dst_h>SCREEN_HEIGHT) {
+				dst_h = SCREEN_HEIGHT;
+				dst_w = dst_h * core.aspect_ratio;
+				dst_w -= dst_w % 2;
+				if (dst_w>SCREEN_WIDTH) dst_w = SCREEN_WIDTH;
+			}
+		}
+		else {  printf("NN:C %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			dst_w = width * scale_x;
+			dst_h = height * scale_y;
+		
+			// see above
+			near_ratio = (double)dst_w / dst_h / core.aspect_ratio;
+			if (near_ratio>=0.79 && near_ratio<=1.21) {
+				// close enough
+			}
+			else {
+				if (dst_h>dst_w) {
+					dst_w = dst_h * core.aspect_ratio;
+					dst_w -= dst_w % 2;
+				}
+				else {
+					dst_h = dst_w / core.aspect_ratio;
+					dst_h -= dst_w % 2;
+				}
+			}
+		
+			if (dst_w>SCREEN_WIDTH) {
+				dst_w = SCREEN_WIDTH;
+			}
+			if (dst_h>SCREEN_HEIGHT) {
+				dst_h = SCREEN_HEIGHT;
+			}
+		}
+	}
+	else {
+		dst_w = width * scale;
+		dst_h = height * scale;
 	}
 	
-	if (0) {
-		static int frame = 0;
-		int w = 8;
-		int h = 16;
-		int fps = 60;
-		int x = frame * w;
+	int ox = (SCREEN_WIDTH - dst_w) / 2;
+	int oy = (SCREEN_HEIGHT - dst_h) / 2;
+	dst_offset = (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
 
-		dst -= (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
-		
-		dst += (SCREEN_WIDTH - (w * fps)) / 2 * SCREEN_BPP;
-
-		void* _dst = dst;
-		memset(_dst, 0, (h * SCREEN_PITCH));
-		for (int y=0; y<h; y++) {
-			memset(_dst-SCREEN_BPP, 0xff, SCREEN_BPP);
-			memset(_dst+(w * fps * SCREEN_BPP), 0xff, SCREEN_BPP);
-			_dst += SCREEN_PITCH;
-		}
-
-		dst += (x * SCREEN_BPP);
-
-		for (int y=0; y<h; y++) {
-			memset(dst, 0xff, w * SCREEN_BPP);
-			dst += SCREEN_PITCH;
-		}
-
-		frame += 1;
-		if (frame>=fps) frame -= fps;
-	}
-	
-	if (0) {
-		// measure framerate
-		static int start = -1;
-		static int ticks = 0;
-		ticks += 1;
-		int now = SDL_GetTicks();
-		if (start==-1) start = now;
-		if (now-start>=1000) {
-			start = now;
-			printf("fps: %i\n", ticks);
-			fflush(stdout);
-			ticks = 0;
+	if (use_nearest) 
+		scaler = scaleNN_text;
+	else {
+		switch (scale) {
+			// eggs-optimized scalers
+			case 4: 	scaler = scale4x_n16; break;
+			case 3: 	scaler = scale3x_n16; break;
+			case 2: 	scaler = scale2x_n16; break;
+			default:	scaler = scale1x; break;
+			
+			// my lesser scalers :sweat_smile:
+			// case 4: 	scaler = scale4x; break;
+			// case 3: 	scaler = scale3x; break;
+			// case 3: 	scaler = scale3x_dmg; break;
+			// case 3: 	scaler = scale3x_lcd; break;
+			// case 3: 	scaler = scale3x_scanline; break;
+			// case 2: 	scaler = scale2x; break;
+			// case 2: 	scaler = scale2x_lcd; break;
+			// case 2: 	scaler = scale2x_scanline; break;
+			// default:	scaler = scale1x; break;
 		}
 	}
 }
@@ -840,11 +1085,26 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	if (width!=last_width || height!=last_height) {
 		last_width = width;
 		last_height = height;
+		selectScaler(width,height,pitch);
 		GFX_clearAll();
-		// TODO: selectScaler(width,height,pitch);
 	}
-	scale(data,width,height,pitch,screen->pixels);
+	scaler((void*)data,screen->pixels+dst_offset,width,height,pitch,SCREEN_PITCH);
 	GFX_flip(screen);
+	
+	return; // TODO: tmp
+	
+	// measure framerate
+	static int start = -1;
+	static int ticks = 0;
+	ticks += 1;
+	int now = SDL_GetTicks();
+	if (start==-1) start = now;
+	if (now-start>=1000) {
+		start = now;
+		printf("fps: %i\n", ticks);
+		fflush(stdout);
+		ticks = 0;
+	}
 }
 
 static void audio_sample_callback(int16_t left, int16_t right) {
@@ -972,7 +1232,7 @@ void Core_init(void) {
 	core.initialized = 1;
 }
 void Core_load(void) {
-	LOG_info("inside Core_load\n");
+	// LOG_info("inside Core_load\n");
 	
 	struct retro_game_info game_info;
 	game_info.path = game.path;
@@ -980,29 +1240,34 @@ void Core_load(void) {
 	game_info.size = game.size;
 	
 	core.load_game(&game_info);
-	LOG_info("after core.load_game\n");
+	// LOG_info("after core.load_game\n");
 	
 	SRAM_read();
-	LOG_info("after SRAM_read\n");
+	// LOG_info("after SRAM_read\n");
 	
 	// NOTE: must be called after core.load_game!
 	struct retro_system_av_info av_info = {};
 	core.get_system_av_info(&av_info);
-	LOG_info("after core.get_system_av_info\n");
+	// LOG_info("after core.get_system_av_info\n");
 	
-	double a = av_info.geometry.aspect_ratio;
-	int w = av_info.geometry.base_width;
-	int h = av_info.geometry.base_height;
+	// double a = av_info.geometry.aspect_ratio;
+	// int w = av_info.geometry.base_width;
+	// int h = av_info.geometry.base_height;
 	// char r[8];
 	// getRatio(a, r);
 	// LOG_info("after getRatio\n");
 	
 	core.fps = av_info.timing.fps;
 	core.sample_rate = av_info.timing.sample_rate;
+	double a = av_info.geometry.aspect_ratio;
+	if (a<=0) a = (double)av_info.geometry.base_width / av_info.geometry.base_height;
+	core.aspect_ratio = a;
+	
+	printf("aspect_ratio: %f\n", a);
 
-	printf("%s\n%s\n", core.tag, core.version);
+	// printf("%s\n%s\n", core.tag, core.version);
 	// printf("%dx%d (%s)\n", w,h,r);
-	printf("%f\n%f\n", core.fps, core.sample_rate);
+	// printf("%f\n%f\n", core.fps, core.sample_rate);
 	fflush(stdout);
 }
 void Core_reset(void) {
