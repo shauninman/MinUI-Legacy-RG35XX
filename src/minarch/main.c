@@ -287,6 +287,7 @@ static void State_resume(void) {
 // callbacks
 
 // TODO: tmp, naive options
+static int tmp_options_changed = 0;
 static struct {
 	char key[128];
 	char value[128];
@@ -376,15 +377,17 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			
 			for (int i=0; vars[i].key; i++) {
 				// value appears to be NAME; DEFAULT|VALUE|VALUE|ETC
-				printf("set var key: %s to value: %s\n", vars[i].key, vars[i].value);
+				printf("set bulk var key: %s to value: %s\n", vars[i].key, vars[i].value);
 			}
 		}
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: { /* 17 */
 		bool *out = (bool *)data;
-		if (out)
-			*out = false; // options_changed();
+		if (out) {
+			*out = tmp_options_changed; // options_changed();
+			tmp_options_changed = 0;
+		}
 		break;
 	}
 	// case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
@@ -533,7 +536,30 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	
 	// TODO: RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE 64
 	// TODO: RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK 69
-	// TODO: UNKNOWN 70
+	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
+	// TODO: these should be overridden to be disabled by default because ick
+	case RETRO_ENVIRONMENT_SET_VARIABLE: {
+		puts("RETRO_ENVIRONMENT_SET_VARIABLE");
+		
+		const struct retro_variable *var = (const struct retro_variable *)data;
+		if (var && var->key) {
+			printf("\tset individual var key: %s to value: %s\n", var->key, var->value);
+			for (int i=0; i<128; i++) {
+				if (!strcmp(tmp_options[i].key, var->key)) {
+					strcpy(tmp_options[i].value, var->value);
+					tmp_options_changed = 1;
+					break;
+				}
+			}
+			break;
+		}
+
+		int *out = (bool *)data;
+		if (out) *out = 1;
+		
+		break;
+	}
+	// TODO: these unknowns are probably some flag OR'd to RETRO_ENVIRONMENT_EXPERIMENTAL
 	// TODO: UNKNOWN 65572
 	// TODO: UNKNOWN 65578
 	// TODO: UNKNOWN 65581
