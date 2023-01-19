@@ -27,11 +27,21 @@ fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.img
 if [ ! -f $ROOTFS_IMAGE ]; then
-	# fallback to stock demenu.bin
-	# TODO: embed dmenu_ln loop here
-	/mnt/vendor/bin/dmenu.bin
-	# reboot -p
-	exit
+	# fallback to stock demenu.bin based on dmenu_ln
+	ACT="/tmp/.next"
+	CMD="/mnt/vendor/bin/dmenu.bin"
+	touch "$ACT"
+	while [ -f $CMD ]; do
+		if $CMD; then
+			if [ -f "$ACT" ]; then
+				if  ! sh $ACT; then
+					echo
+				fi
+				rm -f "$ACT"
+			fi
+		fi
+	done
+	sync && reboot -p
 fi
 
 ROOTFS_MOUNTPOINT=/cfw
