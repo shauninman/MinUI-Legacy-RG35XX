@@ -1121,7 +1121,8 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
-static uint32_t buttons = 0;
+static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
+static int cancel_menu = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -1133,10 +1134,14 @@ static void input_poll_callback(void) {
 	// 30 seconds--even while playing!
 	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
 
-
-
+	if (PAD_justPressed(BTN_MENU)) {
+		cancel_menu = 0;
+	}
+	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
+		cancel_menu = 1;
+	}
 	
-	if (PAD_justReleased(BTN_MENU)) {
+	if (!cancel_menu && PAD_justReleased(BTN_MENU)) {
 		show_menu = 1;
 	}
 	
