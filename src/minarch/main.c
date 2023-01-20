@@ -1100,6 +1100,37 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		GFX_clearAll();
 	}
 	scaler((void*)data,screen->pixels+dst_offset,width,height,pitch,SCREEN_PITCH);
+	
+	if (0) {
+		static int frame = 0;
+		int w = 8;
+		int h = 16;
+		int fps = 60;
+		int x = frame * w;
+		
+		void *dst = screen->pixels;
+	
+		dst += (SCREEN_WIDTH - (w * fps)) / 2 * SCREEN_BPP;
+
+		void* _dst = dst;
+		memset(_dst, 0, (h * SCREEN_PITCH));
+		for (int y=0; y<h; y++) {
+			memset(_dst-SCREEN_BPP, 0xff, SCREEN_BPP);
+			memset(_dst+(w * fps * SCREEN_BPP), 0xff, SCREEN_BPP);
+			_dst += SCREEN_PITCH;
+		}
+
+		dst += (x * SCREEN_BPP);
+
+		for (int y=0; y<h; y++) {
+			memset(dst, 0xff, w * SCREEN_BPP);
+			dst += SCREEN_PITCH;
+		}
+
+		frame += 1;
+		if (frame>=fps) frame -= fps;
+	}
+	
 	GFX_flip(screen);
 	
 	return; // TODO: tmp
