@@ -114,7 +114,10 @@ static struct Core {
 	const char tag[8]; // eg. GBC
 	const char name[128]; // eg. gambatte
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
-	const char sys_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
+	
+	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
+	const char saves_dir[MAX_PATH]; // eg. /mnt/sdcard/Saves/GB
+	const char bios_dir[MAX_PATH]; // eg. /mnt/sdcard/Bios/GB
 	
 	double fps;
 	double sample_rate;
@@ -146,7 +149,7 @@ static struct Core {
 // saves and states
 
 static void SRAM_getPath(char* filename) {
-	sprintf(filename, SDCARD_PATH "/Saves/%s/%s.sav", core.tag, game.name);
+	sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
 }
 
 static void SRAM_read(void) {
@@ -195,7 +198,7 @@ static void SRAM_write(void) {
 
 static int state_slot = 0;
 static void State_getPath(char* filename) {
-	sprintf(filename, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s/%s.st%i", core.tag, core.name, game.name, state_slot);
+	sprintf(filename, "%s/%s.st%i", core.config_dir, game.name, state_slot);
 }
 
 static void State_read(void) { // from picoarch
@@ -322,8 +325,9 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL 8
 	case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: { /* 9 */
 		const char **out = (const char **)data;
-		if (out)
-			*out = core.sys_dir;
+		if (out) {
+			*out = core.bios_dir;
+		}
 		
 		break;
 	}
@@ -1224,9 +1228,11 @@ void Core_open(const char* core_path, const char* tag_name) {
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
 	
-	sprintf((char*)core.sys_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
+	sprintf((char*)core.config_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
+	sprintf((char*)core.saves_dir, SDCARD_PATH "/Saves/%s", core.tag);
+	sprintf((char*)core.bios_dir, SDCARD_PATH "/Bios/%s", core.tag);
 	char cmd[512];
-	sprintf(cmd, "mkdir -p \"%s\"", core.sys_dir);
+	sprintf(cmd, "mkdir -p \"%s\"", core.config_dir);
 	system(cmd);
 
 	set_environment_callback(environment_callback);
