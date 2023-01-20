@@ -341,6 +341,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
+		puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS");
 		const struct retro_input_descriptor *vars = (const struct retro_input_descriptor *)data;
 		if (vars) {
 			// TODO: create an array of char* description indexed by id
@@ -363,6 +364,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	// TODO: this is called whether using variables or options
 	case RETRO_ENVIRONMENT_GET_VARIABLE: { /* 15 */
+		puts("RETRO_ENVIRONMENT_GET_VARIABLE");
 		struct retro_variable *var = (struct retro_variable *)data;
 		if (var && var->key) {
 			printf("get key: %s\n", var->key);
@@ -379,6 +381,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: I think this is where the core reports its variables (the precursor to options)
 	// TODO: this is called if RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION sets out to 0
 	case RETRO_ENVIRONMENT_SET_VARIABLES: { /* 16 */
+		puts("RETRO_ENVIRONMENT_SET_VARIABLES");
 		const struct retro_variable *vars = (const struct retro_variable *)data;
 		// options_free();
 		if (vars) {
@@ -416,7 +419,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { /* 31 */
 		const char **out = (const char **)data;
 		if (out)
-			*out = NULL; // save_dir;
+			*out = core.saves_dir; // save_dir;
 		break;
 	}
 	// RETRO_ENVIRONMENT_GET_LANGUAGE 39
