@@ -1122,7 +1122,7 @@ static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
-static int cancel_menu = 0;
+static int ignore_menu = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -1135,13 +1135,13 @@ static void input_poll_callback(void) {
 	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
 
 	if (PAD_justPressed(BTN_MENU)) {
-		cancel_menu = 0;
+		ignore_menu = 0;
 	}
 	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
-		cancel_menu = 1;
+		ignore_menu = 1;
 	}
 	
-	if (!cancel_menu && PAD_justReleased(BTN_MENU)) {
+	if (!ignore_menu && PAD_justReleased(BTN_MENU)) {
 		show_menu = 1;
 	}
 	
@@ -1459,7 +1459,7 @@ void Menu_loop(void) {
 	int save_exists = 0;
 	int preview_exists = 0;
 	
-	int status = STATUS_CONT; // TODO: tmp 
+	int status = STATUS_CONT; // TODO: tmp?
 	int show_setting = 0;
 	int dirty = 1;
 	while (show_menu) {
@@ -1519,7 +1519,7 @@ void Menu_loop(void) {
 			// printf("bmp_path: %s (%i)\n", bmp_path, preview_exists);
 		}
 		
-		if (PAD_justPressed(BTN_B)) { // TODO: ignore BTN_MENU release if VOL_* buttons were pressed while it was pressed?
+		if (PAD_justPressed(BTN_B)) {
 			status = STATUS_CONT;
 			show_menu = 0;
 		}
