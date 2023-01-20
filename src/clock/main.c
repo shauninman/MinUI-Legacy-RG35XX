@@ -136,7 +136,7 @@ int main(int argc , char* argv[]) {
 	int dirty = 1;
 	int show_setting = 0;
 	while(!quit) {
-		unsigned long frame_start = SDL_GetTicks();
+		uint32_t frame_start = SDL_GetTicks();
 		
 		PAD_poll();
 		
@@ -293,7 +293,7 @@ int main(int argc , char* argv[]) {
 		}
 		else {
 			// slow down to 60fps
-			unsigned long frame_duration = SDL_GetTicks() - frame_start;
+			uint32_t frame_duration = SDL_GetTicks() - frame_start;
 			#define kTargetFrameDuration 17
 			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
 		}

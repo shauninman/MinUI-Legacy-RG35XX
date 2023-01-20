@@ -268,7 +268,7 @@ void GFX_clearAll(void) {
 	memset(gfx.map, 0, gfx.map_size);
 }
 
-static int frame_start = 0;
+static uint32_t frame_start = 0;
 void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
@@ -784,7 +784,7 @@ static struct PAD_Context {
 	int just_pressed;
 	int just_released;
 	int just_repeated;
-	int repeat_at[BTN_ID_COUNT];
+	uint32_t repeat_at[BTN_ID_COUNT];
 } pad;
 #define PAD_REPEAT_DELAY	300
 #define PAD_REPEAT_INTERVAL 100
@@ -799,7 +799,7 @@ void PAD_poll(void) {
 	pad.just_released = BTN_NONE;
 	pad.just_repeated = BTN_NONE;
 
-	int tick = SDL_GetTicks();
+	uint32_t tick = SDL_GetTicks();
 	for (int i=0; i<BTN_ID_COUNT; i++) {
 		int btn = 1 << i;
 		if ((pad.is_pressed & btn) && (tick>=pad.repeat_at[i])) {
@@ -865,15 +865,15 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	int dirty = _dirty ? *_dirty : 0;
 	int show_setting = _show_setting ? *_show_setting : 0;
 	
-	static unsigned long cancel_start = 0;
-	static unsigned long power_start = 0;
+	static uint32_t cancel_start = 0;
+	static uint32_t power_start = 0;
 
-	static unsigned long setting_start = 0;
-	static unsigned long charge_start = 0;
+	static uint32_t setting_start = 0;
+	static uint32_t charge_start = 0;
 	static int was_charging = -1;
 	if (was_charging==-1) was_charging = POW_isCharging();
 
-	unsigned long now = SDL_GetTicks();
+	uint32_t now = SDL_GetTicks();
 	if (cancel_start==0) cancel_start = now;
 	if (charge_start==0) charge_start = now;
 	
@@ -976,7 +976,7 @@ static void POW_exitSleep(void) {
 static void POW_waitForWake(void) {
 	SDL_Event event;
 	int wake = 0;
-	unsigned long sleep_ticks = SDL_GetTicks();
+	uint32_t sleep_ticks = SDL_GetTicks();
 	while (!wake) {
 		while (SDL_PollEvent(&event)) {
 			if (event.type==SDL_KEYUP) {

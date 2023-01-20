@@ -590,7 +590,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 static int cpu_ticks = 0;
 static int fps_ticks = 0;
-static int sec_start = 0;
+static uint32_t sec_start = 0;
 
 // TODO: flesh out
 static scale_neon_t scaler;
@@ -1098,10 +1098,10 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	return; // TODO: tmp
 	
 	// measure framerate
-	static int start = -1;
 	static int ticks = 0;
+	static uint32_t start = -1;
 	ticks += 1;
-	int now = SDL_GetTicks();
+	uint32_t now = SDL_GetTicks();
 	if (start==-1) start = now;
 	if (now-start>=1000) {
 		start = now;
@@ -1444,11 +1444,6 @@ void Menu_loop(void) {
 	sprintf(slot_path, "%s/%s.txt", minui_dir, game.name);
 	getDisplayName(game.name, rom_name);
 	
-	puts("slot_path");
-	puts(slot_path);
-	fflush(stdout);
-	
-	//
 	int selected = 0; // resets every launch
 	if (exists(slot_path)) menu.slot = getInt(slot_path);
 	if (menu.slot==8) menu.slot = 0;
@@ -1464,7 +1459,7 @@ void Menu_loop(void) {
 	int dirty = 1;
 	while (show_menu) {
 		GFX_startFrame();
-		int frame_start = SDL_GetTicks();
+		uint32_t frame_start = SDL_GetTicks();
 
 		PAD_poll();
 		
@@ -1732,7 +1727,7 @@ void Menu_loop(void) {
 		}
 		else {
 			// slow down to 60fps
-			unsigned long frame_duration = SDL_GetTicks() - frame_start;
+			uint32_t frame_duration = SDL_GetTicks() - frame_start;
 			#define kTargetFrameDuration 17
 			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
 		}
@@ -1786,7 +1781,7 @@ int main(int argc , char* argv[]) {
 		
 		if (0) {
 			cpu_ticks += 1;
-			int now = SDL_GetTicks();
+			uint32_t now = SDL_GetTicks();
 			if (now - sec_start>=1000) {
 				printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
 				sec_start = now;
