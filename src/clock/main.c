@@ -227,7 +227,7 @@ int main(int argc , char* argv[]) {
 			}
 		}
 		
-		POW_update(&dirty, &show_setting);
+		POW_update(&dirty, &show_setting, NULL,NULL);
 		
 		if (dirty) {
 			dirty = 0;
