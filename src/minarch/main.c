@@ -586,6 +586,68 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 ///////////////////////////////
 
+// TODO: tmp?
+SDL_Surface* digits;
+static void FPS_init(void) {
+	// TODO: scale
+	digits = SDL_CreateRGBSurface(SDL_SWSURFACE, 20*11,32, 16, 0,0,0,0);
+	SDL_FillRect(digits, NULL, RGB_BLACK);
+	
+	SDL_Surface* digit;
+	char* chars[] = { "0","1","2","3","4","5","6","7","8","9",".", NULL };
+	char* c;
+	int i = 0;
+#define DIGIT_WIDTH 20
+#define DIGIT_HEIGHT 32
+#define CHAR_DOT 10
+	while (c = chars[i]) {
+		digit = TTF_RenderUTF8_Blended(font.large, c, COLOR_WHITE);
+		SDL_BlitSurface(digit, NULL, digits, &(SDL_Rect){ (i * DIGIT_WIDTH) + (DIGIT_WIDTH - digit->w)/2, (DIGIT_HEIGHT - digit->h)/2});
+		SDL_FreeSurface(digit);
+		i += 1;
+	}
+}
+static void FPS_blitDouble(double num, int x, int y) {
+	int i = num;
+	int r = (num-i) * 10;
+	int n;
+	
+	// if (i > 999) {
+	// 	n = i / 1000;
+	// 	i -= n * 1000;
+	// 	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	// 	x += 20;
+	// }
+	// if (i > 99) {
+	// 	n = i / 100;
+	// 	i -= n * 100;
+	// 	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	// 	x += 20;
+	// }
+
+	n = i / 10;
+	i -= n * 10;
+	
+	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	x += 20;
+	
+	n = i;
+	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	x += 20;
+	
+	n = 10;
+	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	x += 20;
+	
+	n = r;
+	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+}
+static void FPS_quit(void) {
+	SDL_FreeSurface(digits);
+}
+
+///////////////////////////////
+
 // from gambatte-dms
 //from RGB565
 #define cR(A) (((A) & 0xf800) >> 11)
@@ -597,6 +659,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 static int cpu_ticks = 0;
 static int fps_ticks = 0;
+static double fps_double = 0;
+static double cpu_double = 0;
 static uint32_t sec_start = 0;
 
 // TODO: flesh out
@@ -1065,13 +1129,14 @@ static void selectScaler(int width, int height, int pitch) {
 
 	if (use_nearest) 
 		scaler = scaleNN_text;
+		// scaler = scaleNN; // better for Tekken 3
 	else {
 		switch (scale) {
 			// eggs-optimized scalers
 			case 4: 	scaler = scale4x_n16; break;
 			case 3: 	scaler = scale3x_n16; break;
 			case 2: 	scaler = scale2x_n16; break;
-			default:	scaler = scale1x; break;
+			default:	scaler = scale1x_n16; break;
 			
 			// my lesser scalers :sweat_smile:
 			// case 4: 	scaler = scale4x; break;
@@ -1131,22 +1196,25 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		if (frame>=fps) frame -= fps;
 	}
 	
+	if (fps_double) FPS_blitDouble(fps_double, 0,0);
+	if (cpu_double) FPS_blitDouble(cpu_double, 100,0);
+	
 	GFX_flip(screen);
 	
 	return; // TODO: tmp
 	
 	// measure framerate
-	static int ticks = 0;
-	static uint32_t start = -1;
-	ticks += 1;
-	uint32_t now = SDL_GetTicks();
-	if (start==-1) start = now;
-	if (now-start>=1000) {
-		start = now;
-		printf("fps: %i\n", ticks);
-		fflush(stdout);
-		ticks = 0;
-	}
+	// static int ticks = 0;
+	// static uint32_t start = -1;
+	// ticks += 1;
+	// uint32_t now = SDL_GetTicks();
+	// if (start==-1) start = now;
+	// if (now-start>=1000) {
+	// 	start = now;
+	// 	printf("fps: %i\n", ticks);
+	// 	fflush(stdout);
+	// 	ticks = 0;
+	// }
 }
 
 static void audio_sample_callback(int16_t left, int16_t right) {
@@ -1802,6 +1870,7 @@ int main(int argc , char* argv[]) {
 	// LOG_info("tag_name: %s\n", tag_name);
 	
 	screen = GFX_init(MODE_MENU);
+	FPS_init();
 	InitSettings();
 	
 	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
@@ -1824,11 +1893,13 @@ int main(int argc , char* argv[]) {
 		
 		if (show_menu) Menu_loop();
 		
-		if (0) {
+		if (1) {
 			cpu_ticks += 1;
 			uint32_t now = SDL_GetTicks();
 			if (now - sec_start>=1000) {
-				printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
+				fps_double = fps_ticks / ((double)(now - sec_start) / 1000);
+				cpu_double = cpu_ticks / ((double)(now - sec_start) / 1000);
+				// printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
 				sec_start = now;
 				cpu_ticks = 0;
 				fps_ticks = 0;
@@ -1845,6 +1916,7 @@ int main(int argc , char* argv[]) {
 	Core_close(); // LOG_info("after Core_close\n");
 	
 	SDL_FreeSurface(screen);
+	FPS_quit();
 	GFX_quit();
 	
 	return EXIT_SUCCESS;
