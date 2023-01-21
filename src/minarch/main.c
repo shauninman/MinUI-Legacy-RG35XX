@@ -669,8 +669,21 @@ static double cpu_double = 0;
 static uint32_t sec_start = 0;
 
 // TODO: flesh out
-static scale_neon_t scaler;
-static int dst_offset,dst_w,dst_h;
+#include <pthread.h>
+static struct {
+	void* src;
+	int src_w;
+	int src_h;
+	int src_p;
+	
+	int dst_offset;
+	int dst_w;
+	int dst_h;
+	
+	int do_flip;
+	scale_neon_t scaler;
+	pthread_t flip_pt;
+} renderer;
 static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
 static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	// pitch of src image not src buffer!
@@ -906,13 +919,13 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	}
 }
 static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int dy = -dst_h;
+	int dy = -renderer.dst_h;
 	unsigned lines = h;
 	bool copy = false;
-	size_t cpy_w = dst_w * SCREEN_BPP;
+	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
 
 	while (lines) {
-		int dx = -dst_w;
+		int dx = -renderer.dst_w;
 		const uint16_t *psrc16 = src;
 		uint16_t *pdst16 = dst;
 
@@ -929,7 +942,7 @@ static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint
 					dx += w;
 				}
 
-				dx -= dst_w;
+				dx -= renderer.dst_w;
 				psrc16++;
 			}
 
@@ -938,7 +951,7 @@ static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint
 		}
 
 		if (dy >= 0) {
-			dy -= dst_h;
+			dy -= renderer.dst_h;
 			src += pitch;
 			lines--;
 		} else {
@@ -947,12 +960,12 @@ static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	}
 }
 static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int dy = -dst_h;
+	int dy = -renderer.dst_h;
 	unsigned lines = h;
 	int row = 0;
 	
 	while (lines) {
-		int dx = -dst_w;
+		int dx = -renderer.dst_w;
 		const uint16_t *psrc16 = src;
 		uint16_t *pdst16 = dst;
 		
@@ -964,7 +977,7 @@ static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_
 					dx += w;
 				}
 
-				dx -= dst_w;
+				dx -= renderer.dst_w;
 				psrc16++;
 			}
 		}
@@ -973,7 +986,7 @@ static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_
 		dy += h;
 				
 		if (dy >= 0) {
-			dy -= dst_h;
+			dy -= renderer.dst_h;
 			src += pitch;
 			lines--;
 		}
@@ -981,16 +994,16 @@ static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_
 	}
 }
 static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int dy = -dst_h;
+	int dy = -renderer.dst_h;
 	unsigned lines = h;
 	bool copy = false;
 
-	size_t cpy_w = dst_w * SCREEN_BPP;
+	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
 	
 	int safe = w - 1; // don't look behind when there's nothing to see
 	uint16_t l1,l2;
 	while (lines) {
-		int dx = -dst_w;
+		int dx = -renderer.dst_w;
 		const uint16_t *psrc16 = src;
 		uint16_t *pdst16 = dst;
 		l1 = l2 = 0x0;
@@ -1025,7 +1038,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 					d = 0;
 				}
 
-				dx -= dst_w;
+				dx -= renderer.dst_w;
 				psrc16++;
 			}
 
@@ -1034,7 +1047,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 		}
 
 		if (dy >= 0) {
-			dy -= dst_h;
+			dy -= renderer.dst_h;
 			src += pitch;
 			lines--;
 		} else {
@@ -1043,7 +1056,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 	}
 }
 static void selectScaler(int width, int height, int pitch) {
-	scaler = scaleNull;
+	renderer.scaler = scaleNull;
 	int use_nearest = 0;
 	
 	int scale_x = SCREEN_WIDTH / width;
@@ -1053,123 +1066,175 @@ static void selectScaler(int width, int height, int pitch) {
 	
 	if (scale<=1) {
 		use_nearest = 1;
-		if (scale_y>scale_x) { printf("NN:A %ix%i (%s)\n", width,height,game.name); fflush(stdout);
-			dst_h = height * scale_y;
+		if (scale_y>scale_x) {
+			// printf("NN:A %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			renderer.dst_h = height * scale_y;
 			
 			// if the aspect ratio of an unmodified
 			// w to dst_h is within 20% of the target
 			// aspect_ratio don't force
-			near_ratio = (double)width / dst_h / core.aspect_ratio;
+			near_ratio = (double)width / renderer.dst_h / core.aspect_ratio;
 			if (near_ratio>=0.79 && near_ratio<=1.21) {
-				dst_w = width;
+				renderer.dst_w = width;
 			}
 			else {
-				dst_w = dst_h * core.aspect_ratio;
-				dst_w -= dst_w % 2;
+				renderer.dst_w = renderer.dst_h * core.aspect_ratio;
+				renderer.dst_w -= renderer.dst_w % 2;
 			}
 			
-			if (dst_w>SCREEN_WIDTH) {
-				dst_w = SCREEN_WIDTH;
-				dst_h = dst_w / core.aspect_ratio;
-				dst_h -= dst_w % 2;
-				if (dst_h>SCREEN_HEIGHT) dst_h = SCREEN_HEIGHT;
+			if (renderer.dst_w>SCREEN_WIDTH) {
+				renderer.dst_w = SCREEN_WIDTH;
+				renderer.dst_h = renderer.dst_w / core.aspect_ratio;
+				renderer.dst_h -= renderer.dst_w % 2;
+				if (renderer.dst_h>SCREEN_HEIGHT) renderer.dst_h = SCREEN_HEIGHT;
 			}
 		}
-		else if (scale_x>scale_y) {  printf("NN:B %ix%i (%s)\n", width,height,game.name); fflush(stdout);
-			dst_w = width * scale_x;
+		else if (scale_x>scale_y) {
+			// printf("NN:B %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			renderer.dst_w = width * scale_x;
 			
 			// see above
-			near_ratio = (double)dst_w / height / core.aspect_ratio;
+			near_ratio = (double)renderer.dst_w / height / core.aspect_ratio;
 			if (near_ratio>=0.79 && near_ratio<=1.21) {
-				dst_h = height;
+				renderer.dst_h = height;
 			}
 			else {
-				dst_h = dst_w / core.aspect_ratio;
-				dst_h -= dst_w % 2;
+				renderer.dst_h = renderer.dst_w / core.aspect_ratio;
+				renderer.dst_h -= renderer.dst_w % 2;
 			}
 		
-			if (dst_h>SCREEN_HEIGHT) {
-				dst_h = SCREEN_HEIGHT;
-				dst_w = dst_h * core.aspect_ratio;
-				dst_w -= dst_w % 2;
-				if (dst_w>SCREEN_WIDTH) dst_w = SCREEN_WIDTH;
+			if (renderer.dst_h>SCREEN_HEIGHT) {
+				renderer.dst_h = SCREEN_HEIGHT;
+				renderer.dst_w = renderer.dst_h * core.aspect_ratio;
+				renderer.dst_w -= renderer.dst_w % 2;
+				if (renderer.dst_w>SCREEN_WIDTH) renderer.dst_w = SCREEN_WIDTH;
 			}
 		}
-		else {  printf("NN:C %ix%i (%s)\n", width,height,game.name); fflush(stdout);
-			dst_w = width * scale_x;
-			dst_h = height * scale_y;
+		else {
+			// printf("NN:C %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			renderer.dst_w = width * scale_x;
+			renderer.dst_h = height * scale_y;
 		
 			// see above
-			near_ratio = (double)dst_w / dst_h / core.aspect_ratio;
+			near_ratio = (double)renderer.dst_w / renderer.dst_h / core.aspect_ratio;
 			if (near_ratio>=0.79 && near_ratio<=1.21) {
 				// close enough
 			}
 			else {
-				if (dst_h>dst_w) {
-					dst_w = dst_h * core.aspect_ratio;
-					dst_w -= dst_w % 2;
+				if (renderer.dst_h>renderer.dst_w) {
+					renderer.dst_w = renderer.dst_h * core.aspect_ratio;
+					renderer.dst_w -= renderer.dst_w % 2;
 				}
 				else {
-					dst_h = dst_w / core.aspect_ratio;
-					dst_h -= dst_w % 2;
+					renderer.dst_h = renderer.dst_w / core.aspect_ratio;
+					renderer.dst_h -= renderer.dst_w % 2;
 				}
 			}
 		
-			if (dst_w>SCREEN_WIDTH) {
-				dst_w = SCREEN_WIDTH;
+			if (renderer.dst_w>SCREEN_WIDTH) {
+				renderer.dst_w = SCREEN_WIDTH;
 			}
-			if (dst_h>SCREEN_HEIGHT) {
-				dst_h = SCREEN_HEIGHT;
+			if (renderer.dst_h>SCREEN_HEIGHT) {
+				renderer.dst_h = SCREEN_HEIGHT;
 			}
 		}
 	}
 	else {
-		dst_w = width * scale;
-		dst_h = height * scale;
+		renderer.dst_w = width * scale;
+		renderer.dst_h = height * scale;
 	}
 	
-	int ox = (SCREEN_WIDTH - dst_w) / 2;
-	int oy = (SCREEN_HEIGHT - dst_h) / 2;
-	dst_offset = (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
+	int ox = (SCREEN_WIDTH - renderer.dst_w) / 2;
+	int oy = (SCREEN_HEIGHT - renderer.dst_h) / 2;
+	renderer.dst_offset = (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
 
 	if (use_nearest) 
-		scaler = scaleNN_text;
-		// scaler = scaleNN; // better for Tekken 3
+		renderer.scaler = scaleNN_text;
+		// renderer.scaler = scaleNN; // better for Tekken 3
 	else {
 		switch (scale) {
 			// eggs-optimized scalers
-			case 4: 	scaler = scale4x_n16; break;
-			case 3: 	scaler = scale3x_n16; break;
-			case 2: 	scaler = scale2x_n16; break;
-			default:	scaler = scale1x_n16; break;
+			case 4: 	renderer.scaler = scale4x_n16; break;
+			case 3: 	renderer.scaler = scale3x_n16; break;
+			case 2: 	renderer.scaler = scale2x_n16; break;
+			default:	renderer.scaler = scale1x_n16; break;
 			
 			// my lesser scalers :sweat_smile:
-			// case 4: 	scaler = scale4x; break;
-			// case 3: 	scaler = scale3x; break;
-			// case 3: 	scaler = scale3x_dmg; break;
-			// case 3: 	scaler = scale3x_lcd; break;
-			// case 3: 	scaler = scale3x_scanline; break;
-			// case 2: 	scaler = scale2x; break;
-			// case 2: 	scaler = scale2x_lcd; break;
-			// case 2: 	scaler = scale2x_scanline; break;
-			// default:	scaler = scale1x; break;
+			// case 4: 	renderer.scaler = scale4x; break;
+			// case 3: 	renderer.scaler = scale3x; break;
+			// case 3: 	renderer.scaler = scale3x_dmg; break;
+			// case 3: 	renderer.scaler = scale3x_lcd; break;
+			// case 3: 	renderer.scaler = scale3x_scanline; break;
+			// case 2: 	renderer.scaler = scale2x; break;
+			// case 2: 	renderer.scaler = scale2x_lcd; break;
+			// case 2: 	renderer.scaler = scale2x_scanline; break;
+			// default:	renderer.scaler = scale1x; break;
 		}
 	}
 }
 
+static void* Flip_thread(void* param) {
+	while (1) {
+		if (!renderer.do_flip) {
+			SDL_Delay(1); // TODO: this seems arbitrary
+			continue;
+		}
+		fps_ticks += 1;
+		
+		renderer.scaler(renderer.src,screen->pixels+renderer.dst_offset,renderer.src_w,renderer.src_h,renderer.src_p,SCREEN_PITCH);
+		
+		int x = 0;
+		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
+		if (fps_double) x = FPS_blitDouble(fps_double, x,y);
+		if (cpu_double) {
+			x = FPS_blitChar(DIGIT_SLASH,x,y);
+			FPS_blitDouble(cpu_double, x,y);
+		}
+	
+		GFX_flip(screen);
+		
+		renderer.do_flip = 0;
+	}
+	return 0;
+}
+static void Flip_request(void) {
+	renderer.do_flip = 1;
+}
+static void Flip_init(void) {
+	memset(&renderer, 0, sizeof(renderer));
+	pthread_create(&renderer.flip_pt, NULL, Flip_thread, NULL);
+}
+static void Flip_quit(void) {
+	renderer.do_flip = 0;
+	pthread_cancel(renderer.flip_pt);
+	pthread_join(renderer.flip_pt,NULL);
+}
+
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) return;
-	fps_ticks += 1;
+	fps_ticks += 1; // comment out with threaded renderer
 	
-	static int last_width = 0;
-	static int last_height = 0;
-	if (width!=last_width || height!=last_height) {
-		last_width = width;
-		last_height = height;
+	if (width!=renderer.src_w || height!=renderer.src_h) {
+		renderer.src_w = width;
+		renderer.src_h = height;
+		renderer.src_p = pitch;
+
 		selectScaler(width,height,pitch);
 		GFX_clearAll();
+
+		if (renderer.src) {
+			free(renderer.src);
+			renderer.src = NULL;
+		}
+		renderer.src = malloc(height * pitch);
 	}
-	scaler((void*)data,screen->pixels+dst_offset,width,height,pitch,SCREEN_PITCH);
+	
+	// TODO: we can maintain 60fps where frame rate is an issue without blitting...
+	// memcpy(renderer.src, data, pitch * height); // copy for threaded scaling/rendering
+	// Flip_request();
+	// return;
+	
+	renderer.scaler((void*)data,screen->pixels+renderer.dst_offset,width,height,pitch,SCREEN_PITCH);
 	
 	if (0) {
 		static int frame = 0;
@@ -1232,6 +1297,7 @@ static void audio_sample_callback(int16_t left, int16_t right) {
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
 	return SND_batchSamples((const SND_Frame*)data, frames);
+	// return frames;
 };
 
 static void Menu_beforeSleep(void);
@@ -1504,6 +1570,8 @@ void Menu_afterSleep(void) {
 	unlink(AUTO_RESUME_PATH);
 }
 void Menu_loop(void) {
+	// while (renderer.do_flip) SDL_Delay(1); // TODO:// this seems arbitrary
+	
 	POW_enableAutosleep();
 	PAD_reset();
 	
@@ -1885,6 +1953,7 @@ int main(int argc , char* argv[]) {
 	
 	screen = GFX_init(MODE_MENU);
 	FPS_init();
+	// Flip_init();
 	InitSettings();
 	
 	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
@@ -1930,6 +1999,7 @@ int main(int argc , char* argv[]) {
 	Core_close(); // LOG_info("after Core_close\n");
 	
 	SDL_FreeSurface(screen);
+	// Flip_quit();
 	FPS_quit();
 	GFX_quit();
 	
