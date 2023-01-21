@@ -146,12 +146,10 @@ static struct Core {
 } core;
 
 ///////////////////////////////////////
-// saves and states
 
 static void SRAM_getPath(char* filename) {
 	sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
 }
-
 static void SRAM_read(void) {
 	size_t sram_size = core.get_memory_size(RETRO_MEMORY_SAVE_RAM);
 	if (!sram_size) return;
@@ -196,11 +194,12 @@ static void SRAM_write(void) {
 	sync();
 }
 
+///////////////////////////////////////
+
 static int state_slot = 0;
 static void State_getPath(char* filename) {
 	sprintf(filename, "%s/%s.st%i", core.config_dir, game.name, state_slot);
 }
-
 static void State_read(void) { // from picoarch
 	size_t state_size = core.serialize_size();
 	if (!state_size) return;
@@ -289,7 +288,9 @@ static void State_resume(void) {
 
 ///////////////////////////////
 
-// callbacks
+
+
+///////////////////////////////
 
 // TODO: tmp, naive options
 static int tmp_options_changed = 0;
@@ -1857,6 +1858,10 @@ void Menu_loop(void) {
 }
 
 int main(int argc , char* argv[]) {
+	// force a stack overflow to ensure asan is linked and actually working
+	// char tmp[2];
+	// tmp[2] = 'a';
+	
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 
 	char tag_name[MAX_PATH];

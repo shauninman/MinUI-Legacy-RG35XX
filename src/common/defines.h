@@ -60,24 +60,12 @@
 #define COLOR_DARK_TEXT		(SDL_Color){TRIAD_DARK_TEXT}
 #define COLOR_BUTTON_TEXT	(SDL_Color){TRIAD_GRAY}
 
-#define SCREEN_WIDTH 	640
-#define SCREEN_HEIGHT 	480
-#define SCREEN_SCALE 	2 // SCREEN_HEIGHT / 240
-
 #define BASE_WIDTH 320
 #define BASE_HEIGHT 240
 
-// SNES (stretched to 4:3)
-// #define SCREEN_WIDTH 1024
-// #define SCREEN_HEIGHT 896
-
-// GBA 
-// #define SCREEN_WIDTH 960
-// #define SCREEN_HEIGHT 720
-
-// GB converted to 4:3 with full height
-// #define SCREEN_WIDTH 768
-// #define SCREEN_HEIGHT 576
+#define SCREEN_WIDTH 	640
+#define SCREEN_HEIGHT 	480
+#define SCREEN_SCALE 	2 // SCREEN_HEIGHT / 240
 
 #define SCREEN_DEPTH 	16
 #define SCREEN_BPP 		2

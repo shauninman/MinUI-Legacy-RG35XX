@@ -20,11 +20,11 @@ void LOG_note(int level, const char* fmt, ...);
 
 ///////////////////////////////
 
-uint32_t RGB_WHITE;
-uint32_t RGB_BLACK;
-uint32_t RGB_LIGHT_GRAY;
-uint32_t RGB_GRAY;
-uint32_t RGB_DARK_GRAY;
+extern uint32_t RGB_WHITE;
+extern uint32_t RGB_BLACK;
+extern uint32_t RGB_LIGHT_GRAY;
+extern uint32_t RGB_GRAY;
+extern uint32_t RGB_DARK_GRAY;
 
 enum {
 	ASSET_WHITE_PILL,

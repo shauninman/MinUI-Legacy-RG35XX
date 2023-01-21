@@ -112,6 +112,12 @@ struct owlfb_mem_info {
 
 ///////////////////////////////
 
+uint32_t RGB_WHITE;
+uint32_t RGB_BLACK;
+uint32_t RGB_LIGHT_GRAY;
+uint32_t RGB_GRAY;
+uint32_t RGB_DARK_GRAY;
+
 static struct GFX_Context {
 	int mode;
 	int fb;
@@ -168,7 +174,7 @@ SDL_Surface* GFX_init(int mode) {
 	
 	// open framebuffer
 	gfx.fb = open("/dev/fb0", O_RDWR);
-
+	
 	// configure framebuffer
 	ioctl(gfx.fb, FBIOGET_VSCREENINFO, &gfx.vinfo);
 	gfx.vinfo.bits_per_pixel = SCREEN_DEPTH;
@@ -276,7 +282,8 @@ void GFX_flip(SDL_Surface* screen) {
 	static int ticks = 0;
 	ticks += 1;
 #ifdef GFX_ENABLE_VSYNC
-#define FRAME_BUDGET 17 // 60fps
+	// TODO: this condition doesn't make sense when using the threaded renderer
+	#define FRAME_BUDGET 17 // 60fps
 	if (frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
 		int arg = 1;
 		ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
