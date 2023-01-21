@@ -587,61 +587,65 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 ///////////////////////////////
 
-// TODO: tmp?
+// TODO: tmp? rename this HUD_*? support messages too?
 SDL_Surface* digits;
+#define DIGIT_WIDTH 14
+#define DIGIT_HEIGHT 16
+enum {
+	DIGIT_SLASH = 10,
+	DIGIT_DOT,
+	DIGIT_COUNT,
+};
 static void FPS_init(void) {
 	// TODO: scale
-	digits = SDL_CreateRGBSurface(SDL_SWSURFACE, 20*11,32, 16, 0,0,0,0);
+	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT,SCREEN_DEPTH, 0,0,0,0);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
-	char* chars[] = { "0","1","2","3","4","5","6","7","8","9",".", NULL };
+	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".", NULL };
 	char* c;
 	int i = 0;
-#define DIGIT_WIDTH 20
-#define DIGIT_HEIGHT 32
-#define CHAR_DOT 10
 	while (c = chars[i]) {
-		digit = TTF_RenderUTF8_Blended(font.large, c, COLOR_WHITE);
+		digit = TTF_RenderUTF8_Blended(font.tiny, c, COLOR_WHITE);
 		SDL_BlitSurface(digit, NULL, digits, &(SDL_Rect){ (i * DIGIT_WIDTH) + (DIGIT_WIDTH - digit->w)/2, (DIGIT_HEIGHT - digit->h)/2});
 		SDL_FreeSurface(digit);
 		i += 1;
 	}
 }
-static void FPS_blitDouble(double num, int x, int y) {
+static int FPS_blitChar(int n, int x, int y) {
+	SDL_BlitSurface(digits, &(SDL_Rect){n*DIGIT_WIDTH,0,DIGIT_WIDTH,DIGIT_HEIGHT}, screen, &(SDL_Rect){x,y});
+	return x + DIGIT_WIDTH;
+}
+static int FPS_blitDouble(double num, int x, int y) {
 	int i = num;
 	int r = (num-i) * 10;
 	int n;
 	
-	// if (i > 999) {
-	// 	n = i / 1000;
-	// 	i -= n * 1000;
-	// 	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
-	// 	x += 20;
-	// }
-	// if (i > 99) {
-	// 	n = i / 100;
-	// 	i -= n * 100;
-	// 	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
-	// 	x += 20;
-	// }
-
+	if (i > 999) {
+		n = i / 1000;
+		i -= n * 1000;
+		x = FPS_blitChar(n,x,y);
+	}
+	if (i > 99) {
+		n = i / 100;
+		i -= n * 100;
+		x = FPS_blitChar(n,x,y);
+	}
+	
 	n = i / 10;
 	i -= n * 10;
 	
-	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
-	x += 20;
+	x = FPS_blitChar(n,x,y);
 	
 	n = i;
-	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
-	x += 20;
+	x = FPS_blitChar(n,x,y);
 	
-	n = 10;
-	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
-	x += 20;
+	n = DIGIT_DOT;
+	x = FPS_blitChar(n,x,y);
 	
 	n = r;
-	SDL_BlitSurface(digits, &(SDL_Rect){n*20,0,20,32}, screen, &(SDL_Rect){x,y});
+	x = FPS_blitChar(n,x,y);
+	return x;
 }
 static void FPS_quit(void) {
 	SDL_FreeSurface(digits);
@@ -1197,8 +1201,13 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		if (frame>=fps) frame -= fps;
 	}
 	
-	if (fps_double) FPS_blitDouble(fps_double, 0,0);
-	if (cpu_double) FPS_blitDouble(cpu_double, 100,0);
+	int x = 0;
+	int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
+	if (fps_double) x = FPS_blitDouble(fps_double, x,y);
+	if (cpu_double) {
+		x = FPS_blitChar(DIGIT_SLASH,x,y);
+		FPS_blitDouble(cpu_double, x,y);
+	}
 	
 	GFX_flip(screen);
 	
@@ -1904,7 +1913,7 @@ int main(int argc , char* argv[]) {
 			if (now - sec_start>=1000) {
 				fps_double = fps_ticks / ((double)(now - sec_start) / 1000);
 				cpu_double = cpu_ticks / ((double)(now - sec_start) / 1000);
-				// printf("fps: %i (%i)\n", cpu_ticks, fps_ticks);
+				// printf("fps: %f (%f)\n", fps_double, cpu_double); fflush(stdout);
 				sec_start = now;
 				cpu_ticks = 0;
 				fps_ticks = 0;
