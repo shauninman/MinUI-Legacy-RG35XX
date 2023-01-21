@@ -1025,15 +1025,17 @@ int POW_preventAutosleep(void) {
 int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
-int POW_getBattery(void) { // 0-100 in 5% increments
-	// return getInt("/sys/class/power_supply/battery/capacity"); // this is really inaccurate
+int POW_getBattery(void) { // 5-100 in 25% fragments
+	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 1000; // 3300-4100
+	i -= 3300; 	// ~0-800
+	i /= 8; 	// ~0-100
 	
-	// TODO: smooth this value before returning ala Mini?
-	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // ~320-420
-	i = MIN(MAX(0, i-320), 100);
-	i /= 5;
-	i *= 5;
-	return i;
+	// worry less about battery and more about the game you're playing
+	if (i>75) return 100;
+	if (i>50) return  75;
+	if (i>25) return  50;
+	if (i>5)  return  25;
+	else      return   5;
 }
 void POW_setRumble(int strength) {
 	putInt("/sys/class/power_supply/battery/moto", strength);
