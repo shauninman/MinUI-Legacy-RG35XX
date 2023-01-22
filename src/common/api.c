@@ -98,8 +98,6 @@ struct owlfb_sync_info {
 ///////////////////////////////
 
 #define GFX_BUFFER_COUNT 3
-#define GFX_ENABLE_VSYNC
-#define GFX_ENABLE_BUFFER
 
 ///////////////////////////////
 
@@ -111,6 +109,7 @@ uint32_t RGB_DARK_GRAY;
 
 static struct GFX_Context {
 	int mode;
+	int vsync;
 	int fb;
 	int pitch;
 	int buffer;
@@ -157,6 +156,7 @@ SDL_Surface* GFX_init(int mode) {
 	SDL_ShowCursor(0);
 	TTF_Init();
 	
+	gfx.vsync = 1;
 	gfx.mode = mode;
 	
 	// we're drawing to the (triple-buffered) framebuffer directly
@@ -172,15 +172,10 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.vinfo.xres = SCREEN_WIDTH;
 	gfx.vinfo.yres = SCREEN_HEIGHT;
 	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
-	gfx.vinfo.yres_virtual = SCREEN_HEIGHT;
-#ifdef GFX_ENABLE_BUFFER
-	gfx.vinfo.yres_virtual *= GFX_BUFFER_COUNT;
-#endif
-#if defined (GFX_ENABLE_BUFFER) && !defined (GFX_ENABLE_VSYNC) 
+	gfx.vinfo.yres_virtual = SCREEN_HEIGHT * GFX_BUFFER_COUNT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
     gfx.vinfo.activate = FB_ACTIVATE_VBL;
-#endif
     
 	if (ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo)) {
 		printf("FBIOPUT_VSCREENINFO failed: %s (%i)\n", strerror(errno),  errno);
@@ -192,20 +187,14 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.map = mmap(0, gfx.map_size, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb, 0);
 	memset(gfx.map, 0, gfx.map_size);
 	
-#ifdef GFX_ENABLE_VSYNC
 	struct owlfb_sync_info sinfo;
 	sinfo.enabled = 1;
 	if (ioctl(gfx.fb, OWLFB_VSYNC_EVENT_EN, &sinfo)) {
 		printf("OWLFB_VSYNC_EVENT_EN failed: %s (%i)\n", strerror(errno),  errno);
 	}
-#endif
 	
 	// buffer tracking
-#ifdef GFX_ENABLE_BUFFER
 	gfx.buffer = 1;
-#else
-	gfx.buffer = 0;
-#endif
 	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
 
 	// return screen
@@ -248,10 +237,10 @@ void GFX_quit(void) {
 	TTF_CloseFont(font.tiny);
 	
 	SDL_FreeSurface(gfx.assets);
-#ifdef GFX_ENABLE_VSYNC
+	
 	int arg = 1;
 	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
-#endif
+
 	GFX_clearAll();
 	munmap(gfx.map, gfx.map_size);
 	close(gfx.fb);
@@ -265,6 +254,13 @@ void GFX_clearAll(void) {
 	memset(gfx.map, 0, gfx.map_size);
 }
 
+int GFX_getVsync(void) {
+	return gfx.vsync;
+}
+void GFX_setVsync(int vsync) {
+	gfx.vsync = vsync;
+}
+
 static uint32_t frame_start = 0;
 void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
@@ -272,23 +268,20 @@ void GFX_startFrame(void) {
 void GFX_flip(SDL_Surface* screen) {
 	static int ticks = 0;
 	ticks += 1;
-#ifdef GFX_ENABLE_VSYNC
-	// TODO: this condition doesn't make sense when using the threaded renderer
-	#define FRAME_BUDGET 17 // 60fps
-	if (frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-		int arg = 1;
-		ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+	if (gfx.vsync) {
+		#define FRAME_BUDGET 17 // 60fps
+		if (frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
+			int arg = 1;
+			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+		}
 	}
-#endif
 
-#ifdef GFX_ENABLE_BUFFER
 	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
 	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
 
 	gfx.buffer += 1;
 	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
-#endif
 }
 
 SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller

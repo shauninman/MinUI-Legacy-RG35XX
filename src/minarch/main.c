@@ -521,14 +521,19 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	// TODO: RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION 59
+	// TODO: I'm not sure what uses this...not gambatte, not snes9x, not pcsx
 	case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK: { /* 62 */
+		puts("RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK");
 		const struct retro_audio_buffer_status_callback *cb =
 			(const struct retro_audio_buffer_status_callback *)data;
 		if (cb) {
+			puts("has audo_buffer_status callback");
 			core.audio_buffer_status = cb->callback;
 		} else {
+			puts("missing audo_buffer_status callback");
 			core.audio_buffer_status = NULL;
 		}
+		fflush(stdout);
 		break;
 	}
 	// TODO: not used by gambatte
@@ -685,8 +690,6 @@ static double cpu_double = 0;
 static double use_double = 0;
 static uint32_t sec_start = 0;
 
-// TODO: flesh out
-#include <pthread.h>
 static struct {
 	void* src;
 	int src_w;
@@ -696,10 +699,8 @@ static struct {
 	int dst_offset;
 	int dst_w;
 	int dst_h;
-	
-	int do_flip;
+
 	scale_neon_t scaler;
-	pthread_t flip_pt;
 } renderer;
 static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
 static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
@@ -1190,43 +1191,6 @@ static void selectScaler(int width, int height, int pitch) {
 	}
 }
 
-static void* Flip_thread(void* param) {
-	while (1) {
-		if (!renderer.do_flip) {
-			SDL_Delay(1); // TODO: this seems arbitrary
-			continue;
-		}
-		fps_ticks += 1;
-		
-		renderer.scaler(renderer.src,screen->pixels+renderer.dst_offset,renderer.src_w,renderer.src_h,renderer.src_p,SCREEN_PITCH);
-		
-		int x = 0;
-		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
-		if (fps_double) x = MSG_blitDouble(fps_double, x,y);
-		if (cpu_double) {
-			x = MSG_blitChar(DIGIT_SLASH,x,y);
-			MSG_blitDouble(cpu_double, x,y);
-		}
-	
-		GFX_flip(screen);
-		
-		renderer.do_flip = 0;
-	}
-	return 0;
-}
-static void Flip_request(void) {
-	renderer.do_flip = 1;
-}
-static void Flip_init(void) {
-	memset(&renderer, 0, sizeof(renderer));
-	pthread_create(&renderer.flip_pt, NULL, Flip_thread, NULL);
-}
-static void Flip_quit(void) {
-	renderer.do_flip = 0;
-	pthread_cancel(renderer.flip_pt);
-	pthread_join(renderer.flip_pt,NULL);
-}
-
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) return;
 	fps_ticks += 1; // comment out with threaded renderer
@@ -1245,11 +1209,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		}
 		renderer.src = malloc(height * pitch);
 	}
-	
-	// TODO: we can maintain 60fps where frame rate is an issue without blitting...
-	// memcpy(renderer.src, data, pitch * height); // copy for threaded scaling/rendering
-	// Flip_request();
-	// return;
 	
 	static int top_width = 0;
 	static int bottom_width = 0;
@@ -1306,7 +1265,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 			x = MSG_blitChar(DIGIT_PERCENT,x,y);
 		}
 		
-		bottom_width = x;
+		if (x>bottom_width) bottom_width = x; // keep the largest width because triple buffer
 		
 		x = 0;
 		y = 0;
@@ -1325,7 +1284,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		x = MSG_blitInt(renderer.dst_h,x,y);
 		x = MSG_blitChar(DIGIT_CP,x,y);
 		
-		top_width = x;
+		if (x>top_width) top_width = x; // keep the largest width because triple buffer
 	}
 	
 	GFX_flip(screen);
@@ -1621,8 +1580,6 @@ void Menu_afterSleep(void) {
 	unlink(AUTO_RESUME_PATH);
 }
 void Menu_loop(void) {
-	// while (renderer.do_flip) SDL_Delay(1); // TODO:// this seems arbitrary
-	
 	POW_enableAutosleep();
 	PAD_reset();
 	
@@ -2028,7 +1985,6 @@ int main(int argc , char* argv[]) {
 	
 	screen = GFX_init(MODE_MENU);
 	MSG_init();
-	// Flip_init();
 	InitSettings();
 	
 	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
@@ -2082,7 +2038,6 @@ int main(int argc , char* argv[]) {
 	Core_close(); // LOG_info("after Core_close\n");
 	
 	SDL_FreeSurface(screen);
-	// Flip_quit();
 	MSG_quit();
 	GFX_quit();
 	

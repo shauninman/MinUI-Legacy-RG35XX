@@ -72,6 +72,9 @@ void GFX_startFrame(void);
 void GFX_flip(SDL_Surface* screen);
 void GFX_quit(void);
 
+int GFX_getVsync(void);
+void GFX_setVsync(int vsync);
+
 SDL_Surface* GFX_getBufferCopy(void); // must be freed by caller
 int GFX_truncateDisplayName(const char* in_name, char* out_name, int max_width); // returns final width (including pill padding)
 
