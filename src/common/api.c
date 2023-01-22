@@ -94,15 +94,87 @@ struct owlfb_mem_info {
 	__u8  reserved[3];
 };
 
-#define OWL_IOW(num, dtype)	_IOW('O', num, dtype)
+enum owlfb_overlay_type {
+	OWLFB_OVERLAY_VIDEO = 1,
+	OWLFB_OVERLAY_CURSOR,	
+};
+
+struct owlfb_overlay_args {
+	__u16 fb_id;
+	__u16 overlay_id;
+	__u16 overlay_type;
+	__u32 overlay_mem_base;
+	__u32 overlay_mem_size;
+	__u32 uintptr_overly_info;
+};
+
+enum owl_color_mode {
+	OWL_DSS_COLOR_RGB16	    = 0,  /* RGB16  */
+	OWL_DSS_COLOR_BGR16	    = 1,  /* RGB16 */
+	OWL_DSS_COLOR_ARGB32    = 4,  /* ARGB32*/
+	OWL_DSS_COLOR_ABGR32    = 5,  /* ARGB32 */
+	OWL_DSS_COLOR_RGBA32    = 6,  /* RGBA32 */
+	OWL_DSS_COLOR_BGRA32	= 7,  /* RGBA32 */
+	OWL_DSS_COLOR_NV21	    = 8,  /* YUV 4:2:0 sp */	
+	OWL_DSS_COLOR_NU21	    = 9,  /* YVU 4:2:0 sp */
+	OWL_DSS_COLOR_YU12	    = 10, /* YUV 4:2:0 */
+	OWL_DSS_COLOR_ARGB16	= 12, /* ARGB16 */
+	OWL_DSS_COLOR_ABGR16	= 13, /* ABGR16 */
+	OWL_DSS_COLOR_RGBA16	= 14, /* RGBA16 */
+	OWL_DSS_COLOR_BGRA16	= 15, /* BGRA16 */	
+	OWL_DSS_COLOR_RGB24U	= 16, /* RGB24, 32-bit container */
+	OWL_DSS_COLOR_RGB24P	= 17, /* RGB24, 24-bit container */
+	OWL_DSS_COLOR_RGBX32	= 18, /* RGBx32 */
+	OWL_DSS_COLOR_NV12		= 19, /* YVU 4:2:0  */
+	OWL_DSS_COLOR_XBGR32	= 20, /* XBGR32 */
+	OWL_DSS_COLOR_XRGB32 	= 21,
+};
+
+#include <stdbool.h>
+struct owlfb_overlay_info {
+    __u32 mem_off;
+    __u32 mem_size;
+	
+	__u32 screen_width;	
+	enum owl_color_mode color_mode;		
+	__u32 img_width;
+	__u32 img_height;
+		
+	__u32 xoff;	
+	__u32 yoff;
+	__u32 width;
+	__u32 height;
+	
+	__u8 rotation;
+	
+	__u32 pos_x;
+	__u32 pos_y;
+	__u32 out_width;	/* if 0, out_width == width */
+	__u32 out_height;	/* if 0, out_height == height */
+	
+	__u8 lightness;
+	__u8 saturation;
+	__u8 contrast;
+	bool global_alpha_en;
+	__u8 global_alpha;
+	
+	bool pre_mult_alpha_en;	
+	__u8 zorder;
+};
+
+#define OWL_IOW(num, dtype) _IOW('O', num, dtype)
+#define OWL_IOR(num, dtype)	_IOR('O', num, dtype)
 #define OWLFB_WAITFORVSYNC            OWL_IOW(57,long long)
-#define OWLFB_GET_DISPLAY_INFO		  OWL_IOW(74,struct owlfb_disp_device)
-#define OWLFB_SET_DISPLAY_INFO		  OWL_IOW(75,struct owlfb_disp_device)
+#define OWLFB_GET_DISPLAY_INFO		  OWL_IOW(74, struct owlfb_disp_device)
+#define OWLFB_SET_DISPLAY_INFO		  OWL_IOW(75, struct owlfb_disp_device)
 #define OWLFB_VSYNC_EVENT_EN	      OWL_IOW(67, struct owlfb_sync_info)
 
-// not implemented?
-#define OWLFB_SETUP_MEM	              OWL_IOW(55, struct owlfb_mem_info)
-#define OWLFB_QUERY_MEM	              OWL_IOW(56, struct owlfb_mem_info)
+#define OWLFB_OVERLAY_REQUEST	      OWL_IOR(41, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_RELEASE		  OWL_IOR(42, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_ENABLE	      OWL_IOR(43, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_DISABLE		  OWL_IOR(45, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_GETINFO	      OWL_IOW(46, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_SETINFO         OWL_IOW(47, struct owlfb_overlay_args)
 
 ///////////////////////////////
 
@@ -208,6 +280,186 @@ SDL_Surface* GFX_init(int mode) {
 		printf("OWLFB_VSYNC_EVENT_EN failed: %s (%i)\n", strerror(errno),  errno);
 	}
 #endif
+	
+	// OVERLAY testing
+	if (0) {
+	puts("---");
+	
+	struct owlfb_overlay_args overlay_args;
+	struct owlfb_overlay_info oinfo;
+	
+	memset(&overlay_args, 0, sizeof(struct owlfb_overlay_args));
+	memset(&oinfo, 0, sizeof(struct owlfb_overlay_info));
+	
+	// TODO: some combination of ioctl's produced overlay and manager entries to appear in /sys/devices/owldss
+	// I'm dumb, I should have been looking in /sys/devices/platform/owldss :facepalm:
+	
+	// overlay_args.fb_id = 0;
+	overlay_args.overlay_id = 1; // if left as zero it appears to replace fb0? (the screen is black in any case)
+	overlay_args.overlay_type = OWLFB_OVERLAY_VIDEO; // might only support OWLFB_OVERLAY_CURSOR...
+	// overlay_args.overlay_mem_size = SCREEN_WIDTH * SCREEN_BPP * SCREEN_HEIGHT;? // stays 0 after REQUEST
+	overlay_args.uintptr_overly_info = (__u32)&oinfo;
+	
+	// puts("before REQUEST");
+	// printf("\toverlay_args.fb_id: %u\n", overlay_args.fb_id);
+	// printf("\toverlay_args.overlay_id: %u\n", overlay_args.overlay_id);
+	// printf("\toverlay_args.overlay_type: %u\n", overlay_args.overlay_type);
+	// printf("\toverlay_args.overlay_mem_base: %u\n", overlay_args.overlay_mem_base);
+	// printf("\toverlay_args.overlay_mem_size: %u\n", overlay_args.overlay_mem_size);
+	//
+	// printf("\toinfo.mem_off: %u\n", oinfo.mem_off);
+	// printf("\toinfo.mem_size: %u\n", oinfo.mem_size);
+	// printf("\toinfo.screen_width: %u\n", oinfo.screen_width); // 8???
+	// printf("\toinfo.color_mode: %u\n", oinfo.color_mode); // 0 = OWL_DSS_COLOR_RGB16
+	// printf("\toinfo.img_width: %u\n", oinfo.img_width);
+	// printf("\toinfo.img_height: %u\n", oinfo.img_height);
+	// printf("\toinfo.xoff: %u\n", oinfo.xoff);
+	// printf("\toinfo.yoff: %u\n", oinfo.yoff);
+	// printf("\toinfo.width: %u\n", oinfo.width);
+	// printf("\toinfo.height: %u\n", oinfo.height);
+	// printf("\toinfo.rotation: %u\n", oinfo.rotation);
+	// printf("\toinfo.pos_x: %u\n", oinfo.pos_x);
+	// printf("\toinfo.pos_y: %u\n", oinfo.pos_y);
+	// printf("\toinfo.out_width: %u\n", oinfo.out_width);
+	// printf("\toinfo.out_height: %u\n", oinfo.out_height);
+	// printf("\toinfo.lightness: %u\n", oinfo.lightness);
+	// printf("\toinfo.saturation: %u\n", oinfo.saturation);
+	// printf("\toinfo.contrast: %u\n", oinfo.contrast);
+	// printf("\toinfo.global_alpha_en: %u\n", oinfo.global_alpha_en);
+	// printf("\toinfo.global_alpha: %u\n", oinfo.global_alpha);
+	// printf("\toinfo.pre_mult_alpha_en: %u\n", oinfo.pre_mult_alpha_en);
+	// printf("\toinfo.zorder: %u\n", oinfo.zorder);
+	
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_REQUEST, &overlay_args)) {
+		printf("OWLFB_OVERLAY_REQUEST failed: %s (%i)\n", strerror(errno),  errno);
+	}
+	
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_ENABLE, &overlay_args)) {
+		printf("OWLFB_OVERLAY_ENABLE failed: %s (%i)\n", strerror(errno),  errno);
+	}
+	
+	puts("after ENABLE");
+	printf("\toverlay_args.fb_id: %u\n", overlay_args.fb_id);
+	printf("\toverlay_args.overlay_id: %u\n", overlay_args.overlay_id);
+	printf("\toverlay_args.overlay_type: %u\n", overlay_args.overlay_type);
+	printf("\toverlay_args.overlay_mem_base: %u\n", overlay_args.overlay_mem_base);
+	printf("\toverlay_args.overlay_mem_size: %u\n", overlay_args.overlay_mem_size);
+
+	printf("\toinfo.mem_off: %u\n", oinfo.mem_off);
+	printf("\toinfo.mem_size: %u\n", oinfo.mem_size);
+	printf("\toinfo.screen_width: %u\n", oinfo.screen_width); // 8???
+	printf("\toinfo.color_mode: %u\n", oinfo.color_mode); // 0 = OWL_DSS_COLOR_RGB16
+	printf("\toinfo.img_width: %u\n", oinfo.img_width);
+	printf("\toinfo.img_height: %u\n", oinfo.img_height);
+	printf("\toinfo.xoff: %u\n", oinfo.xoff);
+	printf("\toinfo.yoff: %u\n", oinfo.yoff);
+	printf("\toinfo.width: %u\n", oinfo.width);
+	printf("\toinfo.height: %u\n", oinfo.height);
+	printf("\toinfo.rotation: %u\n", oinfo.rotation);
+	printf("\toinfo.pos_x: %u\n", oinfo.pos_x);
+	printf("\toinfo.pos_y: %u\n", oinfo.pos_y);
+	printf("\toinfo.out_width: %u\n", oinfo.out_width);
+	printf("\toinfo.out_height: %u\n", oinfo.out_height);
+	printf("\toinfo.lightness: %u\n", oinfo.lightness);
+	printf("\toinfo.saturation: %u\n", oinfo.saturation);
+	printf("\toinfo.contrast: %u\n", oinfo.contrast);
+	printf("\toinfo.global_alpha_en: %u\n", oinfo.global_alpha_en);
+	printf("\toinfo.global_alpha: %u\n", oinfo.global_alpha);
+	printf("\toinfo.pre_mult_alpha_en: %u\n", oinfo.pre_mult_alpha_en);
+	printf("\toinfo.zorder: %u\n", oinfo.zorder);
+
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_GETINFO, &overlay_args)) {
+		printf("OWLFB_OVERLAY_GETINFO failed: %s (%i)\n", strerror(errno),  errno);
+	}
+
+	puts("after GETINFO");
+	printf("\toverlay_args.fb_id: %u\n", overlay_args.fb_id);
+	printf("\toverlay_args.overlay_id: %u\n", overlay_args.overlay_id);
+	printf("\toverlay_args.overlay_type: %u\n", overlay_args.overlay_type);
+	printf("\toverlay_args.overlay_mem_base: %u\n", overlay_args.overlay_mem_base); // remain 0...
+	printf("\toverlay_args.overlay_mem_size: %u\n", overlay_args.overlay_mem_size); // remain 0...
+
+	printf("\toinfo.mem_off: %u\n", oinfo.mem_off);   // possibly returning -1?
+	printf("\toinfo.mem_size: %u\n", oinfo.mem_size); // possibly returning -1?
+	printf("\toinfo.screen_width: %u\n", oinfo.screen_width); // 8???
+	printf("\toinfo.color_mode: %u\n", oinfo.color_mode); // 0 = OWL_DSS_COLOR_RGB16
+	printf("\toinfo.img_width: %u\n", oinfo.img_width);
+	printf("\toinfo.img_height: %u\n", oinfo.img_height);
+	printf("\toinfo.xoff: %u\n", oinfo.xoff);
+	printf("\toinfo.yoff: %u\n", oinfo.yoff);
+	printf("\toinfo.width: %u\n", oinfo.width);
+	printf("\toinfo.height: %u\n", oinfo.height);
+	printf("\toinfo.rotation: %u\n", oinfo.rotation);
+	printf("\toinfo.pos_x: %u\n", oinfo.pos_x);
+	printf("\toinfo.pos_y: %u\n", oinfo.pos_y);
+	printf("\toinfo.out_width: %u\n", oinfo.out_width);
+	printf("\toinfo.out_height: %u\n", oinfo.out_height);
+	printf("\toinfo.lightness: %u\n", oinfo.lightness);
+	printf("\toinfo.saturation: %u\n", oinfo.saturation);
+	printf("\toinfo.contrast: %u\n", oinfo.contrast);
+	printf("\toinfo.global_alpha_en: %u\n", oinfo.global_alpha_en);
+	printf("\toinfo.global_alpha: %u\n", oinfo.global_alpha);
+	printf("\toinfo.pre_mult_alpha_en: %u\n", oinfo.pre_mult_alpha_en);
+	printf("\toinfo.zorder: %u\n", oinfo.zorder);
+
+	// TODO: where is the memory for this!?
+	oinfo.screen_width = SCREEN_WIDTH;
+	oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
+	
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_SETINFO, &overlay_args)) {
+		printf("OWLFB_OVERLAY_SETINFO failed: %s (%i)\n", strerror(errno),  errno);
+	}
+	
+	puts("after SETINFO");
+	printf("\toverlay_args.fb_id: %u\n", overlay_args.fb_id);
+	printf("\toverlay_args.overlay_id: %u\n", overlay_args.overlay_id);
+	printf("\toverlay_args.overlay_type: %u\n", overlay_args.overlay_type);
+	printf("\toverlay_args.overlay_mem_base: %u\n", overlay_args.overlay_mem_base);
+	printf("\toverlay_args.overlay_mem_size: %u\n", overlay_args.overlay_mem_size);
+
+	printf("\toinfo.mem_off: %u\n", oinfo.mem_off);
+	printf("\toinfo.mem_size: %u\n", oinfo.mem_size);
+	printf("\toinfo.screen_width: %u\n", oinfo.screen_width); // 8???
+	printf("\toinfo.color_mode: %u\n", oinfo.color_mode); // 0 = OWL_DSS_COLOR_RGB16
+	printf("\toinfo.img_width: %u\n", oinfo.img_width);
+	printf("\toinfo.img_height: %u\n", oinfo.img_height);
+	printf("\toinfo.xoff: %u\n", oinfo.xoff);
+	printf("\toinfo.yoff: %u\n", oinfo.yoff);
+	printf("\toinfo.width: %u\n", oinfo.width);
+	printf("\toinfo.height: %u\n", oinfo.height);
+	printf("\toinfo.rotation: %u\n", oinfo.rotation);
+	printf("\toinfo.pos_x: %u\n", oinfo.pos_x);
+	printf("\toinfo.pos_y: %u\n", oinfo.pos_y);
+	printf("\toinfo.out_width: %u\n", oinfo.out_width);
+	printf("\toinfo.out_height: %u\n", oinfo.out_height);
+	printf("\toinfo.lightness: %u\n", oinfo.lightness);
+	printf("\toinfo.saturation: %u\n", oinfo.saturation);
+	printf("\toinfo.contrast: %u\n", oinfo.contrast);
+	printf("\toinfo.global_alpha_en: %u\n", oinfo.global_alpha_en);
+	printf("\toinfo.global_alpha: %u\n", oinfo.global_alpha);
+	printf("\toinfo.pre_mult_alpha_en: %u\n", oinfo.pre_mult_alpha_en);
+	printf("\toinfo.zorder: %u\n", oinfo.zorder);
+
+	// NOTE: SETINFO automatically enables overlay
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_ENABLE, &overlay_args)) {
+		printf("OWLFB_OVERLAY_ENABLE failed: %s (%i)\n", strerror(errno),  errno);
+	}
+
+	// TODO: /sys/devices/platform/owldss/overlay1/enabled == 1 at this point
+
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_DISABLE, &overlay_args)) {
+		printf("OWLFB_OVERLAY_DISABLE failed: %s (%i)\n", strerror(errno),  errno);
+	}
+
+	if (ioctl(gfx.fb, OWLFB_OVERLAY_RELEASE, &overlay_args)) {
+		printf("OWLFB_OVERLAY_RELEASE failed: %s (%i)\n", strerror(errno),  errno);
+	}
+	
+	puts("---");
+	fflush(stdout);
+	
+	}
+	// OVERLAY testing
 	
 	// buffer tracking
 #ifdef GFX_ENABLE_BUFFER
