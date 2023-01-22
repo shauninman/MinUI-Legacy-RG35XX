@@ -587,7 +587,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 ///////////////////////////////
 
-// TODO: tmp? rename this HUD_*? support messages too?
+// TODO: this is a dumb API
 SDL_Surface* digits;
 #define DIGIT_WIDTH 18
 #define DIGIT_HEIGHT 16
@@ -596,16 +596,19 @@ enum {
 	DIGIT_SLASH = 10,
 	DIGIT_DOT,
 	DIGIT_PERCENT,
+	DIGIT_X,
+	DIGIT_OP, // (
+	DIGIT_CP, // )
 	DIGIT_COUNT,
 };
 #define DIGIT_SPACE DIGIT_COUNT
-static void FPS_init(void) {
+static void MSG_init(void) {
 	// TODO: scale
 	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT,SCREEN_DEPTH, 0,0,0,0);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
-	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".","%", NULL };
+	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".","%","x","(",")", NULL };
 	char* c;
 	int i = 0;
 	while (c = chars[i]) {
@@ -615,42 +618,51 @@ static void FPS_init(void) {
 		i += 1;
 	}
 }
-static int FPS_blitChar(int n, int x, int y) {
+static int MSG_blitChar(int n, int x, int y) {
 	if (n!=DIGIT_SPACE) SDL_BlitSurface(digits, &(SDL_Rect){n*DIGIT_WIDTH,0,DIGIT_WIDTH,DIGIT_HEIGHT}, screen, &(SDL_Rect){x,y});
 	return x + DIGIT_WIDTH + DIGIT_TRACKING;
 }
-static int FPS_blitDouble(double num, int x, int y) {
+static int MSG_blitInt(int num, int x, int y) {
 	int i = num;
-	int r = (num-i) * 10;
 	int n;
 	
 	if (i > 999) {
 		n = i / 1000;
 		i -= n * 1000;
-		x = FPS_blitChar(n,x,y);
+		x = MSG_blitChar(n,x,y);
 	}
 	if (i > 99) {
 		n = i / 100;
 		i -= n * 100;
-		x = FPS_blitChar(n,x,y);
+		x = MSG_blitChar(n,x,y);
 	}
 	
-	n = i / 10;
-	i -= n * 10;
-	
-	x = FPS_blitChar(n,x,y);
+	if (i > 9) {
+		n = i / 10;
+		i -= n * 10;
+		x = MSG_blitChar(n,x,y);
+	}
 	
 	n = i;
-	x = FPS_blitChar(n,x,y);
+	x = MSG_blitChar(n,x,y);
 	
-	n = DIGIT_DOT;
-	x = FPS_blitChar(n,x,y);
-	
-	n = r;
-	x = FPS_blitChar(n,x,y);
 	return x;
 }
-static void FPS_quit(void) {
+static int MSG_blitDouble(double num, int x, int y) {
+	int i = num;
+	int r = (num-i) * 10;
+	int n;
+	
+	x = MSG_blitInt(i, x,y);
+
+	n = DIGIT_DOT;
+	x = MSG_blitChar(n,x,y);
+	
+	n = r;
+	x = MSG_blitChar(n,x,y);
+	return x;
+}
+static void MSG_quit(void) {
 	SDL_FreeSurface(digits);
 }
 
@@ -1190,10 +1202,10 @@ static void* Flip_thread(void* param) {
 		
 		int x = 0;
 		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
-		if (fps_double) x = FPS_blitDouble(fps_double, x,y);
+		if (fps_double) x = MSG_blitDouble(fps_double, x,y);
 		if (cpu_double) {
-			x = FPS_blitChar(DIGIT_SLASH,x,y);
-			FPS_blitDouble(cpu_double, x,y);
+			x = MSG_blitChar(DIGIT_SLASH,x,y);
+			MSG_blitDouble(cpu_double, x,y);
 		}
 	
 		GFX_flip(screen);
@@ -1239,6 +1251,12 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	// Flip_request();
 	// return;
 	
+	static int top_width = 0;
+	static int bottom_width = 0;
+	
+	if (top_width) SDL_FillRect(screen, &(SDL_Rect){0,0,top_width,DIGIT_HEIGHT}, RGB_BLACK);
+	if (bottom_width) SDL_FillRect(screen, &(SDL_Rect){0,SCREEN_HEIGHT-DIGIT_HEIGHT,bottom_width,DIGIT_HEIGHT}, RGB_BLACK);
+	
 	renderer.scaler((void*)data,screen->pixels+renderer.dst_offset,width,height,pitch,SCREEN_PITCH);
 	
 	if (0) {
@@ -1274,16 +1292,40 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	if (1) {
 		int x = 0;
 		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
-		if (fps_double) x = FPS_blitDouble(fps_double, x,y);
+		
+		if (fps_double) x = MSG_blitDouble(fps_double, x,y);
+		
 		if (cpu_double) {
-			x = FPS_blitChar(DIGIT_SLASH,x,y);
-			x = FPS_blitDouble(cpu_double, x,y);
+			x = MSG_blitChar(DIGIT_SLASH,x,y);
+			x = MSG_blitDouble(cpu_double, x,y);
 		}
+		
 		if (use_double) {
-			x = FPS_blitChar(DIGIT_SPACE,x,y);
-			x = FPS_blitDouble(use_double, x,y);
-			FPS_blitChar(DIGIT_PERCENT,x,y);
+			x = MSG_blitChar(DIGIT_SPACE,x,y);
+			x = MSG_blitDouble(use_double, x,y);
+			x = MSG_blitChar(DIGIT_PERCENT,x,y);
 		}
+		
+		bottom_width = x;
+		
+		x = 0;
+		y = 0;
+		
+		// src res
+		x = MSG_blitInt(renderer.src_w,x,y);
+		x = MSG_blitChar(DIGIT_X,x,y);
+		x = MSG_blitInt(renderer.src_h,x,y);
+		
+		x = MSG_blitChar(DIGIT_SPACE,x,y);
+		
+		// dst res
+		x = MSG_blitChar(DIGIT_OP,x,y);
+		x = MSG_blitInt(renderer.dst_w,x,y);
+		x = MSG_blitChar(DIGIT_X,x,y);
+		x = MSG_blitInt(renderer.dst_h,x,y);
+		x = MSG_blitChar(DIGIT_CP,x,y);
+		
+		top_width = x;
 	}
 	
 	GFX_flip(screen);
@@ -1985,7 +2027,7 @@ int main(int argc , char* argv[]) {
 	// LOG_info("tag_name: %s\n", tag_name);
 	
 	screen = GFX_init(MODE_MENU);
-	FPS_init();
+	MSG_init();
 	// Flip_init();
 	InitSettings();
 	
@@ -2041,7 +2083,7 @@ int main(int argc , char* argv[]) {
 	
 	SDL_FreeSurface(screen);
 	// Flip_quit();
-	FPS_quit();
+	MSG_quit();
 	GFX_quit();
 	
 	return EXIT_SUCCESS;
