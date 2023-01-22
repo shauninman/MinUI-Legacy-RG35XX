@@ -142,7 +142,6 @@ static struct Core {
 	unsigned (*get_region)(void);
 	void *(*get_memory_data)(unsigned id);
 	size_t (*get_memory_size)(unsigned id);
-	retro_audio_buffer_status_callback_t audio_buffer_status;
 } core;
 
 ///////////////////////////////////////
@@ -523,17 +522,17 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION 59
 	// TODO: I'm not sure what uses this...not gambatte, not snes9x, not pcsx
 	case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK: { /* 62 */
-		puts("RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK");
-		const struct retro_audio_buffer_status_callback *cb =
-			(const struct retro_audio_buffer_status_callback *)data;
-		if (cb) {
-			puts("has audo_buffer_status callback");
-			core.audio_buffer_status = cb->callback;
-		} else {
-			puts("missing audo_buffer_status callback");
-			core.audio_buffer_status = NULL;
-		}
-		fflush(stdout);
+		// puts("RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK");
+		// const struct retro_audio_buffer_status_callback *cb =
+		// 	(const struct retro_audio_buffer_status_callback *)data;
+		// if (cb) {
+		// 	puts("has audo_buffer_status callback");
+		// 	core.audio_buffer_status = cb->callback;
+		// } else {
+		// 	puts("missing audo_buffer_status callback");
+		// 	core.audio_buffer_status = NULL;
+		// }
+		// fflush(stdout);
 		break;
 	}
 	// TODO: not used by gambatte
