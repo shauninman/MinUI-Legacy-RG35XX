@@ -1026,16 +1026,16 @@ int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
 int POW_getBattery(void) { // 5-100 in 25% fragments
-	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 1000; // 3300-4100
-	i -= 3300; 	// ~0-800
-	i /= 8; 	// ~0-100
+	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
+	i -= 310; 	// ~0-100
 	
 	// worry less about battery and more about the game you're playing
-	if (i>75) return 100;
-	if (i>50) return  75;
-	if (i>25) return  50;
-	if (i>5)  return  25;
-	else      return   5;
+	if (i>80) return 100;
+	if (i>60) return  80;
+	if (i>40) return  60;
+	if (i>20)  return 40;
+	if (i>10)  return 20;
+	else      return  10;
 }
 void POW_setRumble(int strength) {
 	putInt("/sys/class/power_supply/battery/moto", strength);

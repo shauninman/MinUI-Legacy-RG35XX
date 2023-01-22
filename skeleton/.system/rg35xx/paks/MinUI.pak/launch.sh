@@ -20,7 +20,7 @@ cd $(dirname "$0")
 
 keymon.elf & # &> /mnt/sdcard/keymon.txt &
 
-# ./batmon.sh &>
+# ./batmon.sh &> /mnt/sdcard/batmon.txt &
 
 export EXEC_PATH=/tmp/minui_exec
 touch "$EXEC_PATH" && sync
