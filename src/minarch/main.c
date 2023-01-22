@@ -1084,6 +1084,7 @@ static void selectScaler(int width, int height, int pitch) {
 	if (scale<=1) {
 		use_nearest = 1;
 		if (scale_y>scale_x) {
+			// PS: Sotn/FFVII (menus)
 			// printf("NN:A %ix%i (%s)\n", width,height,game.name); fflush(stdout);
 			renderer.dst_h = height * scale_y;
 			
@@ -1107,6 +1108,7 @@ static void selectScaler(int width, int height, int pitch) {
 			}
 		}
 		else if (scale_x>scale_y) {
+			// PS: Cotton (parts)
 			// printf("NN:B %ix%i (%s)\n", width,height,game.name); fflush(stdout);
 			renderer.dst_w = width * scale_x;
 			
@@ -1128,6 +1130,7 @@ static void selectScaler(int width, int height, int pitch) {
 			}
 		}
 		else {
+			// PS: Tekken 3 (in-game)
 			// printf("NN:C %ix%i (%s)\n", width,height,game.name); fflush(stdout);
 			renderer.dst_w = width * scale_x;
 			renderer.dst_h = height * scale_y;
@@ -1157,6 +1160,8 @@ static void selectScaler(int width, int height, int pitch) {
 		}
 	}
 	else {
+		// sane consoles
+		// printf("S:%ix %ix%i (%s)\n", scale,width,height,game.name); fflush(stdout);
 		renderer.dst_w = width * scale;
 		renderer.dst_h = height * scale;
 	}
