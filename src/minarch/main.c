@@ -287,6 +287,166 @@ static void State_resume(void) {
 
 ///////////////////////////////
 
+typedef struct Option {
+	char* key;
+	char* name; // desc
+	char* desc; // info
+	int default_value;
+	int value;
+	int count;
+	char** values;
+	char** labels;
+} Option;
+
+typedef struct Override {
+	char* core;
+	char* key;
+	char* value;
+} Override;
+
+static Override overrides[] = {
+	{"gpsp",		"gpsp_save_method",				"libretro"},
+	{"gambatte",	"gambatte_gb_colorization",		"internal"},
+	{"gambatte",	"gambatte_gb_internal_palette",	"TWB64 - Pack 1"},
+	{"gambatte",	"gambatte_gb_palette_twb64_1",	"TWB64 038 - Pokemon mini Ver."},
+	{NULL,NULL,NULL},
+};
+
+static struct {
+	int count;
+	Option* items;
+} options;
+
+static int Option_getValueIndex(Option* item, const char* value) {
+	if (!value) return 0;
+	for (int i=0; i<item->count; i++) {
+		if (!strcmp(item->values[i], value)) return i;
+	}
+	return 0;
+}
+static void Option_setValue(Option* item, const char* value) {
+	// TODO: store previous value?
+	item->value = Option_getValueIndex(item, value);
+}
+static void Options_init(const struct retro_core_option_definition *defs) {
+	// puts("------");
+	// printf("Options_init() for %s\n", core.name);
+	
+	int count;
+	for (count=0; defs[count].key; count++);
+	
+	options.count = count;
+	if (count) {
+		options.items = calloc(count, sizeof(Option));
+	
+		for (int i=0; i<options.count; i++) {
+			int len;
+			const struct retro_core_option_definition *def = &defs[i];
+			Option* item = &options.items[i];
+			len = strlen(def->key) + 1;
+		
+			item->key = calloc(len, sizeof(char));
+			strcpy(item->key, def->key);
+			
+			len = strlen(def->desc) + 1;
+			item->name = calloc(len, sizeof(char));
+			strcpy(item->name, def->desc);
+		
+			if (def->info) {
+				len = strlen(def->info) + 1;
+				item->desc = calloc(len, sizeof(char));
+				strcpy(item->desc, def->info);
+			}
+		
+			// printf("%s (%s): %s\n", item->name, item->key, item->desc);
+
+			for (count=0; def->values[count].value; count++);
+		
+			item->count = count;
+			item->values = calloc(count, sizeof(char*));
+			item->labels = calloc(count, sizeof(char*));
+	
+			for (int j=0; j<count; j++) {
+				const char* value = def->values[j].value;
+				const char* label = def->values[j].label;
+		
+				len = strlen(value) + 1;
+				item->values[j] = calloc(len, sizeof(char));
+				strcpy(item->values[j], value);
+		
+				if (label) {
+					len = strlen(label) + 1;
+					item->labels[j] = calloc(len, sizeof(char));
+					strcpy(item->labels[j], label);
+				}
+				else {
+					item->labels[j] = item->values[j];
+				}
+				
+				// printf("\t%s (%s)\n", item->values[j],item->labels[j]);
+			}
+			
+			const char* default_value = def->default_value;
+			// printf("default: %s\n", default_value);
+			for (int k=0; overrides[k].core; k++) {
+				// printf("override? %s?=%s\n", overrides[k].key, item->key);
+				if (!strcmp(overrides[k].key, item->key)) {
+					default_value = overrides[k].value;
+					// printf("\toverride: %s\n", default_value);
+					break;
+				}
+			}
+			
+			item->value = Option_getValueIndex(item, default_value);
+			item->default_value = item->value;
+			printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
+		}
+	}
+	fflush(stdout);
+}
+static void Options_vars(const struct retro_variable *vars) {
+	// TODO:
+}
+static void Options_reset(void) {
+	if (!options.count) return;
+	
+	for (int i=0; i<options.count; i++) {
+		Option* item = &options.items[i];
+		free(item->key);
+		free(item->name);
+		if (item->desc) free(item->desc);
+		for (int j=0; j<item->count; j++) {
+			char* value = item->values[j];
+			char* label = item->labels[j];
+			if (label!=value) free(label);
+			free(value);
+		}
+		free(item->values);
+		free(item->labels);
+	}
+	free(options.items);
+}
+static Option* Options_getOption(const char* key) {
+	for (int i=0; i<options.count; i++) {
+		Option* item = &options.items[i];
+		if (!strcmp(item->key, key)) return item;
+	}
+	return NULL;
+}
+static char* Options_getOptionValue(const char* key) {
+	Option* item = Options_getOption(key);
+	if (item) {
+		// printf("GET %s (%i)\n", item->key, item->value); fflush(stdout);
+		return item->values[item->value];
+	}
+	else printf("unknown option %s \n", key); fflush(stdout);
+	return NULL;
+}
+static void Options_setOption(const char* key, const char* value) {
+	Option* item = Options_getOption(key);
+	if (item) Option_setValue(item, value);
+	else printf("unknown option %s \n", key); fflush(stdout);
+}
 
 
 ///////////////////////////////
@@ -322,7 +482,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		if (message) LOG_info("%s\n", message->msg);
 		break;
 	}
-	// TODO: RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL 8
+	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
+		puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
+		// TODO: used by fceumm
+	}
 	case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: { /* 9 */
 		const char **out = (const char **)data;
 		if (out) {
@@ -362,19 +525,13 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		}
 		break;
 	}
+
 	// TODO: this is called whether using variables or options
 	case RETRO_ENVIRONMENT_GET_VARIABLE: { /* 15 */
-		puts("RETRO_ENVIRONMENT_GET_VARIABLE");
+		// puts("RETRO_ENVIRONMENT_GET_VARIABLE");
 		struct retro_variable *var = (struct retro_variable *)data;
 		if (var && var->key) {
-			printf("get key: %s\n", var->key);
-			for (int i=0; i<128; i++) {
-				if (!strcmp(tmp_options[i].key, var->key)) {
-					var->value = tmp_options[i].value;
-					break;
-				}
-			}
-			// var->value = options_get_value(var->key);
+			var->value = Options_getOptionValue(var->key);
 		}
 		break;
 	}
@@ -435,60 +592,20 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			*out = 1;
 		break;
 	}
-	// TODO: options and variables are separate concepts use for the same thing...I think.
-	// TODO: not used by gambatte
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS: { /* 53 */
-		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
-		// options_free();
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
-			// options_init(*(const struct retro_core_option_definition **)data);
-			// load_config();
-			
-			const struct retro_core_option_definition *vars = *(const struct retro_core_option_definition **)data;
-			for (int i=0; vars[i].key; i++) {
-				const struct retro_core_option_definition *var = &vars[i];
-				// printf("set key: %s to value: %s (%s)\n", var->key, var->default_value, var->desc);
-				printf("set option key: %s to value: %s\n", var->key, var->default_value);
-			}
+			Options_reset();
+			Options_init(*(const struct retro_core_option_definition **)data); 
 		}
 		break;
 	}
-	
-	// TODO: used by gambatte, fceumm (probably others)
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: { /* 54 */
-		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
-		
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
 		const struct retro_core_options_intl *options = (const struct retro_core_options_intl *)data;
-		
 		if (options && options->us) {
-			// options_free();
-			// options_init(options->us);
-			// load_config();
-			
-			const struct retro_core_option_definition *vars = options->us;
-			for (int i=0; vars[i].key; i++) {
-				const struct retro_core_option_definition *var = &vars[i];
-				// printf("set key: %s to value: %s (%s)\n", var->key, var->default_value, var->desc);
-
-				// TODO: tmp, patch or override cores
-				char *default_value = (char*)var->default_value;
-				if (!strcmp("gpsp_save_method", var->key)) {
-					default_value = "libretro";
-				}
-				else if (!strcmp("gambatte_gb_colorization", var->key)) {
-					default_value = "internal";
-				}
-				else if (!strcmp("gambatte_gb_internal_palette", var->key)) {
-					default_value = "TWB64 - Pack 1";
-				}
-				else if (!strcmp("gambatte_gb_palette_twb64_1", var->key)) {
-					default_value = "TWB64 038 - Pokemon mini Ver.";
-				}
-				
-				printf("set core (intl) key: %s to value: %s\n", var->key, default_value);
-				strcpy(tmp_options[i].key, var->key);
-				strcpy(tmp_options[i].value, default_value);
-			}
+			Options_reset();
+			Options_init(options->us);
 		}
 		break;
 	}
@@ -560,14 +677,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
-			printf("\tset individual var key: %s to value: %s\n", var->key, var->value);
-			for (int i=0; i<128; i++) {
-				if (!strcmp(tmp_options[i].key, var->key)) {
-					strcpy(tmp_options[i].value, var->value);
-					tmp_options_changed = 1;
-					break;
-				}
-			}
+			Options_setOption(var->key, var->value);
+			tmp_options_changed = 1;
 			break;
 		}
 
@@ -1988,6 +2099,10 @@ int main(int argc , char* argv[]) {
 	// LOG_info("tag_name: %s\n", tag_name);
 	
 	screen = GFX_init(MODE_MENU);
+	
+	// doesn't even help that much with Star Fox after overclocking
+	// GFX_setVsync(0);
+	
 	MSG_init();
 	InitSettings();
 	
