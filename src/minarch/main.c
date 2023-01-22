@@ -589,20 +589,23 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 // TODO: tmp? rename this HUD_*? support messages too?
 SDL_Surface* digits;
-#define DIGIT_WIDTH 14
+#define DIGIT_WIDTH 18
 #define DIGIT_HEIGHT 16
+#define DIGIT_TRACKING -4
 enum {
 	DIGIT_SLASH = 10,
 	DIGIT_DOT,
+	DIGIT_PERCENT,
 	DIGIT_COUNT,
 };
+#define DIGIT_SPACE DIGIT_COUNT
 static void FPS_init(void) {
 	// TODO: scale
 	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT,SCREEN_DEPTH, 0,0,0,0);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
-	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".", NULL };
+	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".","%", NULL };
 	char* c;
 	int i = 0;
 	while (c = chars[i]) {
@@ -613,8 +616,8 @@ static void FPS_init(void) {
 	}
 }
 static int FPS_blitChar(int n, int x, int y) {
-	SDL_BlitSurface(digits, &(SDL_Rect){n*DIGIT_WIDTH,0,DIGIT_WIDTH,DIGIT_HEIGHT}, screen, &(SDL_Rect){x,y});
-	return x + DIGIT_WIDTH;
+	if (n!=DIGIT_SPACE) SDL_BlitSurface(digits, &(SDL_Rect){n*DIGIT_WIDTH,0,DIGIT_WIDTH,DIGIT_HEIGHT}, screen, &(SDL_Rect){x,y});
+	return x + DIGIT_WIDTH + DIGIT_TRACKING;
 }
 static int FPS_blitDouble(double num, int x, int y) {
 	int i = num;
@@ -664,8 +667,10 @@ static void FPS_quit(void) {
 
 static int cpu_ticks = 0;
 static int fps_ticks = 0;
+static int use_ticks = 0;
 static double fps_double = 0;
 static double cpu_double = 0;
+static double use_double = 0;
 static uint32_t sec_start = 0;
 
 // TODO: flesh out
@@ -1266,12 +1271,19 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		if (frame>=fps) frame -= fps;
 	}
 	
-	int x = 0;
-	int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
-	if (fps_double) x = FPS_blitDouble(fps_double, x,y);
-	if (cpu_double) {
-		x = FPS_blitChar(DIGIT_SLASH,x,y);
-		FPS_blitDouble(cpu_double, x,y);
+	if (1) {
+		int x = 0;
+		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
+		if (fps_double) x = FPS_blitDouble(fps_double, x,y);
+		if (cpu_double) {
+			x = FPS_blitChar(DIGIT_SLASH,x,y);
+			x = FPS_blitDouble(cpu_double, x,y);
+		}
+		if (use_double) {
+			x = FPS_blitChar(DIGIT_SPACE,x,y);
+			x = FPS_blitDouble(use_double, x,y);
+			FPS_blitChar(DIGIT_PERCENT,x,y);
+		}
 	}
 	
 	GFX_flip(screen);
@@ -1307,9 +1319,6 @@ static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
-
-
-
 
 	// TODO: too heavy? maybe but regardless,
 	// this will cause it to go to sleep after 
@@ -1934,6 +1943,30 @@ void Menu_loop(void) {
 	POW_disableAutosleep();
 }
 
+unsigned getUsage(void) { // from picoarch
+	long unsigned ticks = 0;
+	long ticksps = 0;
+	FILE *file = NULL;
+
+	file = fopen("/proc/self/stat", "r");
+	if (!file)
+		goto finish;
+
+	if (!fscanf(file, "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu", &ticks))
+		goto finish;
+
+	ticksps = sysconf(_SC_CLK_TCK);
+
+	if (ticksps)
+		ticks = ticks * 100 / ticksps;
+
+finish:
+	if (file)
+		fclose(file);
+
+	return ticks;
+}
+
 int main(int argc , char* argv[]) {
 	// force a stack overflow to ensure asan is linked and actually working
 	// char tmp[2];
@@ -1978,14 +2011,22 @@ int main(int argc , char* argv[]) {
 		
 		if (1) {
 			cpu_ticks += 1;
+			static int last_use_ticks = 0;
 			uint32_t now = SDL_GetTicks();
 			if (now - sec_start>=1000) {
-				fps_double = fps_ticks / ((double)(now - sec_start) / 1000);
-				cpu_double = cpu_ticks / ((double)(now - sec_start) / 1000);
-				// printf("fps: %f (%f)\n", fps_double, cpu_double); fflush(stdout);
+				double last_time = (double)(now - sec_start) / 1000;
+				fps_double = fps_ticks / last_time;
+				cpu_double = cpu_ticks / last_time;
+				use_ticks = getUsage();
+				if (use_ticks && last_use_ticks) {
+					use_double = (use_ticks - last_use_ticks) / last_time;
+				}
+				last_use_ticks = use_ticks;
 				sec_start = now;
 				cpu_ticks = 0;
 				fps_ticks = 0;
+
+				// printf("fps: %f (%f)\n", fps_double, cpu_double); fflush(stdout);
 			}
 		}
 	}
