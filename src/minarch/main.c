@@ -291,6 +291,7 @@ typedef struct Option {
 	char* key;
 	char* name; // desc
 	char* desc; // info
+	char* var;
 	int default_value;
 	int value;
 	int count;
@@ -329,9 +330,6 @@ static void Option_setValue(Option* item, const char* value) {
 	item->value = Option_getValueIndex(item, value);
 }
 static void Options_init(const struct retro_core_option_definition *defs) {
-	// puts("------");
-	// printf("Options_init() for %s\n", core.name);
-	
 	int count;
 	for (count=0; defs[count].key; count++);
 	
@@ -358,8 +356,6 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 				strcpy(item->desc, def->info);
 			}
 		
-			// printf("%s (%s): %s\n", item->name, item->key, item->desc);
-
 			for (count=0; def->values[count].value; count++);
 		
 			item->count = count;
@@ -382,47 +378,111 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 				else {
 					item->labels[j] = item->values[j];
 				}
-				
-				// printf("\t%s (%s)\n", item->values[j],item->labels[j]);
 			}
 			
 			const char* default_value = def->default_value;
-			// printf("default: %s\n", default_value);
 			for (int k=0; overrides[k].core; k++) {
-				// printf("override? %s?=%s\n", overrides[k].key, item->key);
 				if (!strcmp(overrides[k].key, item->key)) {
 					default_value = overrides[k].value;
-					// printf("\toverride: %s\n", default_value);
 					break;
 				}
 			}
 			
 			item->value = Option_getValueIndex(item, default_value);
 			item->default_value = item->value;
-			printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
+			// printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
 		}
 	}
-	fflush(stdout);
+	// fflush(stdout);
 }
 static void Options_vars(const struct retro_variable *vars) {
-	// TODO:
+	int count;
+	for (count=0; vars[count].key; count++);
+	
+	options.count = count;
+	if (count) {
+		options.items = calloc(count, sizeof(Option));
+	
+		for (int i=0; i<options.count; i++) {
+			int len;
+			const struct retro_variable *var = &vars[i];
+			Option* item = &options.items[i];
+
+			len = strlen(var->key) + 1;
+			item->key = calloc(len, sizeof(char));
+			strcpy(item->key, var->key);
+			
+			len = strlen(var->value) + 1;
+			item->var = calloc(len, sizeof(char));
+			strcpy(item->var, var->value);
+			
+			char* tmp = strchr(item->var, ';');
+			if (tmp && *(tmp+1)==' ') {
+				*tmp = '\0';
+				item->name = item->var;
+				tmp += 2;
+			}
+			
+			char* opt = tmp;
+			
+			for (count=0; (tmp=strchr(tmp, '|')); tmp++, count++);
+			count += 1; // last entry after final '|'
+		
+			item->count = count;
+			item->values = calloc(count, sizeof(char*));
+			item->labels = calloc(count, sizeof(char*));
+
+			tmp = opt;
+			int j;
+			for (j=0; (tmp=strchr(tmp, '|')); j++) {
+				item->values[j] = opt;
+				item->labels[j] = opt;
+				*tmp = '\0';
+				tmp += 1;
+				opt = tmp; 
+			}
+			item->values[j] = opt;
+			item->labels[j] = opt;
+			
+			// no native default_value support for retro vars
+			const char* default_value = NULL;
+			for (int k=0; overrides[k].core; k++) {
+				if (!strcmp(overrides[k].key, item->key)) {
+					default_value = overrides[k].value;
+					break;
+				}
+			}
+			
+			item->value = Option_getValueIndex(item, default_value);
+			item->default_value = item->value;
+			// printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
+		}
+	}
+	// fflush(stdout);
 }
 static void Options_reset(void) {
 	if (!options.count) return;
 	
 	for (int i=0; i<options.count; i++) {
 		Option* item = &options.items[i];
-		free(item->key);
-		free(item->name);
-		if (item->desc) free(item->desc);
-		for (int j=0; j<item->count; j++) {
-			char* value = item->values[j];
-			char* label = item->labels[j];
-			if (label!=value) free(label);
-			free(value);
+		if (item->var) {
+			// values/labels are all points to var
+			// so no need to free individually
+			free(item->var);
+		}
+		else {
+			if (item->desc) free(item->desc);
+			for (int j=0; j<item->count; j++) {
+				char* value = item->values[j];
+				char* label = item->labels[j];
+				if (label!=value) free(label);
+				free(value);
+			}
 		}
 		free(item->values);
 		free(item->labels);
+		free(item->key);
+		free(item->name);
 	}
 	free(options.items);
 }
@@ -537,18 +597,13 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	// TODO: I think this is where the core reports its variables (the precursor to options)
 	// TODO: this is called if RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION sets out to 0
+	// TODO: not used by anything yet
 	case RETRO_ENVIRONMENT_SET_VARIABLES: { /* 16 */
-		puts("RETRO_ENVIRONMENT_SET_VARIABLES");
+		// puts("RETRO_ENVIRONMENT_SET_VARIABLES");
 		const struct retro_variable *vars = (const struct retro_variable *)data;
-		// options_free();
 		if (vars) {
-			// options_init_variables(vars);
-			// load_config();
-			
-			for (int i=0; vars[i].key; i++) {
-				// value appears to be NAME; DEFAULT|VALUE|VALUE|ETC
-				printf("set bulk var key: %s to value: %s\n", vars[i].key, vars[i].value);
-			}
+			Options_reset();
+			Options_vars(vars);
 		}
 		break;
 	}
@@ -661,7 +716,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			unsigned frames = *latency_ms * core.fps / 1000;
 			if (frames < 30)
 				// audio_buffer_size_override = frames;
-				printf("audio_buffer_size_override = %i\n", frames);
+				printf("audio_buffer_size_override = %i (unused?)\n", frames);
 			// else
 			// 	PA_WARN("Audio buffer change out of range (%d), ignored\n", frames);
 		}
@@ -673,7 +728,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
 	// TODO: these should be overridden to be disabled by default because ick
 	case RETRO_ENVIRONMENT_SET_VARIABLE: {
-		puts("RETRO_ENVIRONMENT_SET_VARIABLE");
+		// puts("RETRO_ENVIRONMENT_SET_VARIABLE");
 		
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
