@@ -1238,6 +1238,8 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 		}
 	}
 }
+
+static SDL_Surface* scaler_surface;
 static void selectScaler(int width, int height, int pitch) {
 	renderer.scaler = scaleNull;
 	int use_nearest = 0;
@@ -1245,21 +1247,31 @@ static void selectScaler(int width, int height, int pitch) {
 	int scale_x = SCREEN_WIDTH / width;
 	int scale_y = SCREEN_HEIGHT / height;
 	int scale = MIN(scale_x,scale_y);
-	double near_ratio;
 	
-	if (scale<=1) {
+	// TODO: carry this fix over to MiniUI/picoarch?
+	
+	// this is not an aspect ratio but rather the ratio between 
+	// the proposed aspect ratio and the target aspect ratio
+	double near_ratio = (double)width / height / core.aspect_ratio;
+	#define ACCEPTABLE_UPPER_BOUNDS 1.14 // catch SotN/FFVII's 368x224 as needing nn scaling 
+	#define ACCEPTABLE_LOWER_BOUNDS 0.79 // but allow SotN's 512x240 scaled 1x2 to pass as core's 4/3 aspect ratio
+	
+	char scaler_name[8];
+	
+	// fixed to allow things like 640x478 to pass through as 1x instead of NN_C
+	if (scale<=1 && (near_ratio<ACCEPTABLE_LOWER_BOUNDS || near_ratio>ACCEPTABLE_UPPER_BOUNDS)) {
 		use_nearest = 1;
 		if (scale_y>scale_x) {
-			// PS: Sotn/FFVII (menus)
-			// printf("NN:A %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			strcpy(scaler_name, "NN_A");
+			// PS: SotN/FFVII (menus 368x224)
 			renderer.dst_h = height * scale_y;
 			
 			// if the aspect ratio of an unmodified
-			// w to dst_h is within 20% of the target
-			// aspect_ratio don't force
+			// w to dst_h is within an acceptable range
+			// of the target aspect_ratio don't force
 			near_ratio = (double)width / renderer.dst_h / core.aspect_ratio;
-			if (near_ratio>=0.79 && near_ratio<=1.21) {
-				renderer.dst_w = width;
+			if (near_ratio>=ACCEPTABLE_LOWER_BOUNDS && near_ratio<=ACCEPTABLE_UPPER_BOUNDS) {
+				renderer.dst_w = width; // close enough (eg. SotN 512x240 logo over moon in intro)
 			}
 			else {
 				renderer.dst_w = renderer.dst_h * core.aspect_ratio;
@@ -1274,14 +1286,14 @@ static void selectScaler(int width, int height, int pitch) {
 			}
 		}
 		else if (scale_x>scale_y) {
-			// PS: Cotton (parts)
-			// printf("NN:B %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			strcpy(scaler_name, "NN_B");
+			// PS: Cotton (loading screen, 320x480)
 			renderer.dst_w = width * scale_x;
 			
 			// see above
 			near_ratio = (double)renderer.dst_w / height / core.aspect_ratio;
-			if (near_ratio>=0.79 && near_ratio<=1.21) {
-				renderer.dst_h = height;
+			if (near_ratio>=ACCEPTABLE_LOWER_BOUNDS && near_ratio<=ACCEPTABLE_UPPER_BOUNDS) {
+				renderer.dst_h = height; // close enough
 			}
 			else {
 				renderer.dst_h = renderer.dst_w / core.aspect_ratio;
@@ -1296,14 +1308,14 @@ static void selectScaler(int width, int height, int pitch) {
 			}
 		}
 		else {
-			// PS: Tekken 3 (in-game)
-			// printf("NN:C %ix%i (%s)\n", width,height,game.name); fflush(stdout);
+			strcpy(scaler_name, "NN_C");
+			// PS: Tekken 3 (in-game, 368x480)
 			renderer.dst_w = width * scale_x;
 			renderer.dst_h = height * scale_y;
 		
 			// see above
 			near_ratio = (double)renderer.dst_w / renderer.dst_h / core.aspect_ratio;
-			if (near_ratio>=0.79 && near_ratio<=1.21) {
+			if (near_ratio>=ACCEPTABLE_LOWER_BOUNDS && near_ratio<=ACCEPTABLE_UPPER_BOUNDS) {
 				// close enough
 			}
 			else {
@@ -1326,8 +1338,7 @@ static void selectScaler(int width, int height, int pitch) {
 		}
 	}
 	else {
-		// sane consoles
-		// printf("S:%ix %ix%i (%s)\n", scale,width,height,game.name); fflush(stdout);
+		// sane consoles :joy:
 		renderer.dst_w = width * scale;
 		renderer.dst_h = height * scale;
 	}
@@ -1338,8 +1349,9 @@ static void selectScaler(int width, int height, int pitch) {
 
 	if (use_nearest) 
 		renderer.scaler = scaleNN_text;
-		// renderer.scaler = scaleNN; // better for Tekken 3
+		// renderer.scaler = scaleNN; // better for Tekken 3, Colin McRae Rally 2
 	else {
+		sprintf(scaler_name, "%ix", scale);
 		switch (scale) {
 			// eggs-optimized scalers
 			case 4: 	renderer.scaler = scale4x_n16; break;
@@ -1359,6 +1371,9 @@ static void selectScaler(int width, int height, int pitch) {
 			// default:	renderer.scaler = scale1x; break;
 		}
 	}
+	
+	if (scaler_surface) SDL_FreeSurface(scaler_surface);
+	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
 }
 
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
@@ -1453,6 +1468,13 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		x = MSG_blitChar(DIGIT_X,x,y);
 		x = MSG_blitInt(renderer.dst_h,x,y);
 		x = MSG_blitChar(DIGIT_CP,x,y);
+		x = MSG_blitChar(DIGIT_SPACE,x,y);
+		
+		if (scaler_surface) {
+			SDL_FillRect(screen, &(SDL_Rect){x,y,scaler_surface->w,DIGIT_HEIGHT}, RGB_BLACK);
+			SDL_BlitSurface(scaler_surface, NULL, screen, &(SDL_Rect){x,y+((DIGIT_HEIGHT - scaler_surface->h)/2)});
+			x += DIGIT_WIDTH * 3;
+		}
 		
 		if (x>top_width) top_width = x; // keep the largest width because triple buffer
 	}
