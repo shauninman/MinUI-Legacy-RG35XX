@@ -287,6 +287,20 @@ static void State_resume(void) {
 
 ///////////////////////////////
 
+typedef struct OptionOverride {
+	char* core;
+	char* key;
+	char* value;
+} OptionOverride;
+
+static OptionOverride option_overrides[] = {
+	{"gpsp",		"gpsp_save_method",				"libretro"},
+	{"gambatte",	"gambatte_gb_colorization",		"internal"},
+	{"gambatte",	"gambatte_gb_internal_palette",	"TWB64 - Pack 1"},
+	{"gambatte",	"gambatte_gb_palette_twb64_1",	"TWB64 038 - Pokemon mini Ver."},
+	{NULL,NULL,NULL},
+};
+
 typedef struct Option {
 	char* key;
 	char* name; // desc
@@ -299,22 +313,9 @@ typedef struct Option {
 	char** labels;
 } Option;
 
-typedef struct Override {
-	char* core;
-	char* key;
-	char* value;
-} Override;
-
-static Override overrides[] = {
-	{"gpsp",		"gpsp_save_method",				"libretro"},
-	{"gambatte",	"gambatte_gb_colorization",		"internal"},
-	{"gambatte",	"gambatte_gb_internal_palette",	"TWB64 - Pack 1"},
-	{"gambatte",	"gambatte_gb_palette_twb64_1",	"TWB64 038 - Pokemon mini Ver."},
-	{NULL,NULL,NULL},
-};
-
 static struct {
 	int count;
+	int changed;
 	Option* items;
 } options;
 
@@ -381,9 +382,10 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 			}
 			
 			const char* default_value = def->default_value;
-			for (int k=0; overrides[k].core; k++) {
-				if (!strcmp(overrides[k].key, item->key)) {
-					default_value = overrides[k].value;
+			for (int k=0; option_overrides[k].core; k++) {
+				OptionOverride* override = &option_overrides[k];
+				if (!strcmp(override->key, item->key)) {
+					default_value = override->value;
 					break;
 				}
 			}
@@ -446,9 +448,10 @@ static void Options_vars(const struct retro_variable *vars) {
 			
 			// no native default_value support for retro vars
 			const char* default_value = NULL;
-			for (int k=0; overrides[k].core; k++) {
-				if (!strcmp(overrides[k].key, item->key)) {
-					default_value = overrides[k].value;
+			for (int k=0; option_overrides[k].core; k++) {
+				OptionOverride* override = &option_overrides[k];
+				if (!strcmp(override->key, item->key)) {
+					default_value = override->value;
 					break;
 				}
 			}
@@ -499,12 +502,15 @@ static char* Options_getOptionValue(const char* key) {
 		// printf("GET %s (%i)\n", item->key, item->value); fflush(stdout);
 		return item->values[item->value];
 	}
-	else printf("unknown option %s \n", key); fflush(stdout);
+	else LOG_warn("unknown option %s \n", key);
 	return NULL;
 }
 static void Options_setOption(const char* key, const char* value) {
 	Option* item = Options_getOption(key);
-	if (item) Option_setValue(item, value);
+	if (item) {
+		Option_setValue(item, value);
+		options.changed = 1;
+	}
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
 
@@ -512,11 +518,6 @@ static void Options_setOption(const char* key, const char* value) {
 ///////////////////////////////
 
 // TODO: tmp, naive options
-static int tmp_options_changed = 0;
-static struct {
-	char key[128];
-	char value[128];
-} tmp_options[128];
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
 	POW_setRumble(strength);
@@ -610,8 +611,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: { /* 17 */
 		bool *out = (bool *)data;
 		if (out) {
-			*out = tmp_options_changed; // options_changed();
-			tmp_options_changed = 0;
+			*out = options.changed; // options_changed();
+			options.changed = 0;
 		}
 		break;
 	}
@@ -733,7 +734,6 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
 			Options_setOption(var->key, var->value);
-			tmp_options_changed = 1;
 			break;
 		}
 
