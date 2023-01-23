@@ -514,7 +514,128 @@ static void Options_setOption(const char* key, const char* value) {
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
 
+///////////////////////////////
 
+static void Menu_beforeSleep(void);
+static void Menu_afterSleep(void);
+
+#define RETRO_BUTTON_COUNT 14
+typedef struct InputOverride {
+	char* core;
+	int key;
+	int value;
+} InputOverride;
+
+// TODO: where do I apply these?
+// TODO: when loading options from cfg file?
+static InputOverride input_overrides[] = {
+	{"gambatte", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
+	{"gambatte", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
+	{"gambatte", RETRO_DEVICE_ID_JOYPAD_L, BTN_NONE}, // disable palette swapping
+	{"gambatte", RETRO_DEVICE_ID_JOYPAD_R, BTN_NONE}, // disable palette swapping
+
+	{"gpsp", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
+	{"gpsp", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
+	
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_L, BTN_NONE}, // disable extras
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_R, BTN_NONE}, // disable extras
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_L2, BTN_NONE}, // disable extras
+	{"fceumm", RETRO_DEVICE_ID_JOYPAD_R2, BTN_NONE}, // disable extras
+	
+	{"pokemini", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
+
+	{NULL,0,0},
+};
+
+static const uint32_t button_sort_order[RETRO_BUTTON_COUNT] = {
+	RETRO_DEVICE_ID_JOYPAD_UP,
+	RETRO_DEVICE_ID_JOYPAD_DOWN,
+	RETRO_DEVICE_ID_JOYPAD_LEFT,
+	RETRO_DEVICE_ID_JOYPAD_RIGHT,
+	RETRO_DEVICE_ID_JOYPAD_SELECT,
+	RETRO_DEVICE_ID_JOYPAD_START,
+	RETRO_DEVICE_ID_JOYPAD_Y,
+	RETRO_DEVICE_ID_JOYPAD_X,
+	RETRO_DEVICE_ID_JOYPAD_B,
+	RETRO_DEVICE_ID_JOYPAD_A,
+	RETRO_DEVICE_ID_JOYPAD_L,
+	RETRO_DEVICE_ID_JOYPAD_R,
+	RETRO_DEVICE_ID_JOYPAD_L2,
+	RETRO_DEVICE_ID_JOYPAD_R2,
+};
+static const char* core_button_names[RETRO_BUTTON_COUNT]; // core-provided
+static const char* device_button_names[RETRO_BUTTON_COUNT] = {
+	[RETRO_DEVICE_ID_JOYPAD_B]		=	"B",
+	[RETRO_DEVICE_ID_JOYPAD_Y]		=	"Y",
+	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	"SELECT",
+	[RETRO_DEVICE_ID_JOYPAD_START]	=	"START",
+	[RETRO_DEVICE_ID_JOYPAD_UP]		=	"UP",
+	[RETRO_DEVICE_ID_JOYPAD_DOWN]	=	"DOWN",
+	[RETRO_DEVICE_ID_JOYPAD_LEFT]	=	"LEFT",
+	[RETRO_DEVICE_ID_JOYPAD_RIGHT]	=	"RIGHT",
+	[RETRO_DEVICE_ID_JOYPAD_A]		=	"A",
+	[RETRO_DEVICE_ID_JOYPAD_X]		=	"X",
+	[RETRO_DEVICE_ID_JOYPAD_L]		=	"L1",
+	[RETRO_DEVICE_ID_JOYPAD_R]		=	"R1",
+	[RETRO_DEVICE_ID_JOYPAD_L2]		=	"L2",
+	[RETRO_DEVICE_ID_JOYPAD_R2]		=	"R2",
+};
+static uint32_t button_map_default[RETRO_BUTTON_COUNT] = {
+	[RETRO_DEVICE_ID_JOYPAD_B]		=	BTN_B,
+	[RETRO_DEVICE_ID_JOYPAD_Y]		=	BTN_Y,
+	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	BTN_SELECT,
+	[RETRO_DEVICE_ID_JOYPAD_START]	=	BTN_START,
+	[RETRO_DEVICE_ID_JOYPAD_UP]		=	BTN_UP,
+	[RETRO_DEVICE_ID_JOYPAD_DOWN]	=	BTN_DOWN,
+	[RETRO_DEVICE_ID_JOYPAD_LEFT]	=	BTN_LEFT,
+	[RETRO_DEVICE_ID_JOYPAD_RIGHT]	=	BTN_RIGHT,
+	[RETRO_DEVICE_ID_JOYPAD_A]		=	BTN_A,
+	[RETRO_DEVICE_ID_JOYPAD_X]		=	BTN_X,
+	[RETRO_DEVICE_ID_JOYPAD_L]		=	BTN_L1,
+	[RETRO_DEVICE_ID_JOYPAD_R]		=	BTN_R1,
+	[RETRO_DEVICE_ID_JOYPAD_L2]		=	BTN_L2,
+	[RETRO_DEVICE_ID_JOYPAD_R2]		=	BTN_R2,
+};
+static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
+static int ignore_menu = 0;
+static void input_poll_callback(void) {
+	PAD_poll();
+
+	// TODO: too heavy? maybe but regardless,
+	// this will cause it to go to sleep after 
+	// 30 seconds--even while playing!
+	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
+
+	if (PAD_justPressed(BTN_MENU)) {
+		ignore_menu = 0;
+	}
+	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
+		ignore_menu = 1;
+	}
+	
+	if (!ignore_menu && PAD_justReleased(BTN_MENU)) {
+		show_menu = 1;
+	}
+	
+	// TODO: support remapping
+	
+	buttons = 0;
+	for (int i=0; i<RETRO_BUTTON_COUNT; i++) {
+		int btn = button_map_default[i];
+		if (btn==BTN_NONE) continue; // still necessary because buttons can be unbound
+		if (PAD_isPressed(btn)) buttons |= 1 << i;
+	}
+}
+static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) { // copied from picoarch
+	// id == RETRO_DEVICE_ID_JOYPAD_MASK or RETRO_DEVICE_ID_JOYPAD_*
+	if (port == 0 && device == RETRO_DEVICE_JOYPAD && index == 0) {
+		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return buttons;
+		return (buttons >> id) & 1;
+	}
+	return 0;
+}
 ///////////////////////////////
 
 // TODO: tmp, naive options
@@ -565,14 +686,41 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
-		puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS");
+		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS");
+		
+		// TODO: move all this to an Input_init()?
+		
 		const struct retro_input_descriptor *vars = (const struct retro_input_descriptor *)data;
 		if (vars) {
-			// TODO: create an array of char* description indexed by id
 			for (int i=0; vars[i].description; i++) {
-				// vars[i].id == RETRO_DEVICE_ID_JOYPAD_*, vars[i].description = name
-				printf("%i %s\n", vars[i].id, vars[i].description);
+				const struct retro_input_descriptor* var = &vars[i];
+				
+				// TODO: can I break or will these come in out of order?
+				if (var->port || var->device!=1 || var->id>=RETRO_BUTTON_COUNT) continue; 
+				
+				core_button_names[var->id] = var->description;
+				printf("%s: %s\n", var->description, device_button_names[var->id]);
 			}
+			
+			// TODO: is this guaranteed to be called?
+			puts("---------------------------------");
+
+			// apply overrides
+			for (int k=0; input_overrides[k].core; k++) {
+				InputOverride* override = &input_overrides[k];
+				if (!strcmp(override->core, core.name)) {
+					button_map_default[override->key] = override->value;
+				}
+			}
+			
+			// TODO: with or without button_sort_order the sort order is broken
+			for (int i=0; i<RETRO_BUTTON_COUNT; i++) {
+				int j = i; // button_sort_order[i];
+				if (!core_button_names[j]) continue;
+				printf("%s: %s\n", core_button_names[j], (button_map_default[j]==BTN_NONE ? "" : device_button_names[j]));
+			}
+			puts("---------------------------------");
+			
 			return false;
 		}
 	} break;
@@ -1504,57 +1652,6 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 	return SND_batchSamples((const SND_Frame*)data, frames);
 	// return frames;
 };
-
-static void Menu_beforeSleep(void);
-static void Menu_afterSleep(void);
-
-static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
-static int ignore_menu = 0;
-static void input_poll_callback(void) {
-	PAD_poll();
-
-	// TODO: too heavy? maybe but regardless,
-	// this will cause it to go to sleep after 
-	// 30 seconds--even while playing!
-	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
-
-	if (PAD_justPressed(BTN_MENU)) {
-		ignore_menu = 0;
-	}
-	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
-		ignore_menu = 1;
-	}
-	
-	if (!ignore_menu && PAD_justReleased(BTN_MENU)) {
-		show_menu = 1;
-	}
-	
-	// TODO: support remapping
-	
-	buttons = 0;
-	if (PAD_isPressed(BTN_UP)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_UP;
-	if (PAD_isPressed(BTN_DOWN)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_DOWN;
-	if (PAD_isPressed(BTN_LEFT)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_LEFT;
-	if (PAD_isPressed(BTN_RIGHT)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_RIGHT;
-	if (PAD_isPressed(BTN_A)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
-	if (PAD_isPressed(BTN_B)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
-	if (PAD_isPressed(BTN_X)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_X;
-	if (PAD_isPressed(BTN_Y)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_Y;
-	if (PAD_isPressed(BTN_START)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_START;
-	if (PAD_isPressed(BTN_SELECT)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_SELECT;
-	if (PAD_isPressed(BTN_L1)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_L;
-	if (PAD_isPressed(BTN_L2)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_L2;
-	if (PAD_isPressed(BTN_R1)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_R;
-	if (PAD_isPressed(BTN_R2)) buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_R2;
-}
-static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) { // copied from picoarch
-	// id == RETRO_DEVICE_ID_JOYPAD_MASK or RETRO_DEVICE_ID_JOYPAD_*
-	if (port == 0 && device == RETRO_DEVICE_JOYPAD && index == 0) {
-		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return buttons;
-		return (buttons >> id) & 1;
-	}
-	return 0;
-}
 
 ///////////////////////////////////////
 
