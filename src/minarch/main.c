@@ -549,22 +549,6 @@ static InputOverride input_overrides[] = {
 	{NULL,0,0},
 };
 
-static const uint32_t button_sort_order[RETRO_BUTTON_COUNT] = {
-	RETRO_DEVICE_ID_JOYPAD_UP,
-	RETRO_DEVICE_ID_JOYPAD_DOWN,
-	RETRO_DEVICE_ID_JOYPAD_LEFT,
-	RETRO_DEVICE_ID_JOYPAD_RIGHT,
-	RETRO_DEVICE_ID_JOYPAD_SELECT,
-	RETRO_DEVICE_ID_JOYPAD_START,
-	RETRO_DEVICE_ID_JOYPAD_Y,
-	RETRO_DEVICE_ID_JOYPAD_X,
-	RETRO_DEVICE_ID_JOYPAD_B,
-	RETRO_DEVICE_ID_JOYPAD_A,
-	RETRO_DEVICE_ID_JOYPAD_L,
-	RETRO_DEVICE_ID_JOYPAD_R,
-	RETRO_DEVICE_ID_JOYPAD_L2,
-	RETRO_DEVICE_ID_JOYPAD_R2,
-};
 static const char* core_button_names[RETRO_BUTTON_COUNT]; // core-provided
 static const char* device_button_names[RETRO_BUTTON_COUNT] = {
 	[RETRO_DEVICE_ID_JOYPAD_B]		=	"B",
@@ -699,7 +683,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 				if (var->port || var->device!=1 || var->id>=RETRO_BUTTON_COUNT) continue; 
 				
 				core_button_names[var->id] = var->description;
-				printf("%s: %s\n", var->description, device_button_names[var->id]);
+				// printf("%s: %s\n", var->description, device_button_names[var->id]);
 			}
 			
 			// TODO: is this guaranteed to be called?
@@ -715,9 +699,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			
 			// TODO: with or without button_sort_order the sort order is broken
 			for (int i=0; i<RETRO_BUTTON_COUNT; i++) {
-				int j = i; // button_sort_order[i];
-				if (!core_button_names[j]) continue;
-				printf("%s: %s\n", core_button_names[j], (button_map_default[j]==BTN_NONE ? "" : device_button_names[j]));
+				if (!core_button_names[i]) continue;
+				printf("%s: %s\n", core_button_names[i], (button_map_default[i]==BTN_NONE ? "" : device_button_names[i]));
 			}
 			puts("---------------------------------");
 			
