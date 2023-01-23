@@ -665,8 +665,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
-		puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
-		// TODO: used by fceumm
+		// puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
+		// TODO: used by fceumm at least
 	}
 	case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: { /* 9 */
 		const char **out = (const char **)data;
@@ -767,7 +767,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
 	        struct retro_rumble_interface *iface = (struct retro_rumble_interface*)data;
 
-	        LOG_info("Setup rumble interface.\n");
+	        // LOG_info("Setup rumble interface.\n");
 	        iface->set_rumble_state = set_rumble_state;
 		break;
 	}
@@ -815,13 +815,14 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	// TODO: not used by gambatte
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: { /* 55 */
-		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
 		
 		const struct retro_core_option_display *display =
 			(const struct retro_core_option_display *)data;
-
-		if (display)
-			printf("visible: %i (%s)\n", display->visible, display->key);
+		
+		// TODO: set visibitility of option
+		// if (display)
+		// 	printf("visible: %i (%s)\n", display->visible, display->key);
 			// options_set_visible(display->key, display->visible);
 		break;
 	}
@@ -858,17 +859,18 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	// TODO: not used by gambatte
 	case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY: { /* 63 */
-		puts("RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY");
-		
-		const unsigned *latency_ms = (const unsigned *)data;
-		if (latency_ms) {
-			unsigned frames = *latency_ms * core.fps / 1000;
-			if (frames < 30)
-				// audio_buffer_size_override = frames;
-				printf("audio_buffer_size_override = %i (unused?)\n", frames);
-			// else
-			// 	PA_WARN("Audio buffer change out of range (%d), ignored\n", frames);
-		}
+		// TODO: unused?
+		// puts("RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY");
+		//
+		// const unsigned *latency_ms = (const unsigned *)data;
+		// if (latency_ms) {
+		// 	unsigned frames = *latency_ms * core.fps / 1000;
+		// 	if (frames < 30)
+		// 		audio_buffer_size_override = frames;
+		// 		printf("audio_buffer_size_override = %i (unused?)\n", frames);
+		// 	else
+		// 		PA_WARN("Audio buffer change out of range (%d), ignored\n", frames);
+		// }
 		break;
 	}
 	
@@ -1644,6 +1646,8 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	// 	ticks = 0;
 	// }
 }
+
+///////////////////////////////
 
 static void audio_sample_callback(int16_t left, int16_t right) {
 	SND_batchSamples(&(const SND_Frame){left,right}, 1);
