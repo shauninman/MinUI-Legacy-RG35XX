@@ -126,6 +126,7 @@ static SDL_Rect asset_rects[] = {
 	[ASSET_WHITE_PILL]		= (SDL_Rect){SCALE4( 1, 1,30,30)},
 	[ASSET_BLACK_PILL]		= (SDL_Rect){SCALE4(33, 1,30,30)},
 	[ASSET_DARK_GRAY_PILL]	= (SDL_Rect){SCALE4(65, 1,30,30)},
+	[ASSET_OPTION]			= (SDL_Rect){SCALE4(97, 1,20,20)},
 	[ASSET_BUTTON]			= (SDL_Rect){SCALE4( 1,33,20,20)},
 	[ASSET_PAGE_BG]			= (SDL_Rect){SCALE4(64,33,15,15)},
 	[ASSET_STATE_BG]		= (SDL_Rect){SCALE4(23,54, 8, 8)},
@@ -144,6 +145,9 @@ static SDL_Rect asset_rects[] = {
 	[ASSET_BATTERY_FILL]	= (SDL_Rect){SCALE4(81,33,12, 6)},
 	[ASSET_BATTERY_FILL_LOW]= (SDL_Rect){SCALE4( 1,55,12, 6)},
 	[ASSET_BATTERY_BOLT]	= (SDL_Rect){SCALE4(81,41,12, 6)},
+	
+	[ASSET_SCROLL_UP]		= (SDL_Rect){SCALE4(97,23,24, 6)},
+	[ASSET_SCROLL_DOWN]		= (SDL_Rect){SCALE4(97,31,24, 6)},
 };
 static uint32_t asset_rgbs[ASSET_COLORS];
 GFX_Fonts font;
@@ -155,7 +159,7 @@ SDL_Surface* GFX_init(int mode) {
 	SDL_ShowCursor(0);
 	TTF_Init();
 	
-	gfx.vsync = 1;
+	gfx.vsync = VSYNC_LENIENT;
 	gfx.mode = mode;
 	
 	// we're drawing to the (triple-buffered) framebuffer directly
@@ -208,6 +212,7 @@ SDL_Surface* GFX_init(int mode) {
 	asset_rgbs[ASSET_WHITE_PILL]	= RGB_WHITE;
 	asset_rgbs[ASSET_BLACK_PILL]	= RGB_BLACK;
 	asset_rgbs[ASSET_DARK_GRAY_PILL]= RGB_DARK_GRAY;
+	asset_rgbs[ASSET_OPTION]		= RGB_DARK_GRAY;
 	asset_rgbs[ASSET_BUTTON]		= RGB_WHITE;
 	asset_rgbs[ASSET_PAGE_BG]		= RGB_WHITE;
 	asset_rgbs[ASSET_STATE_BG]		= RGB_WHITE;
@@ -228,6 +233,9 @@ SDL_Surface* GFX_init(int mode) {
 	font.tiny 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_TINY));
 	
 	return gfx.screen;
+}
+void GFX_setMode(int mode) {
+	gfx.mode = mode;
 }
 void GFX_quit(void) {
 	TTF_CloseFont(font.large);
@@ -270,9 +278,10 @@ void GFX_startFrame(void) {
 void GFX_flip(SDL_Surface* screen) {
 	static int ticks = 0;
 	ticks += 1;
-	if (gfx.vsync) {
+	if (gfx.vsync!=VSYNC_OFF) {
+		// this limiting condition helps SuperFX chip games
 		#define FRAME_BUDGET 17 // 60fps
-		if (frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
+		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
 			int arg = 1;
 			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
 		}
@@ -284,6 +293,20 @@ void GFX_flip(SDL_Surface* screen) {
 	gfx.buffer += 1;
 	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
+}
+void GFX_sync(void) {
+	#define FRAME_BUDGET 17 // ~60fps
+	if (gfx.vsync!=VSYNC_OFF) {
+		// this limiting condition helps SuperFX chip games
+		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
+			int arg = 1;
+			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+		}
+	}
+	else {
+		uint32_t frame_duration = SDL_GetTicks() - frame_start;
+		if (frame_duration<FRAME_BUDGET) SDL_Delay(FRAME_BUDGET-frame_duration);
+	}
 }
 
 SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
@@ -605,6 +628,78 @@ int GFX_blitButtonGroup(char** pairs, SDL_Surface* dst, int align_right) {
 		ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
 	}
 	return ow;
+}
+
+#define MAX_TEXT_LINES 3
+void GFX_sizeText(TTF_Font* font, char* str, int leading, int* w, int* h) {
+	char* lines[MAX_TEXT_LINES];
+	int count = 0;
+
+	char* tmp;
+	lines[count++] = str;
+	while ((tmp=strchr(lines[count-1], '\n'))!=NULL) {
+		if (count+1>MAX_TEXT_LINES) break; // TODO: bail
+		lines[count++] = tmp+1;
+	}
+	*h = count * leading;
+	
+	int mw = 0;
+	char line[256];
+	for (int i=0; i<count; i++) {
+		int len;
+		if (i+1<count) {
+			len = lines[i+1]-lines[i]-1;
+			if (len) strncpy(line, lines[i], len);
+			line[len] = '\0';
+		}
+		else {
+			len = strlen(lines[i]);
+			strcpy(line, lines[i]);
+		}
+		
+		if (len) {
+			int lw;
+			TTF_SizeUTF8(font, line, &lw, NULL);
+			if (lw>mw) mw = lw;
+		}
+	}
+	*w = mw;
+}
+void GFX_blitText(TTF_Font* font, char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT};
+	
+	char* lines[MAX_TEXT_LINES];
+	int count = 0;
+
+	char* tmp;
+	lines[count++] = str;
+	while ((tmp=strchr(lines[count-1], '\n'))!=NULL) {
+		if (count+1>MAX_TEXT_LINES) break; // TODO: bail
+		lines[count++] = tmp+1;
+	}
+	int x = dst_rect->x;
+	int y = dst_rect->y;
+	
+	SDL_Surface* text;
+	char line[256];
+	for (int i=0; i<count; i++) {
+		int len;
+		if (i+1<count) {
+			len = lines[i+1]-lines[i]-1;
+			if (len) strncpy(line, lines[i], len);
+			line[len] = '\0';
+		}
+		else {
+			len = strlen(lines[i]);
+			strcpy(line, lines[i]);
+		}
+		
+		if (len) {
+			text = TTF_RenderUTF8_Blended(font, line, color);
+			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x+((dst_rect->w-text->w)/2),y+(i*leading)});
+			SDL_FreeSurface(text);
+		}
+	}
 }
 
 ///////////////////////////////

@@ -30,6 +30,7 @@ enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
 	ASSET_DARK_GRAY_PILL,
+	ASSET_OPTION,
 	ASSET_BUTTON,
 	ASSET_PAGE_BG,
 	ASSET_STATE_BG,
@@ -50,6 +51,9 @@ enum {
 	ASSET_BATTERY_FILL,
 	ASSET_BATTERY_FILL_LOW,
 	ASSET_BATTERY_BOLT,
+	
+	ASSET_SCROLL_UP,
+	ASSET_SCROLL_DOWN,
 };
 
 typedef struct GFX_Fonts {
@@ -66,11 +70,19 @@ enum {
 };
 
 SDL_Surface* GFX_init(int mode);
+void GFX_setMode(int mode);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);
 void GFX_startFrame(void);
 void GFX_flip(SDL_Surface* screen);
+void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
 void GFX_quit(void);
+
+enum {
+	VSYNC_OFF = 0,
+	VSYNC_LENIENT, // default
+	VSYNC_STRICT,
+};
 
 int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
@@ -90,6 +102,9 @@ void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 int GFX_blitButtonGroup(char** hints, SDL_Surface* dst, int align_right);
 
+void GFX_sizeText(TTF_Font* font, char* str, int leading, int* w, int* h);
+void GFX_blitText(TTF_Font* font, char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect);
+
 ///////////////////////////////
 
 typedef struct SND_Frame {
@@ -104,6 +119,7 @@ void SND_quit(void);
 ///////////////////////////////
 
 enum {
+	BTN_ID_NONE = -1,
 	BTN_ID_UP,
 	BTN_ID_DOWN,
 	BTN_ID_LEFT,

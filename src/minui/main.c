@@ -1261,7 +1261,7 @@ int main (int argc, char *argv[]) {
 					selected = total-1;
 					int start = total - MAIN_ROW_COUNT;
 					top->start = (start<0) ? 0 : start;
-					top->end = total;
+					top->end = total; 
 				}
 				else if (selected<top->start) {
 					top->start -= 1;

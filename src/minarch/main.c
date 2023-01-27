@@ -20,6 +20,30 @@
 #include "api.h"
 #include "scaler_neon.h"
 
+///////////////////////////////////////
+
+#include "overrides.h"
+#include "overrides/fceumm.h"
+#include "overrides/gambatte.h"
+#include "overrides/gpsp.h"
+#include "overrides/pcsx_rearmed.h"
+#include "overrides/picodrive.h"
+#include "overrides/pokemini.h"
+#include "overrides/snes9x2005_plus.h"
+
+static CoreOverrides* overrides[] = {
+	&fceumm_overrides,
+	&gambatte_overrides,
+	&gpsp_overrides,
+	&pcsx_rearmed_overrides,
+	&picodrive_overrides,
+	&pokemini_overrides,
+	&snes9x2005_plus_overrides,
+	NULL,
+};
+
+///////////////////////////////////////
+
 static SDL_Surface* screen;
 static int quit;
 static int show_menu;
@@ -114,6 +138,8 @@ static struct Core {
 	const char tag[8]; // eg. GBC
 	const char name[128]; // eg. gambatte
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
+	
+	CoreOverrides* overrides;
 	
 	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
 	const char saves_dir[MAX_PATH]; // eg. /mnt/sdcard/Saves/GB
@@ -287,20 +313,6 @@ static void State_resume(void) {
 
 ///////////////////////////////
 
-typedef struct OptionOverride {
-	char* core;
-	char* key;
-	char* value;
-} OptionOverride;
-
-static OptionOverride option_overrides[] = {
-	{"gpsp",		"gpsp_save_method",				"libretro"},
-	{"gambatte",	"gambatte_gb_colorization",		"internal"},
-	{"gambatte",	"gambatte_gb_internal_palette",	"TWB64 - Pack 1"},
-	{"gambatte",	"gambatte_gb_palette_twb64_1",	"TWB64 038 - Pokemon mini Ver."},
-	{NULL,NULL,NULL},
-};
-
 typedef struct Option {
 	char* key;
 	char* name; // desc
@@ -309,17 +321,22 @@ typedef struct Option {
 	int default_value;
 	int value;
 	int count;
+	int visible;
 	char** values;
 	char** labels;
 } Option;
-
 static struct {
 	int count;
 	int changed;
 	Option* items;
 } options;
 
-static int Option_getValueIndex(Option* item, const char* value) {
+static Option* frontend_options = (Option[]){
+	// TODO: 
+	{NULL}
+};
+
+static  int Option_getValueIndex(Option* item, const char* value) {
 	if (!value) return 0;
 	for (int i=0; i<item->count; i++) {
 		if (!strcmp(item->values[i], value)) return i;
@@ -330,9 +347,12 @@ static void Option_setValue(Option* item, const char* value) {
 	// TODO: store previous value?
 	item->value = Option_getValueIndex(item, value);
 }
+
 static void Options_init(const struct retro_core_option_definition *defs) {
 	int count;
 	for (count=0; defs[count].key; count++);
+	
+	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
 	
 	options.count = count;
 	if (count) {
@@ -357,12 +377,15 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 				strcpy(item->desc, def->info);
 			}
 		
+			item->visible = 1;
+			
 			for (count=0; def->values[count].value; count++);
 		
 			item->count = count;
-			item->values = calloc(count, sizeof(char*));
-			item->labels = calloc(count, sizeof(char*));
+			item->values = calloc(count+1, sizeof(char*));
+			item->labels = calloc(count+1, sizeof(char*));
 	
+			printf("%s (%s)\n", item->name, item->key);
 			for (int j=0; j<count; j++) {
 				const char* value = def->values[j].value;
 				const char* label = def->values[j].label;
@@ -379,23 +402,28 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 				else {
 					item->labels[j] = item->values[j];
 				}
+				printf("\t%s\n", item->labels[j]);
 			}
 			
 			const char* default_value = def->default_value;
-			for (int k=0; option_overrides[k].core; k++) {
-				OptionOverride* override = &option_overrides[k];
-				if (!strcmp(override->key, item->key)) {
-					default_value = override->value;
-					break;
+			if (core.overrides && core.overrides->option_overrides) {
+				for (int k=0; core.overrides->option_overrides[k].key; k++) {
+					OptionOverride* override = &core.overrides->option_overrides[k];
+					if (!strcmp(override->key, item->key)) {
+						default_value = override->value;
+						break;
+					}
 				}
 			}
 			
 			item->value = Option_getValueIndex(item, default_value);
 			item->default_value = item->value;
-			// printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
+			// printf("(%s:%i)\n", item->labels[item->value], item->value);
+			printf("%s %s\n",item->name, item->labels[item->value]);
+			// if (item->desc) printf("\t%s\n", item->desc);
 		}
 	}
-	// fflush(stdout);
+	fflush(stdout);
 }
 static void Options_vars(const struct retro_variable *vars) {
 	int count;
@@ -425,14 +453,15 @@ static void Options_vars(const struct retro_variable *vars) {
 				tmp += 2;
 			}
 			
-			char* opt = tmp;
+			item->visible = 1;
 			
+			char* opt = tmp;
 			for (count=0; (tmp=strchr(tmp, '|')); tmp++, count++);
 			count += 1; // last entry after final '|'
 		
 			item->count = count;
-			item->values = calloc(count, sizeof(char*));
-			item->labels = calloc(count, sizeof(char*));
+			item->values = calloc(count+1, sizeof(char*));
+			item->labels = calloc(count+1, sizeof(char*));
 
 			tmp = opt;
 			int j;
@@ -448,11 +477,13 @@ static void Options_vars(const struct retro_variable *vars) {
 			
 			// no native default_value support for retro vars
 			const char* default_value = NULL;
-			for (int k=0; option_overrides[k].core; k++) {
-				OptionOverride* override = &option_overrides[k];
-				if (!strcmp(override->key, item->key)) {
-					default_value = override->value;
-					break;
+			if (core.overrides && core.overrides->option_overrides) {
+				for (int k=0; core.overrides->option_overrides[k].key; k++) {
+					OptionOverride* override = &core.overrides->option_overrides[k];
+					if (!strcmp(override->key, item->key)) {
+						default_value = override->value;
+						break;
+					}
 				}
 			}
 			
@@ -498,19 +529,29 @@ static Option* Options_getOption(const char* key) {
 }
 static char* Options_getOptionValue(const char* key) {
 	Option* item = Options_getOption(key);
-	if (item) {
-		// printf("GET %s (%i)\n", item->key, item->value); fflush(stdout);
-		return item->values[item->value];
-	}
+	if (item) return item->values[item->value];
 	else LOG_warn("unknown option %s \n", key);
 	return NULL;
 }
-static void Options_setOption(const char* key, const char* value) {
+static void Options_setOptionRawValue(const char* key, int value) {
+	Option* item = Options_getOption(key);
+	if (item) {
+		item->value = value;
+		options.changed = 1;
+	}
+	else printf("unknown option %s \n", key); fflush(stdout);
+}
+static void Options_setOptionValue(const char* key, const char* value) {
 	Option* item = Options_getOption(key);
 	if (item) {
 		Option_setValue(item, value);
 		options.changed = 1;
 	}
+	else printf("unknown option %s \n", key); fflush(stdout);
+}
+static void Options_setOptionVisibility(const char* key, int visible) {
+	Option* item = Options_getOption(key);
+	if (item) item->visible = visible;
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
 
@@ -520,70 +561,44 @@ static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
 #define RETRO_BUTTON_COUNT 14
-typedef struct InputOverride {
-	char* core;
-	int key;
-	int value;
-} InputOverride;
-
-// TODO: where do I apply these?
-// TODO: when loading options from cfg file?
-static InputOverride input_overrides[] = {
-	{"gambatte", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
-	{"gambatte", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
-	{"gambatte", RETRO_DEVICE_ID_JOYPAD_L, BTN_NONE}, // disable palette swapping
-	{"gambatte", RETRO_DEVICE_ID_JOYPAD_R, BTN_NONE}, // disable palette swapping
-
-	{"gpsp", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
-	{"gpsp", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
-	
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_Y, BTN_NONE}, // disable turbo
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_L, BTN_NONE}, // disable extras
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_R, BTN_NONE}, // disable extras
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_L2, BTN_NONE}, // disable extras
-	{"fceumm", RETRO_DEVICE_ID_JOYPAD_R2, BTN_NONE}, // disable extras
-	
-	{"pokemini", RETRO_DEVICE_ID_JOYPAD_X, BTN_NONE}, // disable turbo
-
-	{NULL,0,0},
+static ButtonMapping default_button_mapping[] = {
+	{"UP",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
+	{"DOWN",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
+	{"LEFT",		RETRO_DEVICE_ID_JOYPAD_LEFT,	BTN_ID_LEFT},
+	{"RIGHT",		RETRO_DEVICE_ID_JOYPAD_RIGHT,	BTN_ID_RIGHT},
+	{"A BUTTON",	RETRO_DEVICE_ID_JOYPAD_A,		BTN_ID_A},
+	{"B BUTTON",	RETRO_DEVICE_ID_JOYPAD_B,		BTN_ID_B},
+	{"X BUTTON",	RETRO_DEVICE_ID_JOYPAD_X,		BTN_ID_X},
+	{"Y BUTTON",	RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_Y},
+	{"START",		RETRO_DEVICE_ID_JOYPAD_START,	BTN_ID_START},
+	{"SELECT",		RETRO_DEVICE_ID_JOYPAD_SELECT,	BTN_ID_SELECT},
+	{"L1 BUTTON",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
+	{"R1 BUTTON",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
+	{"L2 BUTTON",	RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
+	{"R2 BUTTON",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
+	{NULL,0,0}
 };
-
-static const char* core_button_names[RETRO_BUTTON_COUNT]; // core-provided
+static ButtonMapping* button_mapping; // either default_button_mapping or core.overrides->button_mapping
 static const char* device_button_names[RETRO_BUTTON_COUNT] = {
-	[RETRO_DEVICE_ID_JOYPAD_UP]		=	"UP",
-	[RETRO_DEVICE_ID_JOYPAD_DOWN]	=	"DOWN",
-	[RETRO_DEVICE_ID_JOYPAD_LEFT]	=	"LEFT",
-	[RETRO_DEVICE_ID_JOYPAD_RIGHT]	=	"RIGHT",
-	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	"SELECT",
-	[RETRO_DEVICE_ID_JOYPAD_START]	=	"START",
-	[RETRO_DEVICE_ID_JOYPAD_Y]		=	"Y",
-	[RETRO_DEVICE_ID_JOYPAD_X]		=	"X",
-	[RETRO_DEVICE_ID_JOYPAD_B]		=	"B",
-	[RETRO_DEVICE_ID_JOYPAD_A]		=	"A",
-	[RETRO_DEVICE_ID_JOYPAD_L]		=	"L1",
-	[RETRO_DEVICE_ID_JOYPAD_R]		=	"R1",
-	[RETRO_DEVICE_ID_JOYPAD_L2]		=	"L2",
-	[RETRO_DEVICE_ID_JOYPAD_R2]		=	"R2",
+	[BTN_ID_UP]		= "UP",
+	[BTN_ID_DOWN]	= "DOWN",
+	[BTN_ID_LEFT]	= "LEFT",
+	[BTN_ID_RIGHT]	= "RIGHT",
+	[BTN_ID_SELECT]	= "SELECT",
+	[BTN_ID_START]	= "START",
+	[BTN_ID_Y]		= "Y",
+	[BTN_ID_X]		= "X",
+	[BTN_ID_B]		= "B",
+	[BTN_ID_A]		= "A",
+	[BTN_ID_L1]		= "L1",
+	[BTN_ID_R1]		= "R1",
+	[BTN_ID_L2]		= "L2",
+	[BTN_ID_R2]		= "R2",
 };
-static uint32_t button_map_default[RETRO_BUTTON_COUNT] = {
-	[RETRO_DEVICE_ID_JOYPAD_B]		=	BTN_B,
-	[RETRO_DEVICE_ID_JOYPAD_Y]		=	BTN_Y,
-	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	BTN_SELECT,
-	[RETRO_DEVICE_ID_JOYPAD_START]	=	BTN_START,
-	[RETRO_DEVICE_ID_JOYPAD_UP]		=	BTN_UP,
-	[RETRO_DEVICE_ID_JOYPAD_DOWN]	=	BTN_DOWN,
-	[RETRO_DEVICE_ID_JOYPAD_LEFT]	=	BTN_LEFT,
-	[RETRO_DEVICE_ID_JOYPAD_RIGHT]	=	BTN_RIGHT,
-	[RETRO_DEVICE_ID_JOYPAD_A]		=	BTN_A,
-	[RETRO_DEVICE_ID_JOYPAD_X]		=	BTN_X,
-	[RETRO_DEVICE_ID_JOYPAD_L]		=	BTN_L1,
-	[RETRO_DEVICE_ID_JOYPAD_R]		=	BTN_R1,
-	[RETRO_DEVICE_ID_JOYPAD_L2]		=	BTN_L2,
-	[RETRO_DEVICE_ID_JOYPAD_R2]		=	BTN_R2,
-};
+static const char* core_button_names[RETRO_BUTTON_COUNT];
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
+static int show_debug = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -598,6 +613,9 @@ static void input_poll_callback(void) {
 	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
 		ignore_menu = 1;
 	}
+	if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
+		show_debug = !show_debug;
+	}
 	
 	if (!ignore_menu && PAD_justReleased(BTN_MENU)) {
 		show_menu = 1;
@@ -606,10 +624,10 @@ static void input_poll_callback(void) {
 	// TODO: support remapping
 	
 	buttons = 0;
-	for (int i=0; i<RETRO_BUTTON_COUNT; i++) {
-		int btn = button_map_default[i];
-		if (btn==BTN_NONE) continue; // still necessary because buttons can be unbound
-		if (PAD_isPressed(btn)) buttons |= 1 << i;
+	for (int i=0; button_mapping[i].name; i++) {
+		int btn = 1 << button_mapping[i].local;
+		if (btn==BTN_NONE) continue; // present buttons can still be unbound
+		if (PAD_isPressed(btn)) buttons |= 1 << button_mapping[i].retro;
 	}
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) { // copied from picoarch
@@ -675,37 +693,47 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// (some? all?) cores don't sort these in any logical way
 		// which explains why picoarch didn't implement this...
 
+		// TODO: this needs further refactoring (and to be moved elsewhere)
+		// we need:
+		// core_button_names (indexed by RETRO_DEVICE_ID_JOYPAD_*) from input_descriptors
+		// override_button_names (indexed by RETRO_DEVICE_ID_JOYPAD_*) from core.overrides
+		// device_button_names (indexed by BTN_ID_*)
+		// default_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
+		// override_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
 		
 		// TODO: move all this to an Input_init()?
+		button_mapping = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
 		
 		const struct retro_input_descriptor *vars = (const struct retro_input_descriptor *)data;
 		if (vars) {
-			for (int i=0; vars[i].description; i++) {
-				const struct retro_input_descriptor* var = &vars[i];
-				
-				// TODO: can I break or will these come in out of order?
-				if (var->port || var->device!=1 || var->id>=RETRO_BUTTON_COUNT) continue; 
-				
-				core_button_names[var->id] = var->description;
-				// printf("%s: %s\n", var->description, device_button_names[var->id]);
-			}
-			
 			// TODO: is this guaranteed to be called?
 			puts("---------------------------------");
-
-			// apply overrides
-			for (int k=0; input_overrides[k].core; k++) {
-				InputOverride* override = &input_overrides[k];
-				if (!strcmp(override->core, core.name)) {
-					button_map_default[override->key] = override->value;
-				}
+			
+			// identify buttons available in this core
+			int present[RETRO_BUTTON_COUNT];
+			memset(&present, 0, RETRO_BUTTON_COUNT * sizeof(int));
+			for (int i=0; vars[i].description; i++) {
+				const struct retro_input_descriptor* var = &vars[i];
+				present[var->id] = 1;
+				core_button_names[var->id] = var->description;
 			}
 			
-			// TODO: with or without button_sort_order the sort order is broken
-			for (int i=0; i<RETRO_BUTTON_COUNT; i++) {
-				if (!core_button_names[i]) continue;
-				printf("%s: %s\n", core_button_names[i], (button_map_default[i]==BTN_NONE ? "" : device_button_names[i]));
+			for (int i=0;default_button_mapping[i].name; i++) {
+				int local = default_button_mapping[i].local;
+				LOG_info("DEFAULT %s: <%s>\n", default_button_mapping[i].name, (local==BTN_ID_NONE ? "NONE" : device_button_names[local]));
 			}
+			
+			for (int i=0; button_mapping[i].name; i++) {
+				int retro = button_mapping[i].retro;
+				// null mappings that aren't available in this core
+				if (!present[retro]) {
+					button_mapping[i].name = NULL;
+					continue;
+				}
+				int local = button_mapping[i].local;
+				LOG_info("%s: <%s>\n", button_mapping[i].name, (local==BTN_ID_NONE ? "NONE" : device_button_names[local]));
+			}
+			
 			puts("---------------------------------");
 			
 			return false;
@@ -800,17 +828,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		}
 		break;
 	}
-	// TODO: not used by gambatte
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: { /* 55 */
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
-		
-		const struct retro_core_option_display *display =
-			(const struct retro_core_option_display *)data;
-		
-		// TODO: set visibitility of option
-		// if (display)
-		// 	printf("visible: %i (%s)\n", display->visible, display->key);
-			// options_set_visible(display->key, display->visible);
+		const struct retro_core_option_display *display = (const struct retro_core_option_display *)data;
+		if (display) Options_setOptionVisibility(display->key, display->visible);
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: { /* 57 */
@@ -864,13 +885,12 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE 64
 	// TODO: RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK 69
 	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
-	// TODO: these should be overridden to be disabled by default because ick
 	case RETRO_ENVIRONMENT_SET_VARIABLE: {
 		// puts("RETRO_ENVIRONMENT_SET_VARIABLE");
 		
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
-			Options_setOption(var->key, var->value);
+			Options_setOptionValue(var->key, var->value);
 			break;
 		}
 
@@ -1013,6 +1033,25 @@ static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	int src_pitch = w * SCREEN_BPP; 
 	int src_stride = pitch / SCREEN_BPP;
 	int dst_stride = dst_pitch / SCREEN_BPP;
+	int cpy_pitch = MIN(src_pitch, dst_pitch);
+	
+	uint16_t* restrict src_row = (uint16_t*)src;
+	uint16_t* restrict dst_row = (uint16_t*)dst;
+	for (int y=0; y<h; y++) {
+		memcpy(dst_row, src_row, cpy_pitch);
+		dst_row += dst_stride;
+		src_row += src_stride;
+	}
+	
+}
+static void scale1x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	// pitch of src image not src buffer!
+	// eg. gb has a 160 pixel wide image but 
+	// gambatte uses a 256 pixel wide buffer
+	// (only matters when using memcpy) 
+	int src_pitch = w * SCREEN_BPP; 
+	int src_stride = 2 * pitch / SCREEN_BPP;
+	int dst_stride = 2 * dst_pitch / SCREEN_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t* restrict src_row = (uint16_t*)src;
@@ -1238,6 +1277,44 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 		}
 	}
 }
+static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int row3 = SCREEN_WIDTH * 2;
+	// int row4 = SCREEN_WIDTH * 3;
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 4;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t s = *src_row;
+			
+			// row 1
+			*(dst_row    ) = s;
+			*(dst_row + 1) = s;
+			*(dst_row + 2) = s;
+			*(dst_row + 3) = s;
+			
+			// // row 2
+			// *(dst_row + SCREEN_WIDTH    ) = s;
+			// *(dst_row + SCREEN_WIDTH + 1) = s;
+			// *(dst_row + SCREEN_WIDTH + 2) = s;
+			// *(dst_row + SCREEN_WIDTH + 3) = s;
+
+			// row 3
+			*(dst_row + row3    ) = s;
+			*(dst_row + row3 + 1) = s;
+			*(dst_row + row3 + 2) = s;
+			*(dst_row + row3 + 3) = s;
+
+			// // row 4
+			// *(dst_row + row4    ) = s;
+			// *(dst_row + row4 + 1) = s;
+			// *(dst_row + row4 + 2) = s;
+			// *(dst_row + row4 + 3) = s;
+
+			src_row += 1;
+			dst_row += 4;
+		}
+	}
+}
 static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	int dy = -renderer.dst_h;
 	unsigned lines = h;
@@ -1375,6 +1452,60 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 		}
 	}
 }
+static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int dy = -renderer.dst_h;
+	unsigned lines = h;
+
+	int row = 0;
+	int safe = w - 1; // don't look behind when there's nothing to see
+	uint16_t l1,l2;
+	while (lines) {
+		int dx = -renderer.dst_w;
+		const uint16_t *psrc16 = src;
+		uint16_t *pdst16 = dst;
+		l1 = l2 = 0x0;
+		
+		if (row%2==0) {
+			int col = w;
+			while(col--) {
+				int d = 0;
+				if (col<safe && l1!=l2) {
+					// https://stackoverflow.com/a/71086522/145965
+					uint16_t r = (l1 >> 10) & 0x3E;
+					uint16_t g = (l1 >> 5) & 0x3F;
+					uint16_t b = (l1 << 1) & 0x3E;
+					uint16_t luma = (r * 218) + (g * 732) + (b * 74);
+					luma = (luma >> 10) + ((luma >> 9) & 1); // 0-63
+					d = luma > 24;
+				}
+
+				uint16_t s = *psrc16;
+				
+				while (dx < 0) {
+					*pdst16++ = d ? l1 : s;
+					dx += w;
+
+					l2 = l1;
+					l1 = s;
+					d = 0;
+				}
+
+				dx -= renderer.dst_w;
+				psrc16++;
+			}
+		}
+
+		dst += dst_pitch;
+		dy += h;
+				
+		if (dy >= 0) {
+			dy -= renderer.dst_h;
+			src += pitch;
+			lines--;
+		}
+		row += 1;
+	}
+}
 
 static SDL_Surface* scaler_surface;
 static void selectScaler(int width, int height, int pitch) {
@@ -1486,26 +1617,36 @@ static void selectScaler(int width, int height, int pitch) {
 
 	if (use_nearest) 
 		renderer.scaler = scaleNN_text;
+		// renderer.scaler = scaleNN_text_scanline;
 		// renderer.scaler = scaleNN; // better for Tekken 3, Colin McRae Rally 2
 	else {
 		sprintf(scaler_name, "%ix", scale);
-		switch (scale) {
-			// eggs-optimized scalers
-			case 4: 	renderer.scaler = scale4x_n16; break;
-			case 3: 	renderer.scaler = scale3x_n16; break;
-			case 2: 	renderer.scaler = scale2x_n16; break;
-			default:	renderer.scaler = scale1x_n16; break;
-			
-			// my lesser scalers :sweat_smile:
-			// case 4: 	renderer.scaler = scale4x; break;
-			// case 3: 	renderer.scaler = scale3x; break;
-			// case 3: 	renderer.scaler = scale3x_dmg; break;
-			// case 3: 	renderer.scaler = scale3x_lcd; break;
-			// case 3: 	renderer.scaler = scale3x_scanline; break;
-			// case 2: 	renderer.scaler = scale2x; break;
-			// case 2: 	renderer.scaler = scale2x_lcd; break;
-			// case 2: 	renderer.scaler = scale2x_scanline; break;
-			// default:	renderer.scaler = scale1x; break;
+		if (0) {
+			switch (scale) {
+				case 4: 	renderer.scaler = scale4x_scanline; break;
+				case 3: 	renderer.scaler = scale3x_scanline; break;
+				case 2: 	renderer.scaler = scale2x_scanline; break;
+				default:	renderer.scaler = scale1x_scanline; break;
+			}
+		}
+		else {
+			switch (scale) {
+				case 4: 	renderer.scaler = scale4x_n16; break;
+				case 3: 	renderer.scaler = scale3x_n16; break;
+				case 2: 	renderer.scaler = scale2x_n16; break;
+				default:	renderer.scaler = scale1x_n16; break;
+
+				// my lesser scalers :sweat_smile:
+				// case 4: 	renderer.scaler = scale4x; break;
+				// case 3: 	renderer.scaler = scale3x; break;
+				// case 3: 	renderer.scaler = scale3x_dmg; break;
+				// case 3: 	renderer.scaler = scale3x_lcd; break;
+				// case 3: 	renderer.scaler = scale3x_scanline; break;
+				// case 2: 	renderer.scaler = scale2x; break;
+				// case 2: 	renderer.scaler = scale2x_lcd; break;
+				// case 2: 	renderer.scaler = scale2x_scanline; break;
+				// default:	renderer.scaler = scale1x; break;
+			}
 		}
 	}
 	
@@ -1570,7 +1711,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		if (frame>=fps) frame -= fps;
 	}
 	
-	if (1) {
+	if (show_debug) {
 		int x = 0;
 		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
 		
@@ -1694,7 +1835,13 @@ void Core_open(const char* core_path, const char* tag_name) {
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
 	
-	LOG_info("% %s (%s)\n", core.name, core.version, core.tag);
+	LOG_info("core: %s version: %s tag: %s\n", core.name, core.version, core.tag);
+	
+	for (int i=0; overrides[i]; i++) {
+		if (!strcmp(overrides[i]->core_name, core.name)) {
+			core.overrides = overrides[i];
+		}
+	}
 	
 	sprintf((char*)core.config_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
 	sprintf((char*)core.saves_dir, SDCARD_PATH "/Saves/%s", core.tag);
@@ -1776,7 +1923,7 @@ enum {
 	STATUS_QUIT = 30
 };
 
-static struct Menu {
+static struct {
 	int initialized;
 	SDL_Surface* overlay;
 	char* items[MENU_ITEM_COUNT];
@@ -1786,7 +1933,7 @@ static struct Menu {
 		[ITEM_CONT] = "Continue",
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
-		[ITEM_OPTS] = "Reset",
+		[ITEM_OPTS] = "Options",
 		[ITEM_QUIT] = "Quit",
 	}
 };
@@ -1842,6 +1989,658 @@ void Menu_beforeSleep(void) {
 void Menu_afterSleep(void) {
 	unlink(AUTO_RESUME_PATH);
 }
+
+typedef struct MenuList MenuList;
+typedef struct MenuItem MenuItem;
+enum {
+	MENU_CALLBACK_NOP,
+	MENU_CALLBACK_EXIT,
+	MENU_CALLBACK_NEXT_ITEM,
+};
+typedef int(*MenuList_callback_t)(MenuList* list, int i);
+typedef struct MenuItem {
+	char* name;
+	char* desc;
+	char** values;
+	char* key; // optional, used by options
+	int value;
+	MenuList* submenu;
+	MenuList_callback_t on_confirm;
+	MenuList_callback_t on_change;
+} MenuItem;
+
+enum {
+	MENU_LIST, // eg. save and main menu
+	MENU_VAR, // eg. frontend
+	MENU_FIXED, // eg. emulator
+	MENU_INPUT, // eg. renders like but MENU_VAR but handles input differently
+};
+typedef struct MenuList {
+	int type;
+	int max_width; // cached on first draw
+	char* desc;
+	MenuItem* items;
+	MenuList_callback_t on_confirm;
+	MenuList_callback_t on_change;
+} MenuList;
+
+void Menu_detail(MenuItem* item) {
+	// TODO: name
+}
+
+#define OPTION_PADDING 8
+#define MAX_VISIBLE_OPTIONS 7
+int Menu_options(MenuList* list) {
+	MenuItem* items = list->items;
+	int type = list->type;
+
+	int dirty = 1;
+	int show_options = 1;
+	
+	int count;
+	for (count=0; items[count].name; count++);
+	int selected = 0;
+	int start = 0;
+	int end = MIN(count,MAX_VISIBLE_OPTIONS);
+	int visible_rows = end;
+
+	while (show_options) {
+		GFX_startFrame();
+		uint32_t frame_start = SDL_GetTicks();
+
+		PAD_poll();
+		
+		if (PAD_justRepeated(BTN_UP)) {
+			selected -= 1;
+			if (selected<0) {
+				selected = count - 1;
+				start = MAX(0,count - MAX_VISIBLE_OPTIONS);
+				end = count;
+			}
+			else if (selected<start) {
+				start -= 1;
+				end -= 1;
+			}
+			dirty = 1;
+		}
+		else if (PAD_justRepeated(BTN_DOWN)) {
+			selected += 1;
+			if (selected>=count) {
+				selected = 0;
+				start = 0;
+				end = visible_rows;
+			}
+			else if (selected>=end) {
+				start += 1;
+				end += 1;
+			}
+			dirty = 1;
+		}
+		else if (type!=MENU_INPUT) {
+			if (PAD_justPressed(BTN_LEFT)) {
+				MenuItem* item = &items[selected];
+				if (item->value>0) item->value -= 1;
+				else {
+					int j;
+					for (j=0; item->values[j]; j++);
+					item->value = j - 1;
+				}
+				
+				if (item->on_change) item->on_change(list, selected);
+				else if (list->on_change) list->on_change(list, selected);
+				
+				dirty = 1;
+			}
+			else if (PAD_justPressed(BTN_RIGHT)) {
+				MenuItem* item = &items[selected];
+				if (item->values[item->value+1]) item->value += 1;
+				else item->value = 0;
+				
+				if (item->on_change) item->on_change(list, selected);
+				else if (list->on_change) list->on_change(list, selected);
+				
+				dirty = 1;
+			}
+		}
+		
+		if (PAD_justPressed(BTN_B)) {
+			show_options = 0;
+		}
+		else if (PAD_justPressed(BTN_A)) {
+			MenuItem* item = &items[selected];
+			int result = 0;
+			if (item->on_confirm) result = item->on_confirm(list, selected); // item-specific action, eg. Save for all games
+			else if (item->submenu) result = Menu_options(item->submenu); // drill down, eg. main options menu
+			else if (list->on_confirm) result = list->on_confirm(list, selected); // list-specific action, eg. show item detail view or input binding
+			if (result==MENU_CALLBACK_EXIT) show_options = 0;
+			else {
+				if (result==MENU_CALLBACK_NEXT_ITEM) {
+					// copied from PAD_justRepeated(BTN_DOWN) above
+					selected += 1;
+					if (selected>=count) {
+						selected = 0;
+						start = 0;
+						end = visible_rows;
+					}
+					else if (selected>=end) {
+						start += 1;
+						end += 1;
+					}
+				}
+				dirty = 1;
+			}
+		}
+		else if (type==MENU_INPUT) {
+			if (PAD_justPressed(BTN_X)) {
+				MenuItem* item = &items[selected];
+				item->value = 0;
+				
+				if (item->on_change) item->on_change(list, selected);
+				else if (list->on_change) list->on_change(list, selected);
+				
+				// copied from PAD_justRepeated(BTN_DOWN) above
+				selected += 1;
+				if (selected>=count) {
+					selected = 0;
+					start = 0;
+					end = visible_rows;
+				}
+				else if (selected>=end) {
+					start += 1;
+					end += 1;
+				}
+				dirty = 1;
+			}
+		}
+		
+		if (dirty) {
+			dirty = 0;
+			
+			GFX_clear(screen);
+			GFX_blitHardwareGroup(screen, 0);
+			
+			char* desc = NULL;
+			SDL_Surface* text;
+
+			if (type==MENU_LIST) {
+				int mw = list->max_width;
+				if (!mw) {
+					// get the width of the widest item
+					for (int i=0; i<count; i++) {
+						MenuItem* item = &items[i];
+						int w = 0;
+						TTF_SizeUTF8(font.small, item->name, &w, NULL);
+						w += SCALE1(OPTION_PADDING*2);
+						if (w>mw) mw = w;
+					}
+					// cache the result
+					list->max_width = mw = MIN(mw, SCREEN_WIDTH - SCALE1(PADDING *2));
+				}
+				
+				int ox = (SCREEN_WIDTH - mw) / 2;
+				int oy = SCALE1(PADDING + PILL_SIZE);
+				int selected_row = selected - start;
+				for (int i=start,j=0; i<end; i++,j++) {
+					MenuItem* item = &items[i];
+					SDL_Color text_color = COLOR_WHITE;
+
+					// int ox = (SCREEN_WIDTH - w) / 2; // if we're centering these (but I don't think we should after seeing it)
+					if (j==selected_row) {
+						// move out of conditional if centering
+						int w = 0;
+						TTF_SizeUTF8(font.small, item->name, &w, NULL);
+						w += SCALE1(OPTION_PADDING*2);
+						
+						GFX_blitPill(ASSET_BUTTON, screen, &(SDL_Rect){
+							ox,
+							oy+SCALE1(j*BUTTON_SIZE),
+							w,
+							SCALE1(BUTTON_SIZE)
+						});
+						text_color = COLOR_BLACK;
+						
+						if (item->desc) desc = item->desc;
+					}
+					text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+						ox+SCALE1(OPTION_PADDING),
+						oy+SCALE1((j*BUTTON_SIZE)+1)
+					});
+					SDL_FreeSurface(text);
+				}
+			}
+			else if (type==MENU_FIXED) {
+				// NOTE: no need to calculate max width
+				int mw = SCREEN_WIDTH - SCALE1(PADDING*2);
+				int lw,rw;
+				lw = rw = mw / 2;
+				int ox,oy;
+				ox = oy = SCALE1(PADDING);
+				oy += SCALE1(PILL_SIZE);
+				
+				int selected_row = selected - start;
+				for (int i=start,j=0; i<end; i++,j++) {
+					MenuItem* item = &items[i];
+					SDL_Color text_color = COLOR_WHITE;
+
+					if (j==selected_row) {
+						// gray pill
+						GFX_blitPill(ASSET_OPTION, screen, &(SDL_Rect){
+							ox,
+							oy+SCALE1(j*BUTTON_SIZE),
+							mw,
+							SCALE1(BUTTON_SIZE)
+						});
+						
+						// white pill
+						int w = 0;
+						TTF_SizeUTF8(font.small, item->name, &w, NULL);
+						w += SCALE1(OPTION_PADDING*2);
+						GFX_blitPill(ASSET_BUTTON, screen, &(SDL_Rect){
+							ox,
+							oy+SCALE1(j*BUTTON_SIZE),
+							w,
+							SCALE1(BUTTON_SIZE)
+						});
+						text_color = COLOR_BLACK;
+						
+						if (item->desc) desc = item->desc;
+					}
+					text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+						ox+SCALE1(OPTION_PADDING),
+						oy+SCALE1((j*BUTTON_SIZE)+1)
+					});
+					SDL_FreeSurface(text);
+					
+					if (item->value>=0) {
+						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
+						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+							ox + mw - text->w - SCALE1(OPTION_PADDING),
+							oy+SCALE1((j*BUTTON_SIZE)+3)
+						});
+						SDL_FreeSurface(text);
+					}
+				}
+			}
+			else if (type==MENU_VAR || type==MENU_INPUT) {
+				int mw = list->max_width;
+				if (!mw) {
+					// get the width of the widest row
+					int mrw = 0;
+					for (int i=0; i<count; i++) {
+						MenuItem* item = &items[i];
+						int w = 0;
+						int lw = 0;
+						int rw = 0;
+						TTF_SizeUTF8(font.small, item->name, &lw, NULL);
+						
+						// every value list in an input table is the same
+						// so only calculate rw for the first item...
+						if (!mrw || type!=MENU_INPUT) {
+							for (int j=0; item->values[j]; j++) {
+								TTF_SizeUTF8(font.tiny, item->values[j], &rw, NULL);
+								if (lw+rw>w) w = lw+rw;
+								if (rw>mrw) mrw = rw;
+							}
+						}
+						else {
+							w = lw + mrw;
+						}
+						w += SCALE1(OPTION_PADDING*4);
+						if (w>mw) mw = w;
+					}
+					fflush(stdout);
+					// cache the result
+					list->max_width = mw = MIN(mw, SCREEN_WIDTH - SCALE1(PADDING *2));
+				}
+				
+				int ox = (SCREEN_WIDTH - mw) / 2;
+				int oy = SCALE1(PADDING + PILL_SIZE);
+				int selected_row = selected - start;
+				for (int i=start,j=0; i<end; i++,j++) {
+					MenuItem* item = &items[i];
+					SDL_Color text_color = COLOR_WHITE;
+
+					if (j==selected_row) {
+						// gray pill
+						GFX_blitPill(ASSET_OPTION, screen, &(SDL_Rect){
+							ox,
+							oy+SCALE1(j*BUTTON_SIZE),
+							mw,
+							SCALE1(BUTTON_SIZE)
+						});
+						
+						// white pill
+						int w = 0;
+						TTF_SizeUTF8(font.small, item->name, &w, NULL);
+						w += SCALE1(OPTION_PADDING*2);
+						GFX_blitPill(ASSET_BUTTON, screen, &(SDL_Rect){
+							ox,
+							oy+SCALE1(j*BUTTON_SIZE),
+							w,
+							SCALE1(BUTTON_SIZE)
+						});
+						text_color = COLOR_BLACK;
+						
+						if (item->desc) desc = item->desc;
+					}
+					text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+						ox+SCALE1(OPTION_PADDING),
+						oy+SCALE1((j*BUTTON_SIZE)+1)
+					});
+					SDL_FreeSurface(text);
+					
+					if (item->value>=0) {
+						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
+						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+							ox + mw - text->w - SCALE1(OPTION_PADDING),
+							oy+SCALE1((j*BUTTON_SIZE)+3)
+						});
+						SDL_FreeSurface(text);
+					}
+				}
+			}
+			
+			if (count>MAX_VISIBLE_OPTIONS) {
+				#define SCROLL_WIDTH 24
+				#define SCROLL_HEIGHT 4
+				int ox = (SCREEN_WIDTH - SCALE1(SCROLL_WIDTH))/2;
+				int oy = SCALE1((PILL_SIZE - SCROLL_HEIGHT) / 2);
+				if (start>0) GFX_blitAsset(ASSET_SCROLL_UP,   NULL, screen, &(SDL_Rect){ox, SCALE1(PADDING) + oy});
+				if (end<count) GFX_blitAsset(ASSET_SCROLL_DOWN, NULL, screen, &(SDL_Rect){ox, SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + oy});
+			}
+			
+			if (!desc && list->desc) desc = list->desc;
+			
+			if (desc) {
+				int w,h;
+				GFX_sizeText(font.tiny, desc, SCALE1(12), &w,&h);
+				GFX_blitText(font.tiny, desc, SCALE1(12), COLOR_WHITE, screen, &(SDL_Rect){
+					(SCREEN_WIDTH - w) / 2,
+					SCREEN_HEIGHT - SCALE1(PADDING) - h,
+					w,h
+				});
+			}
+			
+			GFX_flip(screen);
+		}
+		else GFX_sync();
+	}
+	
+	GFX_clearAll();
+	GFX_flip(screen);
+	
+	return 0;
+}
+
+// TODO: set in makefile
+#define BUILD_DATE "2023.01.25"
+#define COMMIT_HASH "d3adb33f"
+
+int options_save_confirm(MenuList* list, int i) {
+	char* message;
+	switch (i) {
+		case 0: {
+			// TODO: 
+			message = "Saved for all games.";
+			break;
+		}
+		case 1: {
+			// TODO: 
+			message = "Saved for this game.";
+			break;
+		}
+		default: {
+			// TODO: 
+			message = "Restored defaults.";
+			break;
+		}
+	}
+
+	uint32_t message_start = SDL_GetTicks();
+	int ready = 0;
+	int dirty = 1;
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		if (!ready && SDL_GetTicks()-message_start>=1000) ready = dirty = 1;
+
+		if (ready && (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B))) break;
+		
+		if (dirty) {
+			dirty = 0;
+			GFX_clear(screen);
+			GFX_blitMessage(message, screen, NULL);
+			if (ready) GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
+			GFX_flip(screen);
+		}
+		else GFX_sync();
+	}
+	return MENU_CALLBACK_EXIT;
+}
+int options_shortcuts_bind_confirm(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	int bound = 0;
+	while (!bound) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		// NOTE: off by one because of the initial NONE value
+		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+			if (PAD_justPressed(1 << id-1)) {
+				fflush(stdout);
+				item->value = id;
+				if (PAD_isPressed(BTN_MENU)) {
+					item->value += RETRO_BUTTON_COUNT;
+				}
+				bound = 1;
+				break;
+			}
+		}
+		GFX_sync();
+	}
+	return MENU_CALLBACK_NEXT_ITEM;
+}
+int options_controls_bind_confirm(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	int bound = 0;
+	while (!bound) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		// NOTE: off by one because of the initial NONE value
+		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+			if (PAD_justPressed(1 << id-1)) {
+				fflush(stdout);
+				item->value = id;
+				bound = 1;
+				break;
+			}
+		}
+		GFX_sync();
+	}
+	return MENU_CALLBACK_NEXT_ITEM;
+}
+
+// NOTE: these must be in BTN_ID_ order also off by 1 because of NONE (which is -1 in BTN_ID_ land)
+static char* button_labels[] = {
+	"NONE", // displayed by default
+	"UP",
+	"DOWN",
+	"LEFT",
+	"RIGHT",
+	"A",
+	"B",
+	"X",
+	"Y",
+	"START",
+	"SELECT",
+	"L1",
+	"R1",
+	"L2",
+	"R2",
+	NULL,
+};
+static char* shortcut_labels[] = {
+	"NONE", // displayed by default
+	"UP",
+	"DOWN",
+	"LEFT",
+	"RIGHT",
+	"A",
+	"B",
+	"X",
+	"Y",
+	"START",
+	"SELECT",
+	"L1",
+	"R1",
+	"L2",
+	"R2",
+	"MENU+UP",
+	"MENU+DOWN",
+	"MENU+LEFT",
+	"MENU+RIGHT",
+	"MENU+A",
+	"MENU+B",
+	"MENU+X",
+	"MENU+Y",
+	"MENU+START",
+	"MENU+SELECT",
+	"MENU+L1",
+	"MENU+R1",
+	"MENU+L2",
+	"MENU+R2",
+	NULL,
+};
+static char* onoff_labels[] = {
+	"OFF",
+	"ON",
+	NULL
+};
+static char* tearing_labels[] = {
+	"OFF",
+	"LENIENT",
+	"STRICT",
+	NULL
+};
+static char* max_ff_labels[] = {
+	"NONE",
+	"2X",
+	"3X",
+	"4X",
+	"5X",
+	"6X",
+	"7X",
+	"8X",
+	NULL,
+};
+
+static MenuList options_frontend_menu = {
+	.type = MENU_VAR,
+	.items = (MenuItem[]){
+		{"Scanlines/Grid", .values=onoff_labels, .desc="Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load."},
+		{"Optimize Text", .values=onoff_labels,.value=1, .desc="Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load."},
+		{"Prevent Tearing", .values=tearing_labels,.value=1, .desc="Wait for vsync before drawing the next frame. Lenient\nonly waits when within frame budget. Strict always waits\nand may cause audio stutter or crackling in some games."},
+		{"Debug HUD", .values=onoff_labels,.desc="Show frames per second, cpu load,\nresolution, and scaler information."},
+		{"Max FF Speed", .values=max_ff_labels,.value=3,.desc="Fast forward will not exceed the selected speed\n(but may be less than depending on game and emulator)."},
+		{NULL},
+	}
+};
+
+static int options_emulator_change(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	Option* option = Options_getOption(item->key);
+	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key, 
+		item->values[option->value], option->values[option->value], 
+		item->values[item->value], option->values[item->value]
+	);
+	Options_setOptionRawValue(item->key, item->value);
+}
+
+static MenuList options_emulator_menu = {
+	.type = MENU_FIXED,
+	.on_change = options_emulator_change,
+	.items = NULL,
+};
+static int options_emulator_confirm(MenuList* list, int i) {
+	if (options_emulator_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_emulator_menu.items = calloc(options.count+1, sizeof(MenuItem));
+		for (int j=0; j<options.count; j++) {
+			Option* option = &options.items[j];
+			MenuItem* item = &options_emulator_menu.items[j];
+			item->name = option->name;
+			item->key = option->key;
+			item->value = option->value;
+			// TODO: these need to be uppercased so we'll want to copy instead of reference
+			item->values = option->labels;
+		}
+	}
+	Menu_options(&options_emulator_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+// TODO: generated by core overrides?
+static MenuList options_controls_menu = {
+	.type = MENU_INPUT,
+	.desc = "Press A to set and X to clear.",
+	.on_confirm = options_controls_bind_confirm,
+	.items = (MenuItem[]){
+		{"UP",.values=button_labels},
+		{"DOWN",.values=button_labels},
+		{"LEFT",.values=button_labels},
+		{"RIGHT",.values=button_labels},
+		{"SELECT",.values=button_labels},
+		{"START",.values=button_labels},
+		{"A BUTTON",.values=button_labels},
+		{"B BUTTON",.values=button_labels},
+		{"X BUTTON",.values=button_labels},
+		{"Y BUTTON",.values=button_labels},
+		{"L BUTTON",.values=button_labels},
+		{"R BUTTON",.values=button_labels},
+		{NULL}
+	}
+};
+static MenuList options_shortcuts_menu = {
+	.type = MENU_INPUT,
+	.desc = "Press A to set and X to clear.\nSupports single button and MENU+button.",
+	.on_confirm = options_shortcuts_bind_confirm,
+	.items = (MenuItem[]){
+		{"Save State",.values=shortcut_labels},
+		{"Load State",.values=shortcut_labels},
+		{"Reset Game",.values=shortcut_labels},
+		{"Toggle FF",.values=shortcut_labels},
+		{"Hold FF",.values=shortcut_labels},
+		{NULL}
+	}
+};
+static MenuList options_save_menu = {
+	.type = MENU_LIST,
+	.on_confirm = options_save_confirm,
+	.items = (MenuItem[]){
+		{"Save for all games"},
+		{"Save for this game"},
+		{"Restore defaults"},
+		{NULL},
+	}
+};
+
+static MenuList options_menu = {
+	.type = MENU_LIST,
+	.items = (MenuItem[]){
+		{"Frontend", "MinUI / " BUILD_DATE " / " COMMIT_HASH,.submenu=&options_frontend_menu}, // TODO: build submenu from frontend options
+		{"Emulator",.on_confirm=options_emulator_confirm}, // TODO: build submenu from core options
+		{"Controls",.submenu=&options_controls_menu}, // TODO: build submenu from core buttons using callback then open the submenu manually
+		{"Shortcuts",.submenu=&options_shortcuts_menu}, 
+		{"Save Changes",.submenu=&options_save_menu,},
+		{NULL},
+	}
+};
+
 void Menu_loop(void) {
 	POW_enableAutosleep();
 	PAD_reset();
@@ -2031,9 +2830,10 @@ void Menu_loop(void) {
 				}
 				break;
 				case ITEM_OPTS:
-					Core_reset(); // TODO: tmp?
-					status = STATUS_OPTS;
-					show_menu = 0;
+					GFX_setMode(MODE_MAIN);
+					Menu_options(&options_menu);
+					GFX_setMode(MODE_MENU);
+					dirty = 1;
 				break;
 				case ITEM_QUIT:
 					status = STATUS_QUIT;
@@ -2069,10 +2869,10 @@ void Menu_loop(void) {
 			SDL_BlitSurface(text, &(SDL_Rect){
 				0,
 				0,
-				max_width-SCALE1(12*2),
+				max_width-SCALE1(BUTTON_PADDING*2),
 				text->h
 			}, screen, &(SDL_Rect){
-				SCALE1(PADDING+12),
+				SCALE1(PADDING+BUTTON_PADDING),
 				SCALE1(PADDING+4)
 			});
 			SDL_FreeSurface(text);
@@ -2081,8 +2881,6 @@ void Menu_loop(void) {
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, screen, 1);
 			
 			// list
-			TTF_SizeUTF8(font.large, menu.items[ITEM_CONT], &ow, NULL);
-			ow += SCALE1(12*2);
 			oy = 35;
 			for (int i=0; i<MENU_ITEM_COUNT; i++) {
 				char* item = menu.items[i];
@@ -2099,11 +2897,14 @@ void Menu_loop(void) {
 						});
 						text = TTF_RenderUTF8_Blended(font.large, disc_name, COLOR_WHITE);
 						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-							SCREEN_WIDTH - SCALE1(PADDING + 12) - text->w,
+							SCREEN_WIDTH - SCALE1(PADDING + BUTTON_PADDING) - text->w,
 							SCALE1(oy + PADDING + 4)
 						});
 						SDL_FreeSurface(text);
 					}
+					
+					TTF_SizeUTF8(font.large, item, &ow, NULL);
+					ow += SCALE1(BUTTON_PADDING*2);
 					
 					// pill
 					GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
@@ -2113,14 +2914,12 @@ void Menu_loop(void) {
 						SCALE1(PILL_SIZE)
 					});
 					text_color = COLOR_BLACK;
-					
-					// TODO: draw arrow?
 				}
 				else {
 					// shadow
 					text = TTF_RenderUTF8_Blended(font.large, item, COLOR_BLACK);
 					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-						SCALE1(2 + PADDING + 12),
+						SCALE1(2 + PADDING + BUTTON_PADDING),
 						SCALE1(1 + PADDING + oy + (i * PILL_SIZE) + 4)
 					});
 					SDL_FreeSurface(text);
@@ -2129,7 +2928,7 @@ void Menu_loop(void) {
 				// text
 				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-					SCALE1(PADDING + 12),
+					SCALE1(PADDING + BUTTON_PADDING),
 					SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
 				});
 				SDL_FreeSurface(text);
@@ -2187,12 +2986,7 @@ void Menu_loop(void) {
 			GFX_flip(screen);
 			dirty = 0;
 		}
-		else {
-			// slow down to 60fps
-			uint32_t frame_duration = SDL_GetTicks() - frame_start;
-			#define kTargetFrameDuration 17
-			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
-		}
+		else GFX_sync();
 	}
 	
 	PAD_reset();
@@ -2245,7 +3039,7 @@ int main(int argc , char* argv[]) {
 	screen = GFX_init(MODE_MENU);
 	
 	// doesn't even help that much with Star Fox after overclocking
-	// GFX_setVsync(0);
+	// GFX_setVsync(VSYNC_STRICT);
 	
 	MSG_init();
 	InitSettings();
@@ -2301,6 +3095,7 @@ int main(int argc , char* argv[]) {
 	
 	SDL_FreeSurface(screen);
 	MSG_quit();
+	QuitSettings();
 	GFX_quit();
 	
 	return EXIT_SUCCESS;
