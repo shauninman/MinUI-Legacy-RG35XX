@@ -6,7 +6,6 @@
 
 #include <fcntl.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
@@ -248,9 +247,12 @@ void GFX_quit(void) {
 }
 
 void GFX_clear(SDL_Surface* screen) {
-	memset(screen->pixels, 0, gfx.buffer_size);
+	memset(screen->pixels, 0, gfx.buffer_size); // this buffer is offscreen when cleared
 }
 void GFX_clearAll(void) {
+	// TODO: one of the buffers is onscreen when cleared producing tearing
+	// so clear our working buffer immediately (screen->pixels)
+	// then set a flag and clear the other two after vsync?
 	memset(gfx.map, 0, gfx.map_size);
 }
 
@@ -442,9 +444,7 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	SDL_FreeSurface(text);
 }
 void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
-	if (dst_rect==NULL) {
-		dst_rect = &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT};
-	}
+	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT};
 	
 	SDL_Surface* text;
 #define TEXT_BOX_MAX_ROWS 16
@@ -951,6 +951,7 @@ static char governor[128];
 static void POW_enterSleep(void) {
 	SetRawVolume(0);
 	putInt(BACKLIGHT_PATH, FB_BLANK_POWERDOWN);
+	
 	// save current governor (either ondemand or performance)
 	getFile(GOVERNOR_PATH, governor, 128);
 	trimTrailingNewlines(governor);
@@ -961,8 +962,10 @@ static void POW_enterSleep(void) {
 static void POW_exitSleep(void) {
 	putInt(BACKLIGHT_PATH, FB_BLANK_UNBLANK);
 	SetVolume(GetVolume());
+	
 	// restore previous governor
 	putFile(GOVERNOR_PATH, governor);
+	sync();
 }
 static void POW_waitForWake(void) {
 	SDL_Event event;

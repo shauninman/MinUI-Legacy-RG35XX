@@ -300,8 +300,10 @@ int main(int argc , char* argv[]) {
 	}
 	
 	SDL_FreeSurface(digits);
-
+	
+	QuitSettings();
 	GFX_quit();
+	
 	
 	// TODO: if (seconds_selected==tm.tm_sec) refresh tm and update seconds_selected
 	

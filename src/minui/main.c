@@ -1399,10 +1399,10 @@ int main (int argc, char *argv[]) {
 					SDL_BlitSurface(text, &(SDL_Rect){
 						0,
 						0,
-						max_width-SCALE1(12*2),
+						max_width-SCALE1(BUTTON_PADDING*2),
 						text->h
 					}, screen, &(SDL_Rect){
-						SCALE1(PADDING+12),
+						SCALE1(PADDING+BUTTON_PADDING),
 						SCALE1(PADDING+(j*PILL_SIZE)+4)
 					});
 					SDL_FreeSurface(text);

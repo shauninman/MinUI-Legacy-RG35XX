@@ -25,7 +25,6 @@ keymon.elf & # &> /mnt/sdcard/keymon.txt &
 export EXEC_PATH=/tmp/minui_exec
 touch "$EXEC_PATH" && sync
 
-echo ondemand > "$CPU_PATH"
 while [ -f "$EXEC_PATH" ]; do
 	echo ondemand > "$CPU_PATH"
 	

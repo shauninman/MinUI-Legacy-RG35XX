@@ -551,16 +551,16 @@ static InputOverride input_overrides[] = {
 
 static const char* core_button_names[RETRO_BUTTON_COUNT]; // core-provided
 static const char* device_button_names[RETRO_BUTTON_COUNT] = {
-	[RETRO_DEVICE_ID_JOYPAD_B]		=	"B",
-	[RETRO_DEVICE_ID_JOYPAD_Y]		=	"Y",
-	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	"SELECT",
-	[RETRO_DEVICE_ID_JOYPAD_START]	=	"START",
 	[RETRO_DEVICE_ID_JOYPAD_UP]		=	"UP",
 	[RETRO_DEVICE_ID_JOYPAD_DOWN]	=	"DOWN",
 	[RETRO_DEVICE_ID_JOYPAD_LEFT]	=	"LEFT",
 	[RETRO_DEVICE_ID_JOYPAD_RIGHT]	=	"RIGHT",
-	[RETRO_DEVICE_ID_JOYPAD_A]		=	"A",
+	[RETRO_DEVICE_ID_JOYPAD_SELECT]	=	"SELECT",
+	[RETRO_DEVICE_ID_JOYPAD_START]	=	"START",
+	[RETRO_DEVICE_ID_JOYPAD_Y]		=	"Y",
 	[RETRO_DEVICE_ID_JOYPAD_X]		=	"X",
+	[RETRO_DEVICE_ID_JOYPAD_B]		=	"B",
+	[RETRO_DEVICE_ID_JOYPAD_A]		=	"A",
 	[RETRO_DEVICE_ID_JOYPAD_L]		=	"L1",
 	[RETRO_DEVICE_ID_JOYPAD_R]		=	"R1",
 	[RETRO_DEVICE_ID_JOYPAD_L2]		=	"L2",
@@ -671,6 +671,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
 		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS");
+		// TODO: this is useless
+		// (some? all?) cores don't sort these in any logical way
+		// which explains why picoarch didn't implement this...
+
 		
 		// TODO: move all this to an Input_init()?
 		
@@ -1648,9 +1652,7 @@ void Core_getName(char* in_name, char* out_name) {
 	tmp[0] = '\0';
 }
 void Core_open(const char* core_path, const char* tag_name) {
-	LOG_info("inside Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
-	LOG_info("after dlopen\n");
 	
 	if (!core.handle) LOG_error("%s\n", dlerror());
 	
@@ -1692,6 +1694,8 @@ void Core_open(const char* core_path, const char* tag_name) {
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
 	
+	LOG_info("% %s (%s)\n", core.name, core.version, core.tag);
+	
 	sprintf((char*)core.config_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
 	sprintf((char*)core.saves_dir, SDCARD_PATH "/Saves/%s", core.tag);
 	sprintf((char*)core.bios_dir, SDCARD_PATH "/Bios/%s", core.tag);
@@ -1711,30 +1715,18 @@ void Core_init(void) {
 	core.initialized = 1;
 }
 void Core_load(void) {
-	// LOG_info("inside Core_load\n");
-	
 	struct retro_game_info game_info;
 	game_info.path = game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
 	
 	core.load_game(&game_info);
-	// LOG_info("after core.load_game\n");
 	
 	SRAM_read();
-	// LOG_info("after SRAM_read\n");
 	
 	// NOTE: must be called after core.load_game!
 	struct retro_system_av_info av_info = {};
 	core.get_system_av_info(&av_info);
-	// LOG_info("after core.get_system_av_info\n");
-	
-	// double a = av_info.geometry.aspect_ratio;
-	// int w = av_info.geometry.base_width;
-	// int h = av_info.geometry.base_height;
-	// char r[8];
-	// getRatio(a, r);
-	// LOG_info("after getRatio\n");
 	
 	core.fps = av_info.timing.fps;
 	core.sample_rate = av_info.timing.sample_rate;
@@ -1742,12 +1734,7 @@ void Core_load(void) {
 	if (a<=0) a = (double)av_info.geometry.base_width / av_info.geometry.base_height;
 	core.aspect_ratio = a;
 	
-	printf("aspect_ratio: %f\n", a);
-
-	// printf("%s\n%s\n", core.tag, core.version);
-	// printf("%dx%d (%s)\n", w,h,r);
-	// printf("%f\n%f\n", core.fps, core.sample_rate);
-	fflush(stdout);
+	LOG_info("aspect_ratio: %f\n", a);
 }
 void Core_reset(void) {
 	core.reset();
@@ -2255,10 +2242,6 @@ int main(int argc , char* argv[]) {
 	strcpy(rom_path, argv[2]);
 	getEmuName(rom_path, tag_name);
 	
-	// LOG_info("core_path: %s\n", core_path);
-	// LOG_info("rom_path: %s\n", rom_path);
-	// LOG_info("tag_name: %s\n", tag_name);
-	
 	screen = GFX_init(MODE_MENU);
 	
 	// doesn't even help that much with Star Fox after overclocking
@@ -2267,16 +2250,15 @@ int main(int argc , char* argv[]) {
 	MSG_init();
 	InitSettings();
 	
-	Core_open(core_path, tag_name); 		// LOG_info("after Core_open\n");
-	Core_init(); 							// LOG_info("after Core_init\n");
-	Game_open(rom_path); 					// LOG_info("after Game_open\n");
-	Core_load();  							// LOG_info("after Core_load\n");
-	SND_init(core.sample_rate, core.fps);	// LOG_info("after SND_init\n");
+	Core_open(core_path, tag_name);
+	Core_init();
+	Game_open(rom_path);
+	Core_load();
+	SND_init(core.sample_rate, core.fps);
 	
 	Menu_init();
 	
 	State_resume();
-	// State_read();							LOG_info("after State_read\n");
 	
 	POW_disableAutosleep();
 	sec_start = SDL_GetTicks();
@@ -2315,7 +2297,7 @@ int main(int argc , char* argv[]) {
 	Core_unload();
 
 	Core_quit();
-	Core_close(); // LOG_info("after Core_close\n");
+	Core_close();
 	
 	SDL_FreeSurface(screen);
 	MSG_quit();
