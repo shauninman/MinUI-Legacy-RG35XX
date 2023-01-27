@@ -19,7 +19,6 @@ CPU_PATH="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
 cd $(dirname "$0")
 
 keymon.elf & # &> /mnt/sdcard/keymon.txt &
-
 # ./batmon.sh &> /mnt/sdcard/batmon.txt &
 
 export EXEC_PATH=/tmp/minui_exec

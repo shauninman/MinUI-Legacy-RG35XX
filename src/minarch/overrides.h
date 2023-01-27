@@ -4,7 +4,7 @@
 typedef struct OptionOverride {
 	char* key;
 	char* value;
-	int disable; // hides from user
+	int disable; // TODO: hide option from user
 } OptionOverride;
 
 typedef struct ButtonMapping { 
@@ -13,9 +13,8 @@ typedef struct ButtonMapping {
 	int local;
 } ButtonMapping;
 
-// TODO: not strictly overrides anymore...
 typedef struct CoreOverrides {
-	char* 			core_name;
+	char* 			core_name; // cannot be NULL
 	OptionOverride* option_overrides;
 	ButtonMapping* 	button_mapping;
 } CoreOverrides;

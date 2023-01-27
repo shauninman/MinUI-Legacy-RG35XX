@@ -48,6 +48,11 @@ static SDL_Surface* screen;
 static int quit;
 static int show_menu;
 
+static int show_scanlines;
+static int optimize_text = 1;
+static int show_debug;
+static int max_ff_speed = 3; // 4x
+
 ///////////////////////////////////////
 
 static struct Game {
@@ -320,20 +325,140 @@ typedef struct Option {
 	char* var;
 	int default_value;
 	int value;
-	int count;
+	int count; // TODO: drop this
 	int visible;
 	char** values;
 	char** labels;
 } Option;
-static struct {
+typedef struct OptionList {
 	int count;
 	int changed;
 	Option* items;
-} options;
+} OptionList;
+static OptionList options;
 
-static Option* frontend_options = (Option[]){
-	// TODO: 
-	{NULL}
+static char* onoff_values[] = {
+	"0",
+	"1",
+	NULL,
+};
+static char* onoff_labels[] = {
+	"OFF",
+	"ON",
+	NULL
+};
+static char* tearing_labels[] = {
+	"OFF",
+	"LENIENT",
+	"STRICT",
+	NULL
+};
+static char* max_ff_labels[] = {
+	"NONE",
+	"2X",
+	"3X",
+	"4X",
+	"5X",
+	"6X",
+	"7X",
+	"8X",
+	NULL,
+};
+
+enum {
+	FE_OPT_SCANLINES,
+	FE_OPT_TEXT,
+	FE_OPT_TEARING,
+	FE_OPT_DEBUG,
+	FE_OPT_MAXFF,
+	FE_OPT_COUNT,
+};
+
+static OptionList frontend_options = {
+	.count = FE_OPT_COUNT,
+	.items = (Option[]){
+		[FE_OPT_SCANLINES] = {
+			.key	= "minarch_scanlines_grid", 
+			.name	= "Scanlines/Grid",
+			.desc	= "Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load.",
+			.default_value = 0,
+			.value = 0,
+			.count = 2,
+			.values = onoff_values,
+			.labels = onoff_labels,
+		},
+		[FE_OPT_TEXT] = {
+			.key	= "minarch_optimize_text", 
+			.name	= "Optimize Text",
+			.desc	= "Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load.",
+			.default_value = 1,
+			.value = 1,
+			.count = 2,
+			.values = onoff_values,
+			.labels = onoff_labels,
+		},
+		[FE_OPT_TEARING] = {
+			.key	= "minarch_prevent_tearing",
+			.name	= "Prevent Tearing",
+			.desc	= "Wait for vsync before drawing the next frame. Lenient\nonly waits when within frame budget. Strict always waits\nand may cause audio stutter or crackling in some games.",
+			.default_value = 1,
+			.value = 1,
+			.count = 3,
+			.values = (char* []){
+				"off",
+				"lenient",
+				"strict",
+				NULL
+			},
+			.labels = (char* []){
+				"OFF",
+				"LENIENT",
+				"STRICT",
+				NULL
+			},
+		},
+		[FE_OPT_DEBUG] = {
+			.key	= "minarch_debug_hud",
+			.name	= "Debug HUD",
+			.desc	= "Show frames per second, cpu load,\nresolution, and scaler information.",
+			.default_value = 0,
+			.value = 0,
+			.count = 2,
+			.values = onoff_values,
+			.labels = onoff_labels,
+		},
+		[FE_OPT_MAXFF] = {
+			.key	= "minarch_max_ff_speed",
+			.name	= "Max FF Speed",
+			.desc	= "Fast forward will not exceed the selected speed\n(but may be less than depending on game and emulator).",
+			.default_value = 3,
+			.value = 3,
+			.count = 8,
+			.values = (char* []){
+				"none",
+				"2x",
+				"3x",
+				"4x",
+				"5x",
+				"6x",
+				"7x",
+				"8x",
+				NULL,
+			},
+			.labels = (char* []){
+				"NONE",
+				"2X",
+				"3X",
+				"4X",
+				"5X",
+				"6X",
+				"7X",
+				"8X",
+				NULL,
+			},
+		},
+		[FE_OPT_COUNT] = {NULL}
+	}
 };
 
 static  int Option_getValueIndex(Option* item, const char* value) {
@@ -598,7 +723,6 @@ static const char* device_button_names[RETRO_BUTTON_COUNT] = {
 static const char* core_button_names[RETRO_BUTTON_COUNT];
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
-static int show_debug = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -1013,7 +1137,7 @@ static double use_double = 0;
 static uint32_t sec_start = 0;
 
 static struct {
-	void* src;
+	// void* src;
 	int src_w;
 	int src_h;
 	int src_p;
@@ -1516,7 +1640,7 @@ static void selectScaler(int width, int height, int pitch) {
 	int scale_y = SCREEN_HEIGHT / height;
 	int scale = MIN(scale_x,scale_y);
 	
-	// TODO: carry this fix over to MiniUI/picoarch?
+	// TODO: carry this fix over to MiniUI/picoarch? or just port MinUI/minarch itself? :sweat_smile:
 	
 	// this is not an aspect ratio but rather the ratio between 
 	// the proposed aspect ratio and the target aspect ratio
@@ -1616,12 +1740,11 @@ static void selectScaler(int width, int height, int pitch) {
 	renderer.dst_offset = (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
 
 	if (use_nearest) 
-		renderer.scaler = scaleNN_text;
-		// renderer.scaler = scaleNN_text_scanline;
-		// renderer.scaler = scaleNN; // better for Tekken 3, Colin McRae Rally 2
+		if (show_scanlines) renderer.scaler = optimize_text ? scaleNN_text_scanline : scaleNN_scanline;
+		else renderer.scaler = optimize_text ? scaleNN_text : scaleNN;
 	else {
 		sprintf(scaler_name, "%ix", scale);
-		if (0) {
+		if (show_scanlines) {
 			switch (scale) {
 				case 4: 	renderer.scaler = scale4x_scanline; break;
 				case 3: 	renderer.scaler = scale3x_scanline; break;
@@ -1666,11 +1789,11 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		selectScaler(width,height,pitch);
 		GFX_clearAll();
 
-		if (renderer.src) {
-			free(renderer.src);
-			renderer.src = NULL;
-		}
-		renderer.src = malloc(height * pitch);
+		// if (renderer.src) {
+		// 	free(renderer.src);
+		// 	renderer.src = NULL;
+		// }
+		// renderer.src = malloc(height * pitch);
 	}
 	
 	static int top_width = 0;
@@ -2076,8 +2199,8 @@ int Menu_options(MenuList* list) {
 			}
 			dirty = 1;
 		}
-		else if (type!=MENU_INPUT) {
-			if (PAD_justPressed(BTN_LEFT)) {
+		else if (type!=MENU_INPUT && type!=MENU_LIST) {
+			if (PAD_justRepeated(BTN_LEFT)) {
 				MenuItem* item = &items[selected];
 				if (item->value>0) item->value -= 1;
 				else {
@@ -2091,7 +2214,7 @@ int Menu_options(MenuList* list) {
 				
 				dirty = 1;
 			}
-			else if (PAD_justPressed(BTN_RIGHT)) {
+			else if (PAD_justRepeated(BTN_RIGHT)) {
 				MenuItem* item = &items[selected];
 				if (item->values[item->value+1]) item->value += 1;
 				else item->value = 0;
@@ -2231,7 +2354,18 @@ int Menu_options(MenuList* list) {
 							mw,
 							SCALE1(BUTTON_SIZE)
 						});
-						
+					}
+					
+					if (item->value>=0) {
+						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
+						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+							ox + mw - text->w - SCALE1(OPTION_PADDING),
+							oy+SCALE1((j*BUTTON_SIZE)+3)
+						});
+						SDL_FreeSurface(text);
+					}
+					
+					if (j==selected_row) {
 						// white pill
 						int w = 0;
 						TTF_SizeUTF8(font.small, item->name, &w, NULL);
@@ -2252,15 +2386,6 @@ int Menu_options(MenuList* list) {
 						oy+SCALE1((j*BUTTON_SIZE)+1)
 					});
 					SDL_FreeSurface(text);
-					
-					if (item->value>=0) {
-						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
-						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-							ox + mw - text->w - SCALE1(OPTION_PADDING),
-							oy+SCALE1((j*BUTTON_SIZE)+3)
-						});
-						SDL_FreeSurface(text);
-					}
 				}
 			}
 			else if (type==MENU_VAR || type==MENU_INPUT) {
@@ -2516,40 +2641,49 @@ static char* shortcut_labels[] = {
 	"MENU+R2",
 	NULL,
 };
-static char* onoff_labels[] = {
-	"OFF",
-	"ON",
-	NULL
-};
-static char* tearing_labels[] = {
-	"OFF",
-	"LENIENT",
-	"STRICT",
-	NULL
-};
-static char* max_ff_labels[] = {
-	"NONE",
-	"2X",
-	"3X",
-	"4X",
-	"5X",
-	"6X",
-	"7X",
-	"8X",
-	NULL,
-};
 
+static int options_frontend_change(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	Option* option = &frontend_options.items[i];
+	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key,
+		item->values[option->value], option->values[option->value],
+		item->values[item->value], option->values[item->value]
+	);
+	option->value = item->value;
+	
+	switch (i) {
+		case FE_OPT_SCANLINES:	show_scanlines 	= item->value; renderer.src_w = 0; break;
+		case FE_OPT_TEXT:		optimize_text 	= item->value; renderer.src_w = 0; break;
+		case FE_OPT_TEARING:	GFX_setVsync(item->value); break;
+		case FE_OPT_DEBUG:		show_debug 		= item->value; break;
+		case FE_OPT_MAXFF:		max_ff_speed 	= item->value; break;
+	}
+	
+	// Options_setOptionRawValue(item->key, item->value);
+}
 static MenuList options_frontend_menu = {
 	.type = MENU_VAR,
-	.items = (MenuItem[]){
-		{"Scanlines/Grid", .values=onoff_labels, .desc="Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load."},
-		{"Optimize Text", .values=onoff_labels,.value=1, .desc="Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load."},
-		{"Prevent Tearing", .values=tearing_labels,.value=1, .desc="Wait for vsync before drawing the next frame. Lenient\nonly waits when within frame budget. Strict always waits\nand may cause audio stutter or crackling in some games."},
-		{"Debug HUD", .values=onoff_labels,.desc="Show frames per second, cpu load,\nresolution, and scaler information."},
-		{"Max FF Speed", .values=max_ff_labels,.value=3,.desc="Fast forward will not exceed the selected speed\n(but may be less than depending on game and emulator)."},
-		{NULL},
-	}
+	.on_change = options_frontend_change,
+	.items = NULL,
 };
+static int options_frontend_confirm(MenuList* list, int i) {
+	if (options_frontend_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_frontend_menu.items = calloc(frontend_options.count+1, sizeof(MenuItem));
+		for (int j=0; j<frontend_options.count; j++) {
+			Option* option = &frontend_options.items[j];
+			MenuItem* item = &options_frontend_menu.items[j];
+			item->key = option->key;
+			item->name = option->name;
+			item->desc = option->desc;
+			item->value = option->value;
+			// TODO: these need to be uppercased so we'll want to copy instead of reference or do it at the source?
+			item->values = option->labels;
+		}
+	}
+	Menu_options(&options_frontend_menu);
+	return MENU_CALLBACK_NOP;
+}
 
 static int options_emulator_change(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
@@ -2560,7 +2694,6 @@ static int options_emulator_change(MenuList* list, int i) {
 	);
 	Options_setOptionRawValue(item->key, item->value);
 }
-
 static MenuList options_emulator_menu = {
 	.type = MENU_FIXED,
 	.on_change = options_emulator_change,
@@ -2573,8 +2706,10 @@ static int options_emulator_confirm(MenuList* list, int i) {
 		for (int j=0; j<options.count; j++) {
 			Option* option = &options.items[j];
 			MenuItem* item = &options_emulator_menu.items[j];
-			item->name = option->name;
 			item->key = option->key;
+			item->name = option->name;
+			item->desc = NULL; // gambatte crashes if this isn't set to NULL :thinking_face:
+			// item->desc = option->desc; // TODO: these need to be copyfit/truncated
 			item->value = option->value;
 			// TODO: these need to be uppercased so we'll want to copy instead of reference
 			item->values = option->labels;
@@ -2632,7 +2767,7 @@ static MenuList options_save_menu = {
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]){
-		{"Frontend", "MinUI / " BUILD_DATE " / " COMMIT_HASH,.submenu=&options_frontend_menu}, // TODO: build submenu from frontend options
+		{"Frontend", "MinUI (" BUILD_DATE " " COMMIT_HASH ")",.on_confirm=options_frontend_confirm}, // TODO: build submenu from frontend options
 		{"Emulator",.on_confirm=options_emulator_confirm}, // TODO: build submenu from core options
 		{"Controls",.submenu=&options_controls_menu}, // TODO: build submenu from core buttons using callback then open the submenu manually
 		{"Shortcuts",.submenu=&options_shortcuts_menu}, 
@@ -3046,6 +3181,13 @@ int main(int argc , char* argv[]) {
 	
 	Core_open(core_path, tag_name);
 	Core_init();
+	
+	// TODO: find a better place to do this, mixing static and loaded data is messy
+	// char core_desc[MAX_PATH];
+	// sprintf(core_desc, "%s / %s", core.tag, core.version);
+	// options_menu.items[1].desc = core_desc;
+	options_menu.items[1].desc = (char*)core.version;
+	
 	Game_open(rom_path);
 	Core_load();
 	SND_init(core.sample_rate, core.fps);
