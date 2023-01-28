@@ -48,10 +48,24 @@ static SDL_Surface* screen;
 static int quit;
 static int show_menu;
 
-static int show_scanlines;
+// default frontend options
+static int show_scanlines = 0;
 static int optimize_text = 1;
-static int show_debug;
+static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
+static int fast_forward = 0;
+
+static struct {
+	int src_w;
+	int src_h;
+	int src_p;
+	
+	int dst_offset;
+	int dst_w;
+	int dst_h;
+
+	scale_neon_t scaler;
+} renderer;
 
 ///////////////////////////////////////
 
@@ -325,43 +339,40 @@ typedef struct Option {
 	char* var;
 	int default_value;
 	int value;
-	int count; // TODO: drop this
+	int count; // TODO: drop this?
 	int visible;
 	char** values;
 	char** labels;
 } Option;
+typedef struct OptionList OptionList;
+// typedef void (*OptionList_callback_t)(OptionList* list, const char* key);
 typedef struct OptionList {
 	int count;
 	int changed;
 	Option* items;
+	// OptionList_callback_t on_set;
 } OptionList;
-static OptionList options;
 
-static char* onoff_values[] = {
-	"0",
-	"1",
-	NULL,
-};
 static char* onoff_labels[] = {
-	"OFF",
-	"ON",
+	"Off",
+	"On",
 	NULL
 };
 static char* tearing_labels[] = {
-	"OFF",
-	"LENIENT",
-	"STRICT",
+	"Off",
+	"Lenient",
+	"Strict",
 	NULL
 };
 static char* max_ff_labels[] = {
-	"NONE",
-	"2X",
-	"3X",
-	"4X",
-	"5X",
-	"6X",
-	"7X",
-	"8X",
+	"None",
+	"2x",
+	"3x",
+	"4x",
+	"5x",
+	"6x",
+	"7x",
+	"8x",
 	NULL,
 };
 
@@ -374,92 +385,364 @@ enum {
 	FE_OPT_COUNT,
 };
 
-static OptionList frontend_options = {
-	.count = FE_OPT_COUNT,
-	.items = (Option[]){
-		[FE_OPT_SCANLINES] = {
-			.key	= "minarch_scanlines_grid", 
-			.name	= "Scanlines/Grid",
-			.desc	= "Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load.",
-			.default_value = 0,
-			.value = 0,
-			.count = 2,
-			.values = onoff_values,
-			.labels = onoff_labels,
-		},
-		[FE_OPT_TEXT] = {
-			.key	= "minarch_optimize_text", 
-			.name	= "Optimize Text",
-			.desc	= "Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load.",
-			.default_value = 1,
-			.value = 1,
-			.count = 2,
-			.values = onoff_values,
-			.labels = onoff_labels,
-		},
-		[FE_OPT_TEARING] = {
-			.key	= "minarch_prevent_tearing",
-			.name	= "Prevent Tearing",
-			.desc	= "Wait for vsync before drawing the next frame. Lenient\nonly waits when within frame budget. Strict always waits\nand may cause audio stutter or crackling in some games.",
-			.default_value = 1,
-			.value = 1,
-			.count = 3,
-			.values = (char* []){
-				"off",
-				"lenient",
-				"strict",
-				NULL
-			},
-			.labels = (char* []){
-				"OFF",
-				"LENIENT",
-				"STRICT",
-				NULL
-			},
-		},
-		[FE_OPT_DEBUG] = {
-			.key	= "minarch_debug_hud",
-			.name	= "Debug HUD",
-			.desc	= "Show frames per second, cpu load,\nresolution, and scaler information.",
-			.default_value = 0,
-			.value = 0,
-			.count = 2,
-			.values = onoff_values,
-			.labels = onoff_labels,
-		},
-		[FE_OPT_MAXFF] = {
-			.key	= "minarch_max_ff_speed",
-			.name	= "Max FF Speed",
-			.desc	= "Fast forward will not exceed the selected speed\n(but may be less than depending on game and emulator).",
-			.default_value = 3,
-			.value = 3,
-			.count = 8,
-			.values = (char* []){
-				"none",
-				"2x",
-				"3x",
-				"4x",
-				"5x",
-				"6x",
-				"7x",
-				"8x",
-				NULL,
-			},
-			.labels = (char* []){
-				"NONE",
-				"2X",
-				"3X",
-				"4X",
-				"5X",
-				"6X",
-				"7X",
-				"8X",
-				NULL,
-			},
-		},
-		[FE_OPT_COUNT] = {NULL}
-	}
+///////////////////////////////
+
+enum {
+	SHORTCUT_SAVE_STATE,
+	SHORTCUT_LOAD_STATE,
+	SHORTCUT_RESET_GAME,
+	SHORTCUT_TOGGLE_FF,
+	SHORTCUT_HOLD_FF,
+	SHORTCUT_COUNT,
 };
+
+#define RETRO_BUTTON_COUNT 14
+static const char* device_button_names[RETRO_BUTTON_COUNT] = {
+	[BTN_ID_UP]		= "UP",
+	[BTN_ID_DOWN]	= "DOWN",
+	[BTN_ID_LEFT]	= "LEFT",
+	[BTN_ID_RIGHT]	= "RIGHT",
+	[BTN_ID_SELECT]	= "SELECT",
+	[BTN_ID_START]	= "START",
+	[BTN_ID_Y]		= "Y",
+	[BTN_ID_X]		= "X",
+	[BTN_ID_B]		= "B",
+	[BTN_ID_A]		= "A",
+	[BTN_ID_L1]		= "L1",
+	[BTN_ID_R1]		= "R1",
+	[BTN_ID_L2]		= "L2",
+	[BTN_ID_R2]		= "R2",
+};
+static ButtonMapping default_button_mapping[] = {
+	{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
+	{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
+	{"Left",		RETRO_DEVICE_ID_JOYPAD_LEFT,	BTN_ID_LEFT},
+	{"Right",		RETRO_DEVICE_ID_JOYPAD_RIGHT,	BTN_ID_RIGHT},
+	{"A Button",	RETRO_DEVICE_ID_JOYPAD_A,		BTN_ID_A},
+	{"B Button",	RETRO_DEVICE_ID_JOYPAD_B,		BTN_ID_B},
+	{"X Button",	RETRO_DEVICE_ID_JOYPAD_X,		BTN_ID_X},
+	{"Y Button",	RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_Y},
+	{"Start",		RETRO_DEVICE_ID_JOYPAD_START,	BTN_ID_START},
+	{"Select",		RETRO_DEVICE_ID_JOYPAD_SELECT,	BTN_ID_SELECT},
+	{"L1 Button",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
+	{"R1 Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
+	{"L2 Button",	RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
+	{"R2 Button",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
+	{NULL,0,0}
+};
+static const char* core_button_names[RETRO_BUTTON_COUNT];
+
+// NOTE: these must be in BTN_ID_ order also off by 1 because of NONE (which is -1 in BTN_ID_ land)
+static char* button_labels[] = {
+	"NONE", // displayed by default
+	"UP",
+	"DOWN",
+	"LEFT",
+	"RIGHT",
+	"A",
+	"B",
+	"X",
+	"Y",
+	"START",
+	"SELECT",
+	"L1",
+	"R1",
+	"L2",
+	"R2",
+	NULL,
+};
+static char* shortcut_labels[] = {
+	"NONE", // displayed by default
+	"UP",
+	"DOWN",
+	"LEFT",
+	"RIGHT",
+	"A",
+	"B",
+	"X",
+	"Y",
+	"START",
+	"SELECT",
+	"L1",
+	"R1",
+	"L2",
+	"R2",
+	"MENU+UP",
+	"MENU+DOWN",
+	"MENU+LEFT",
+	"MENU+RIGHT",
+	"MENU+A",
+	"MENU+B",
+	"MENU+X",
+	"MENU+Y",
+	"MENU+START",
+	"MENU+SELECT",
+	"MENU+L1",
+	"MENU+R1",
+	"MENU+L2",
+	"MENU+R2",
+	NULL,
+};
+
+enum {
+	CONFIG_NONE,
+	CONFIG_GLOBAL,
+	CONFIG_GAME,
+};
+
+static struct {
+	OptionList core;
+	OptionList frontend;
+	ButtonMapping* controls;
+	ButtonMapping* shortcuts;
+	int loaded;
+} config = {
+	.frontend = (OptionList){
+		.count = FE_OPT_COUNT,
+		.items = (Option[]){
+			[FE_OPT_SCANLINES] = {
+				.key	= "minarch_scanlines_grid", 
+				.name	= "Scanlines/Grid",
+				.desc	= "Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load.",
+				.default_value = 0,
+				.value = 0,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			[FE_OPT_TEXT] = {
+				.key	= "minarch_optimize_text", 
+				.name	= "Optimize Text",
+				.desc	= "Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load.",
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			[FE_OPT_TEARING] = {
+				.key	= "minarch_prevent_tearing",
+				.name	= "Prevent Tearing",
+				.desc	= "Wait for vsync before drawing the next frame. Lenient\nonly waits when within frame budget. Strict always waits.",
+				.default_value = VSYNC_LENIENT,
+				.value = VSYNC_LENIENT,
+				.count = 3,
+				.values = tearing_labels,
+				.labels = tearing_labels,
+			},
+			[FE_OPT_DEBUG] = {
+				.key	= "minarch_debug_hud",
+				.name	= "Debug HUD",
+				.desc	= "Show frames per second, cpu load,\nresolution, and scaler information.",
+				.default_value = 0,
+				.value = 0,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			[FE_OPT_MAXFF] = {
+				.key	= "minarch_max_ff_speed",
+				.name	= "Max FF Speed",
+				.desc	= "Fast forward will not exceed the selected speed\n(but may be less than depending on game and emulator).",
+				.default_value = 3, // 4x
+				.value = 3, // 4x
+				.count = 8,
+				.values = max_ff_labels,
+				.labels = max_ff_labels,
+			},
+			[FE_OPT_COUNT] = {NULL}
+		}
+	},
+	.shortcuts = (ButtonMapping[]){
+		[SHORTCUT_SAVE_STATE]	= {"Save State",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_LOAD_STATE]	= {"Load State",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_RESET_GAME]	= {"Reset Game",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_FF]	= {"Toggle FF",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_HOLD_FF]		= {"Hold FF",		-1, BTN_ID_NONE, 0},
+		{NULL}
+	},
+};
+static void Config_getValue(char* cfg, const char* key, char* out_value) {
+	char* tmp = cfg;
+	while ((tmp = strstr(tmp, key))) {
+		tmp += strlen(key);
+		if (!strncmp(tmp, " = ", 3)) break;
+	};
+	if (!tmp) return;
+	tmp += 3;
+	
+	strncpy(out_value, tmp, 256);
+	out_value[256 - 1] = '\0';
+	tmp = strchr(out_value, '\n');
+	if (!tmp) tmp = strchr(out_value, '\r');
+	if (tmp) *tmp = '\0';
+}
+static void Config_syncFrontend(int i, int value) {
+	switch (i) {
+		case FE_OPT_SCANLINES:	show_scanlines 	= value; renderer.src_w = 0; break;
+		case FE_OPT_TEXT:		optimize_text 	= value; renderer.src_w = 0; break;
+		case FE_OPT_TEARING:	GFX_setVsync(value); break;
+		case FE_OPT_DEBUG:		show_debug 		= value; break;
+		case FE_OPT_MAXFF:		max_ff_speed 	= value; break;
+	}
+}
+static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
+enum {
+	CONFIG_WRITE_ALL,
+	CONFIG_WRITE_GAME,
+};
+static void Config_getPath(char* filename, int override) {
+	if (override) sprintf(filename, "%s/%s.cfg", core.config_dir, game.name);
+	else sprintf(filename, "%s/minarch.cfg", core.config_dir);
+}
+static void Config_read(void) {
+	char path[MAX_PATH];
+	config.loaded = CONFIG_NONE;
+
+	int override = 0;
+	Config_getPath(path, CONFIG_WRITE_GAME);
+	if (exists(path)) override = 1; 
+	if (!override) Config_getPath(path, CONFIG_WRITE_ALL);
+	
+	char* cfg = allocFile(path);
+	if (!cfg) return;
+	
+	config.loaded = override ? CONFIG_GAME : CONFIG_GLOBAL;
+	
+	char key[256];
+	char value[256];
+	for (int i=0; config.frontend.items[i].key; i++) {
+		Option* option = &config.frontend.items[i];
+		Config_getValue(cfg, option->key, value);
+		// TODO: handle not finding the expected value
+		OptionList_setOptionValue(&config.frontend, option->key, value);
+		Config_syncFrontend(i, option->value);
+	}
+	
+	for (int i=0; config.core.items[i].key; i++) {
+		Option* option = &config.core.items[i];
+		Config_getValue(cfg, option->key, value);
+		// TODO: handle not finding the expected value
+		OptionList_setOptionValue(&config.core, option->key, value);
+	}
+	
+	for (int i=0; config.controls[i].name; i++) {
+		ButtonMapping* mapping = &config.controls[i];
+		sprintf(key, "bind %s", mapping->name);
+		Config_getValue(cfg, key, value);
+		int id = -1;
+		for (int j=0; button_labels[j]; j++) {
+			if (!strcmp(button_labels[j],value)) {
+				id = j - 1;
+				break;
+			}
+		}
+		mapping->local = id;
+		mapping->mod = 0;
+	}
+	
+	for (int i=0; config.shortcuts[i].name; i++) {
+		ButtonMapping* mapping = &config.shortcuts[i];
+		sprintf(key, "bind %s", mapping->name);
+		Config_getValue(cfg, key, value);
+		
+		int id = -1;
+		for (int j=0; shortcut_labels[j]; j++) {
+			if (!strcmp(shortcut_labels[j],value)) {
+				id = j - 1;
+				break;
+			}
+		}
+		
+		int mod = 0;
+		if (id>RETRO_BUTTON_COUNT) {
+			id -= RETRO_BUTTON_COUNT;
+			mod = 1;
+		}
+		mapping->local = id;
+		mapping->mod = mod;
+	}
+	
+	free(cfg);
+}
+static void Config_write(int override) {
+	char path[MAX_PATH];
+	// sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+	Config_getPath(path, CONFIG_WRITE_GAME);
+	
+	if (!override) {
+		if (config.loaded==CONFIG_GAME) unlink(path);
+		Config_getPath(path, CONFIG_WRITE_ALL);
+	}
+	config.loaded = CONFIG_GLOBAL;
+	
+	FILE *file = fopen(path, "wb");
+	if (!file) return;
+	
+	for (int i=0; config.frontend.items[i].key; i++) {
+		Option* option = &config.frontend.items[i];
+		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+	}
+	for (int i=0; config.core.items[i].key; i++) {
+		Option* option = &config.core.items[i];
+		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+	}
+	for (int i=0; config.controls[i].name; i++) {
+		ButtonMapping* mapping = &config.controls[i];
+		int j = mapping->local + 1;
+		if (mapping->mod) j += RETRO_BUTTON_COUNT;
+		fprintf(file, "bind %s = %s\n", mapping->name, shortcut_labels[j]);
+	}
+	for (int i=0; config.shortcuts[i].name; i++) {
+		ButtonMapping* mapping = &config.shortcuts[i];
+		int j = mapping->local + 1;
+		if (mapping->mod) j += RETRO_BUTTON_COUNT;
+		fprintf(file, "bind %s = %s\n", mapping->name, shortcut_labels[j]);
+	}
+	
+	fclose(file);
+	sync();
+}
+static void Config_restore(void) {
+	char path[MAX_PATH];
+	if (config.loaded==CONFIG_GAME) {
+		sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+		unlink(path);
+	}
+	else if (config.loaded==CONFIG_GLOBAL) {
+		sprintf(path, "%s/minarch.cfg", core.config_dir);
+		unlink(path);
+	}
+	config.loaded = CONFIG_NONE;
+	
+	for (int i=0; config.frontend.items[i].key; i++) {
+		Option* option = &config.frontend.items[i];
+		option->value = option->default_value;
+		Config_syncFrontend(i, option->value);
+	}
+	for (int i=0; config.core.items[i].key; i++) {
+		Option* option = &config.core.items[i];
+		option->value = option->default_value;
+	}
+	config.core.changed = 1; // let the core know
+
+	for (int i=0; config.controls[i].name; i++) {
+		ButtonMapping* mapping = &config.controls[i];
+		mapping->local = mapping->default_;
+		mapping->mod = 0;
+	}
+	for (int i=0; config.shortcuts[i].name; i++) {
+		ButtonMapping* mapping = &config.shortcuts[i];
+		mapping->local = BTN_ID_NONE;
+		mapping->mod = 0;
+	}
+	
+	Config_read();
+	
+	renderer.src_w = 0;
+}
+
+///////////////////////////////
 
 static  int Option_getValueIndex(Option* item, const char* value) {
 	if (!value) return 0;
@@ -473,20 +756,21 @@ static void Option_setValue(Option* item, const char* value) {
 	item->value = Option_getValueIndex(item, value);
 }
 
-static void Options_init(const struct retro_core_option_definition *defs) {
+// the following 3 functions always touch config.core, the rest can operate on arbitrary OptionLists
+static void OptionList_init(const struct retro_core_option_definition *defs) {
 	int count;
 	for (count=0; defs[count].key; count++);
 	
 	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
 	
-	options.count = count;
+	config.core.count = count;
 	if (count) {
-		options.items = calloc(count, sizeof(Option));
+		config.core.items = calloc(count, sizeof(Option));
 	
-		for (int i=0; i<options.count; i++) {
+		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_core_option_definition *def = &defs[i];
-			Option* item = &options.items[i];
+			Option* item = &config.core.items[i];
 			len = strlen(def->key) + 1;
 		
 			item->key = calloc(len, sizeof(char));
@@ -510,7 +794,7 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 			item->values = calloc(count+1, sizeof(char*));
 			item->labels = calloc(count+1, sizeof(char*));
 	
-			printf("%s (%s)\n", item->name, item->key);
+			// printf("%s (%s)\n", item->name, item->key);
 			for (int j=0; j<count; j++) {
 				const char* value = def->values[j].value;
 				const char* label = def->values[j].label;
@@ -527,7 +811,7 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 				else {
 					item->labels[j] = item->values[j];
 				}
-				printf("\t%s\n", item->labels[j]);
+				// printf("\t%s\n", item->labels[j]);
 			}
 			
 			const char* default_value = def->default_value;
@@ -544,24 +828,24 @@ static void Options_init(const struct retro_core_option_definition *defs) {
 			item->value = Option_getValueIndex(item, default_value);
 			item->default_value = item->value;
 			// printf("(%s:%i)\n", item->labels[item->value], item->value);
-			printf("%s %s\n",item->name, item->labels[item->value]);
+			// printf("%s %s\n",item->name, item->labels[item->value]);
 			// if (item->desc) printf("\t%s\n", item->desc);
 		}
 	}
 	fflush(stdout);
 }
-static void Options_vars(const struct retro_variable *vars) {
+static void OptionList_vars(const struct retro_variable *vars) {
 	int count;
 	for (count=0; vars[count].key; count++);
 	
-	options.count = count;
+	config.core.count = count;
 	if (count) {
-		options.items = calloc(count, sizeof(Option));
+		config.core.items = calloc(count, sizeof(Option));
 	
-		for (int i=0; i<options.count; i++) {
+		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_variable *var = &vars[i];
-			Option* item = &options.items[i];
+			Option* item = &config.core.items[i];
 
 			len = strlen(var->key) + 1;
 			item->key = calloc(len, sizeof(char));
@@ -619,11 +903,11 @@ static void Options_vars(const struct retro_variable *vars) {
 	}
 	// fflush(stdout);
 }
-static void Options_reset(void) {
-	if (!options.count) return;
+static void OptionList_reset(void) {
+	if (!config.core.count) return;
 	
-	for (int i=0; i<options.count; i++) {
-		Option* item = &options.items[i];
+	for (int i=0; i<config.core.count; i++) {
+		Option* item = &config.core.items[i];
 		if (item->var) {
 			// values/labels are all points to var
 			// so no need to free individually
@@ -643,39 +927,42 @@ static void Options_reset(void) {
 		free(item->key);
 		free(item->name);
 	}
-	free(options.items);
+	free(config.core.items);
 }
-static Option* Options_getOption(const char* key) {
-	for (int i=0; i<options.count; i++) {
-		Option* item = &options.items[i];
+
+static Option* OptionList_getOption(OptionList* list, const char* key) {
+	for (int i=0; i<list->count; i++) {
+		Option* item = &list->items[i];
 		if (!strcmp(item->key, key)) return item;
 	}
 	return NULL;
 }
-static char* Options_getOptionValue(const char* key) {
-	Option* item = Options_getOption(key);
+static char* OptionList_getOptionValue(OptionList* list, const char* key) {
+	Option* item = OptionList_getOption(list, key);
 	if (item) return item->values[item->value];
 	else LOG_warn("unknown option %s \n", key);
 	return NULL;
 }
-static void Options_setOptionRawValue(const char* key, int value) {
-	Option* item = Options_getOption(key);
+static void OptionList_setOptionRawValue(OptionList* list, const char* key, int value) {
+	Option* item = OptionList_getOption(list, key);
 	if (item) {
 		item->value = value;
-		options.changed = 1;
+		list->changed = 1;
+		// if (list->on_set) list->on_set(list, key);
 	}
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
-static void Options_setOptionValue(const char* key, const char* value) {
-	Option* item = Options_getOption(key);
+static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value) {
+	Option* item = OptionList_getOption(list, key);
 	if (item) {
 		Option_setValue(item, value);
-		options.changed = 1;
+		list->changed = 1;
+		// if (list->on_set) list->on_set(list, key);
 	}
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
-static void Options_setOptionVisibility(const char* key, int visible) {
-	Option* item = Options_getOption(key);
+static void OptionList_setOptionVisibility(OptionList* list, const char* key, int visible) {
+	Option* item = OptionList_getOption(list, key);
 	if (item) item->visible = visible;
 	else printf("unknown option %s \n", key); fflush(stdout);
 }
@@ -685,50 +972,11 @@ static void Options_setOptionVisibility(const char* key, int visible) {
 static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
-#define RETRO_BUTTON_COUNT 14
-static ButtonMapping default_button_mapping[] = {
-	{"UP",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
-	{"DOWN",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
-	{"LEFT",		RETRO_DEVICE_ID_JOYPAD_LEFT,	BTN_ID_LEFT},
-	{"RIGHT",		RETRO_DEVICE_ID_JOYPAD_RIGHT,	BTN_ID_RIGHT},
-	{"A BUTTON",	RETRO_DEVICE_ID_JOYPAD_A,		BTN_ID_A},
-	{"B BUTTON",	RETRO_DEVICE_ID_JOYPAD_B,		BTN_ID_B},
-	{"X BUTTON",	RETRO_DEVICE_ID_JOYPAD_X,		BTN_ID_X},
-	{"Y BUTTON",	RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_Y},
-	{"START",		RETRO_DEVICE_ID_JOYPAD_START,	BTN_ID_START},
-	{"SELECT",		RETRO_DEVICE_ID_JOYPAD_SELECT,	BTN_ID_SELECT},
-	{"L1 BUTTON",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
-	{"R1 BUTTON",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
-	{"L2 BUTTON",	RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
-	{"R2 BUTTON",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
-	{NULL,0,0}
-};
-static ButtonMapping* button_mapping; // either default_button_mapping or core.overrides->button_mapping
-static const char* device_button_names[RETRO_BUTTON_COUNT] = {
-	[BTN_ID_UP]		= "UP",
-	[BTN_ID_DOWN]	= "DOWN",
-	[BTN_ID_LEFT]	= "LEFT",
-	[BTN_ID_RIGHT]	= "RIGHT",
-	[BTN_ID_SELECT]	= "SELECT",
-	[BTN_ID_START]	= "START",
-	[BTN_ID_Y]		= "Y",
-	[BTN_ID_X]		= "X",
-	[BTN_ID_B]		= "B",
-	[BTN_ID_A]		= "A",
-	[BTN_ID_L1]		= "L1",
-	[BTN_ID_R1]		= "R1",
-	[BTN_ID_L2]		= "L2",
-	[BTN_ID_R2]		= "R2",
-};
-static const char* core_button_names[RETRO_BUTTON_COUNT];
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
-	// TODO: too heavy? maybe but regardless,
-	// this will cause it to go to sleep after 
-	// 30 seconds--even while playing!
 	POW_update(NULL,NULL, Menu_beforeSleep, Menu_afterSleep);
 
 	if (PAD_justPressed(BTN_MENU)) {
@@ -737,21 +985,49 @@ static void input_poll_callback(void) {
 	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
 		ignore_menu = 1;
 	}
+	
+	// TODO: tmp?
 	if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
 		show_debug = !show_debug;
+		config.frontend.items[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
+	}
+	
+	// TODO: test fast_forward once implemented
+	for (int i=0; i<SHORTCUT_COUNT; i++) {
+		ButtonMapping* mapping = &config.shortcuts[i];
+		int btn = 1 << mapping->local;
+		if (btn==BTN_NONE) continue; // not bound
+		if (!mapping->mod || PAD_isPressed(BTN_MENU)) {
+			if (i==SHORTCUT_HOLD_FF) {
+				if (PAD_justPressed(btn) || PAD_justReleased(btn)) {
+					fast_forward = PAD_isPressed(btn);
+					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
+				}
+			}
+			else if (PAD_justPressed(btn)) {
+				switch (i) {
+					// TODO: do these state functions 
+					case SHORTCUT_SAVE_STATE: State_write(); break;
+					case SHORTCUT_LOAD_STATE: State_read(); break;
+					case SHORTCUT_RESET_GAME: core.reset(); break;
+					case SHORTCUT_TOGGLE_FF: fast_forward = !fast_forward; break;
+					default: break;
+				}
+				
+				if (mapping->mod) ignore_menu = 1;
+			}
+		}
 	}
 	
 	if (!ignore_menu && PAD_justReleased(BTN_MENU)) {
 		show_menu = 1;
 	}
 	
-	// TODO: support remapping
-	
 	buttons = 0;
-	for (int i=0; button_mapping[i].name; i++) {
-		int btn = 1 << button_mapping[i].local;
+	for (int i=0; config.controls[i].name; i++) {
+		int btn = 1 << config.controls[i].local;
 		if (btn==BTN_NONE) continue; // present buttons can still be unbound
-		if (PAD_isPressed(btn)) buttons |= 1 << button_mapping[i].retro;
+		if (PAD_isPressed(btn)) buttons |= 1 << config.controls[i].retro;
 	}
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) { // copied from picoarch
@@ -764,7 +1040,6 @@ static int16_t input_state_callback(unsigned port, unsigned device, unsigned ind
 }
 ///////////////////////////////
 
-// TODO: tmp, naive options
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
 	POW_setRumble(strength);
@@ -826,7 +1101,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// override_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
 		
 		// TODO: move all this to an Input_init()?
-		button_mapping = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
+		config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
 		
 		const struct retro_input_descriptor *vars = (const struct retro_input_descriptor *)data;
 		if (vars) {
@@ -838,24 +1113,31 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			memset(&present, 0, RETRO_BUTTON_COUNT * sizeof(int));
 			for (int i=0; vars[i].description; i++) {
 				const struct retro_input_descriptor* var = &vars[i];
-				present[var->id] = 1;
-				core_button_names[var->id] = var->description;
+				if (var->port==0 && var->device==RETRO_DEVICE_JOYPAD && var->index==0) {
+					if (var->id>=RETRO_BUTTON_COUNT) {
+						printf("%s unavailable\n", var->description); fflush(stdout);
+						continue;
+					}
+					present[var->id] = 1;
+					core_button_names[var->id] = var->description;
+				}
 			}
 			
 			for (int i=0;default_button_mapping[i].name; i++) {
-				int local = default_button_mapping[i].local;
-				LOG_info("DEFAULT %s: <%s>\n", default_button_mapping[i].name, (local==BTN_ID_NONE ? "NONE" : device_button_names[local]));
+				ButtonMapping* mapping = &default_button_mapping[i];
+				LOG_info("DEFAULT %s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
 			}
 			
-			for (int i=0; button_mapping[i].name; i++) {
-				int retro = button_mapping[i].retro;
+			for (int i=0; config.controls[i].name; i++) {
+				ButtonMapping* mapping = &config.controls[i];
+				mapping->default_ = mapping->local;
+
 				// null mappings that aren't available in this core
-				if (!present[retro]) {
-					button_mapping[i].name = NULL;
+				if (!present[mapping->retro]) {
+					mapping->name = NULL;
 					continue;
 				}
-				int local = button_mapping[i].local;
-				LOG_info("%s: <%s>\n", button_mapping[i].name, (local==BTN_ID_NONE ? "NONE" : device_button_names[local]));
+				LOG_info("%s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
 			}
 			
 			puts("---------------------------------");
@@ -879,7 +1161,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// puts("RETRO_ENVIRONMENT_GET_VARIABLE");
 		struct retro_variable *var = (struct retro_variable *)data;
 		if (var && var->key) {
-			var->value = Options_getOptionValue(var->key);
+			var->value = OptionList_getOptionValue(&config.core, var->key);
 		}
 		break;
 	}
@@ -890,16 +1172,16 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// puts("RETRO_ENVIRONMENT_SET_VARIABLES");
 		const struct retro_variable *vars = (const struct retro_variable *)data;
 		if (vars) {
-			Options_reset();
-			Options_vars(vars);
+			OptionList_reset();
+			OptionList_vars(vars);
 		}
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: { /* 17 */
 		bool *out = (bool *)data;
 		if (out) {
-			*out = options.changed; // options_changed();
-			options.changed = 0;
+			*out = config.core.changed;
+			config.core.changed = 0;
 		}
 		break;
 	}
@@ -938,8 +1220,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS: { /* 53 */
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
-			Options_reset();
-			Options_init(*(const struct retro_core_option_definition **)data); 
+			OptionList_reset();
+			OptionList_init(*(const struct retro_core_option_definition **)data); 
 		}
 		break;
 	}
@@ -947,15 +1229,15 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
 		const struct retro_core_options_intl *options = (const struct retro_core_options_intl *)data;
 		if (options && options->us) {
-			Options_reset();
-			Options_init(options->us);
+			OptionList_reset();
+			OptionList_init(options->us);
 		}
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: { /* 55 */
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
 		const struct retro_core_option_display *display = (const struct retro_core_option_display *)data;
-		if (display) Options_setOptionVisibility(display->key, display->visible);
+		if (display) OptionList_setOptionVisibility(&config.core, display->key, display->visible);
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: { /* 57 */
@@ -1014,7 +1296,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
-			Options_setOptionValue(var->key, var->value);
+			OptionList_setOptionValue(&config.core, var->key, var->value);
 			break;
 		}
 
@@ -1136,18 +1418,6 @@ static double cpu_double = 0;
 static double use_double = 0;
 static uint32_t sec_start = 0;
 
-static struct {
-	// void* src;
-	int src_w;
-	int src_h;
-	int src_p;
-	
-	int dst_offset;
-	int dst_w;
-	int dst_h;
-
-	scale_neon_t scaler;
-} renderer;
 static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
 static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	// pitch of src image not src buffer!
@@ -1776,7 +2046,6 @@ static void selectScaler(int width, int height, int pitch) {
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
 	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
 }
-
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) return;
 	fps_ticks += 1; // comment out with threaded renderer
@@ -2126,6 +2395,7 @@ typedef struct MenuItem {
 	char* desc;
 	char** values;
 	char* key; // optional, used by options
+	int id; // optional, used by bindings
 	int value;
 	MenuList* submenu;
 	MenuList_callback_t on_confirm;
@@ -2147,18 +2417,308 @@ typedef struct MenuList {
 	MenuList_callback_t on_change;
 } MenuList;
 
-void Menu_detail(MenuItem* item) {
+static void Menu_detail(MenuItem* item) {
 	// TODO: name
 }
 
 #define OPTION_PADDING 8
 #define MAX_VISIBLE_OPTIONS 7
-int Menu_options(MenuList* list) {
+#define RELEASE_NAME "r20230127"
+#define COMMIT_HASH "0b74e5f8"
+static int Menu_options(MenuList* list);
+
+static int options_frontend_change(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	Option* option = &config.frontend.items[i];
+	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key,
+		item->values[option->value], option->values[option->value],
+		item->values[item->value], option->values[item->value]
+	);
+	option->value = item->value;
+	Config_syncFrontend(i, item->value);
+}
+static MenuList options_frontend_menu = {
+	.type = MENU_VAR,
+	.on_change = options_frontend_change,
+	.items = NULL,
+};
+static int options_frontend_open(MenuList* list, int i) {
+	if (options_frontend_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_frontend_menu.items = calloc(config.frontend.count+1, sizeof(MenuItem));
+		for (int j=0; j<config.frontend.count; j++) {
+			Option* option = &config.frontend.items[j];
+			MenuItem* item = &options_frontend_menu.items[j];
+			item->key = option->key;
+			item->name = option->name;
+			item->desc = option->desc;
+			item->value = option->value;
+			item->values = option->labels;
+		}
+	}
+	else {
+		// update values
+		for (int j=0; j<config.frontend.count; j++) {
+			Option* option = &config.frontend.items[j];
+			MenuItem* item = &options_frontend_menu.items[j];
+			item->value = option->value;
+		}
+		
+	}
+	Menu_options(&options_frontend_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+static int options_emulator_change(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	Option* option = OptionList_getOption(&config.core, item->key);
+	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key, 
+		item->values[option->value], option->values[option->value], 
+		item->values[item->value], option->values[item->value]
+	);
+	OptionList_setOptionRawValue(&config.core, item->key, item->value);
+}
+static MenuList options_emulator_menu = {
+	.type = MENU_FIXED,
+	.on_change = options_emulator_change,
+	.items = NULL,
+};
+static int options_emulator_open(MenuList* list, int i) {
+	if (options_emulator_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_emulator_menu.items = calloc(config.core.count+1, sizeof(MenuItem));
+		for (int j=0; j<config.core.count; j++) {
+			Option* option = &config.core.items[j];
+			MenuItem* item = &options_emulator_menu.items[j];
+			item->key = option->key;
+			item->name = option->name;
+			item->desc = NULL; // gambatte crashes if this isn't set to NULL :thinking_face:
+			// item->desc = option->desc; // TODO: these need to be copyfit/truncated
+			item->value = option->value;
+			item->values = option->labels;
+		}
+	}
+	else {
+		// update values
+		for (int j=0; j<config.core.count; j++) {
+			Option* option = &config.core.items[j];
+			MenuItem* item = &options_emulator_menu.items[j];
+			item->value = option->value;
+		}
+	}
+	Menu_options(&options_emulator_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+int options_controls_bind_confirm(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	ButtonMapping* button = &config.controls[item->id];
+	
+	int bound = 0;
+	while (!bound) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		// NOTE: off by one because of the initial NONE value
+		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+			if (PAD_justPressed(1 << id-1)) {
+				item->value = id;
+				button->local = id - 1;
+				bound = 1;
+				break;
+			}
+		}
+		GFX_sync();
+	}
+	return MENU_CALLBACK_NEXT_ITEM;
+}
+static MenuList options_controls_menu = {
+	.type = MENU_INPUT,
+	.desc = "Press A to set and X to clear.",
+	.on_confirm = options_controls_bind_confirm,
+	.items = NULL
+};
+static int options_controls_open(MenuList* list, int i) {
+	if (options_controls_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_controls_menu.items = calloc(RETRO_BUTTON_COUNT+1, sizeof(MenuItem));
+		for (int j=0; config.controls[j].name; j++) {
+			ButtonMapping* button = &config.controls[j];
+			MenuItem* item = &options_controls_menu.items[j];
+			item->id = j;
+			// item->key = button->name; // TODO: tmp, lowercase this? prefix with "bind_" or don't lowercase and "bind "
+			item->name = button->name;
+			item->desc = NULL;
+			item->value = button->local + 1;
+			item->values = button_labels;
+		}
+	}
+	else {
+		// update values
+		for (int j=0; config.controls[j].name; j++) {
+			ButtonMapping* button = &config.controls[j];
+			MenuItem* item = &options_controls_menu.items[j];
+			item->value = button->local + 1;
+		}
+	}
+	Menu_options(&options_controls_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+static int options_shortcuts_bind_confirm(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	ButtonMapping* button = &config.shortcuts[item->id];
+	int bound = 0;
+	while (!bound) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		// NOTE: off by one because of the initial NONE value
+		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+			if (PAD_justPressed(1 << id-1)) {
+				fflush(stdout);
+				item->value = id;
+				button->local = id - 1;
+				if (PAD_isPressed(BTN_MENU)) {
+					item->value += RETRO_BUTTON_COUNT;
+					button->mod = 1;
+				}
+				else {
+					button->mod = 0;
+				}
+				bound = 1;
+				break;
+			}
+		}
+		GFX_sync();
+	}
+	fflush(stdout);
+	return MENU_CALLBACK_NEXT_ITEM;
+}
+static MenuList options_shortcuts_menu = {
+	.type = MENU_INPUT,
+	.desc = "Press A to set and X to clear.\nSupports single button and MENU+button.",
+	.on_confirm = options_shortcuts_bind_confirm,
+	.items = NULL
+};
+static char* getSaveDesc(void) {
+	switch (config.loaded) {
+		case CONFIG_NONE:	return "No config loaded."; break;
+		case CONFIG_GLOBAL:	return "Global config loaded."; break;
+		case CONFIG_GAME:	return "Game config loaded."; break;
+	}
+}
+static int options_shortcuts_open(MenuList* list, int i) {
+	if (options_shortcuts_menu.items==NULL) {
+		// TODO: where do I free this?
+		options_shortcuts_menu.items = calloc(SHORTCUT_COUNT+1, sizeof(MenuItem));
+		for (int j=0; config.shortcuts[j].name; j++) {
+			ButtonMapping* button = &config.shortcuts[j];
+			MenuItem* item = &options_shortcuts_menu.items[j];
+			item->id = j;
+			item->name = button->name;
+			item->desc = NULL;
+			item->value = button->local + 1;
+			if (button->mod) item->value += RETRO_BUTTON_COUNT;
+			item->values = shortcut_labels;
+		}
+	}
+	else {
+		// update values
+		for (int j=0; config.shortcuts[j].name; j++) {
+			ButtonMapping* button = &config.shortcuts[j];
+			MenuItem* item = &options_shortcuts_menu.items[j];
+			item->value = button->local + 1;
+			if (button->mod) item->value += RETRO_BUTTON_COUNT;
+		}
+	}
+	options_shortcuts_menu.desc = getSaveDesc();
+	Menu_options(&options_shortcuts_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+static int options_save_confirm(MenuList* list, int i) {
+	char* message;
+	switch (i) {
+		case 0: {
+			Config_write(CONFIG_WRITE_ALL);
+			message = "Saved for all games.";
+			break;
+		}
+		case 1: {
+			Config_write(CONFIG_WRITE_GAME);
+			message = "Saved for this game.";
+			break;
+		}
+		default: {
+			Config_restore();
+			message = "Restored defaults.";
+			break;
+		}
+	}
+	
+	#define MESSAGE_WAIT_DELAY 250 // ms
+	uint32_t message_start = SDL_GetTicks();
+	int ready = 0;
+	int dirty = 1;
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+		
+		if (!ready && SDL_GetTicks()-message_start>=MESSAGE_WAIT_DELAY) {
+			ready = dirty = 1;
+			GFX_setMode(MODE_MAIN);
+		}
+
+		if (ready && (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B))) break;
+		
+		if (dirty) {
+			dirty = 0;
+			GFX_clear(screen);
+			GFX_blitMessage(message, screen, NULL);
+			if (ready) GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
+			GFX_flip(screen);
+		}
+		else GFX_sync();
+	}
+	GFX_setMode(MODE_MENU);
+	return MENU_CALLBACK_EXIT;
+}
+static MenuList options_save_menu = {
+	.type = MENU_LIST,
+	.on_confirm = options_save_confirm,
+	.items = (MenuItem[]){
+		{"Save for all games"},
+		{"Save for this game"},
+		{"Restore defaults"},
+		{NULL},
+	}
+};
+static int options_save_open(MenuList* list, int i) {
+	options_save_menu.desc = getSaveDesc();
+	Menu_options(&options_save_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+static MenuList options_menu = {
+	.type = MENU_LIST,
+	.items = (MenuItem[]) {
+		{"Frontend", "MinUI (" RELEASE_NAME " " COMMIT_HASH ")",.on_confirm=options_frontend_open},
+		{"Emulator",.on_confirm=options_emulator_open},
+		{"Controls",.on_confirm=options_controls_open},
+		{"Shortcuts",.on_confirm=options_shortcuts_open}, 
+		{"Save Changes",.on_confirm=options_save_open},
+		{NULL},
+	}
+};
+
+static int Menu_options(MenuList* list) {
 	MenuItem* items = list->items;
 	int type = list->type;
 
 	int dirty = 1;
 	int show_options = 1;
+	int await_input = 0;
 	
 	int count;
 	for (count=0; items[count].name; count++);
@@ -2168,6 +2728,23 @@ int Menu_options(MenuList* list) {
 	int visible_rows = end;
 
 	while (show_options) {
+		if (await_input) {
+			list->on_confirm(list, selected);
+			
+			selected += 1;
+			if (selected>=count) {
+				selected = 0;
+				start = 0;
+				end = visible_rows;
+			}
+			else if (selected>=end) {
+				start += 1;
+				end += 1;
+			}
+			dirty = 1;
+			await_input = false;
+		}
+		
 		GFX_startFrame();
 		uint32_t frame_start = SDL_GetTicks();
 
@@ -2231,10 +2808,15 @@ int Menu_options(MenuList* list) {
 		}
 		else if (PAD_justPressed(BTN_A)) {
 			MenuItem* item = &items[selected];
-			int result = 0;
+			int result = MENU_CALLBACK_NOP;
 			if (item->on_confirm) result = item->on_confirm(list, selected); // item-specific action, eg. Save for all games
 			else if (item->submenu) result = Menu_options(item->submenu); // drill down, eg. main options menu
-			else if (list->on_confirm) result = list->on_confirm(list, selected); // list-specific action, eg. show item detail view or input binding
+			// TODO: is there a way to defer on_confirm for MENU_INPUT so we can clear the currently set value to indicate it is awaiting input? 
+			// eg. set a flag to call on_confirm at the beginning of the next frame
+			else if (list->on_confirm) {
+				if (type==MENU_INPUT) await_input = 1;
+				else result = list->on_confirm(list, selected); // list-specific action, eg. show item detail view or input binding
+			}
 			if (result==MENU_CALLBACK_EXIT) show_options = 0;
 			else {
 				if (result==MENU_CALLBACK_NEXT_ITEM) {
@@ -2365,6 +2947,7 @@ int Menu_options(MenuList* list) {
 						SDL_FreeSurface(text);
 					}
 					
+					// TODO: blit a black pill on unselected rows (to cover longer item->values?) or truncate longer item->values?
 					if (j==selected_row) {
 						// white pill
 						int w = 0;
@@ -2457,7 +3040,10 @@ int Menu_options(MenuList* list) {
 					});
 					SDL_FreeSurface(text);
 					
-					if (item->value>=0) {
+					if (await_input && j==selected_row) {
+						// buh
+					}
+					else if (item->value>=0) {
 						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
 						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 							ox + mw - text->w - SCALE1(OPTION_PADDING),
@@ -2499,284 +3085,7 @@ int Menu_options(MenuList* list) {
 	
 	return 0;
 }
-
-// TODO: set in makefile
-#define BUILD_DATE "2023.01.25"
-#define COMMIT_HASH "d3adb33f"
-
-int options_save_confirm(MenuList* list, int i) {
-	char* message;
-	switch (i) {
-		case 0: {
-			// TODO: 
-			message = "Saved for all games.";
-			break;
-		}
-		case 1: {
-			// TODO: 
-			message = "Saved for this game.";
-			break;
-		}
-		default: {
-			// TODO: 
-			message = "Restored defaults.";
-			break;
-		}
-	}
-
-	uint32_t message_start = SDL_GetTicks();
-	int ready = 0;
-	int dirty = 1;
-	while (1) {
-		GFX_startFrame();
-		PAD_poll();
-		
-		if (!ready && SDL_GetTicks()-message_start>=1000) ready = dirty = 1;
-
-		if (ready && (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B))) break;
-		
-		if (dirty) {
-			dirty = 0;
-			GFX_clear(screen);
-			GFX_blitMessage(message, screen, NULL);
-			if (ready) GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
-			GFX_flip(screen);
-		}
-		else GFX_sync();
-	}
-	return MENU_CALLBACK_EXIT;
-}
-int options_shortcuts_bind_confirm(MenuList* list, int i) {
-	MenuItem* item = &list->items[i];
-	int bound = 0;
-	while (!bound) {
-		GFX_startFrame();
-		PAD_poll();
-		
-		// NOTE: off by one because of the initial NONE value
-		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
-			if (PAD_justPressed(1 << id-1)) {
-				fflush(stdout);
-				item->value = id;
-				if (PAD_isPressed(BTN_MENU)) {
-					item->value += RETRO_BUTTON_COUNT;
-				}
-				bound = 1;
-				break;
-			}
-		}
-		GFX_sync();
-	}
-	return MENU_CALLBACK_NEXT_ITEM;
-}
-int options_controls_bind_confirm(MenuList* list, int i) {
-	MenuItem* item = &list->items[i];
-	int bound = 0;
-	while (!bound) {
-		GFX_startFrame();
-		PAD_poll();
-		
-		// NOTE: off by one because of the initial NONE value
-		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
-			if (PAD_justPressed(1 << id-1)) {
-				fflush(stdout);
-				item->value = id;
-				bound = 1;
-				break;
-			}
-		}
-		GFX_sync();
-	}
-	return MENU_CALLBACK_NEXT_ITEM;
-}
-
-// NOTE: these must be in BTN_ID_ order also off by 1 because of NONE (which is -1 in BTN_ID_ land)
-static char* button_labels[] = {
-	"NONE", // displayed by default
-	"UP",
-	"DOWN",
-	"LEFT",
-	"RIGHT",
-	"A",
-	"B",
-	"X",
-	"Y",
-	"START",
-	"SELECT",
-	"L1",
-	"R1",
-	"L2",
-	"R2",
-	NULL,
-};
-static char* shortcut_labels[] = {
-	"NONE", // displayed by default
-	"UP",
-	"DOWN",
-	"LEFT",
-	"RIGHT",
-	"A",
-	"B",
-	"X",
-	"Y",
-	"START",
-	"SELECT",
-	"L1",
-	"R1",
-	"L2",
-	"R2",
-	"MENU+UP",
-	"MENU+DOWN",
-	"MENU+LEFT",
-	"MENU+RIGHT",
-	"MENU+A",
-	"MENU+B",
-	"MENU+X",
-	"MENU+Y",
-	"MENU+START",
-	"MENU+SELECT",
-	"MENU+L1",
-	"MENU+R1",
-	"MENU+L2",
-	"MENU+R2",
-	NULL,
-};
-
-static int options_frontend_change(MenuList* list, int i) {
-	MenuItem* item = &list->items[i];
-	Option* option = &frontend_options.items[i];
-	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key,
-		item->values[option->value], option->values[option->value],
-		item->values[item->value], option->values[item->value]
-	);
-	option->value = item->value;
-	
-	switch (i) {
-		case FE_OPT_SCANLINES:	show_scanlines 	= item->value; renderer.src_w = 0; break;
-		case FE_OPT_TEXT:		optimize_text 	= item->value; renderer.src_w = 0; break;
-		case FE_OPT_TEARING:	GFX_setVsync(item->value); break;
-		case FE_OPT_DEBUG:		show_debug 		= item->value; break;
-		case FE_OPT_MAXFF:		max_ff_speed 	= item->value; break;
-	}
-	
-	// Options_setOptionRawValue(item->key, item->value);
-}
-static MenuList options_frontend_menu = {
-	.type = MENU_VAR,
-	.on_change = options_frontend_change,
-	.items = NULL,
-};
-static int options_frontend_confirm(MenuList* list, int i) {
-	if (options_frontend_menu.items==NULL) {
-		// TODO: where do I free this?
-		options_frontend_menu.items = calloc(frontend_options.count+1, sizeof(MenuItem));
-		for (int j=0; j<frontend_options.count; j++) {
-			Option* option = &frontend_options.items[j];
-			MenuItem* item = &options_frontend_menu.items[j];
-			item->key = option->key;
-			item->name = option->name;
-			item->desc = option->desc;
-			item->value = option->value;
-			// TODO: these need to be uppercased so we'll want to copy instead of reference or do it at the source?
-			item->values = option->labels;
-		}
-	}
-	Menu_options(&options_frontend_menu);
-	return MENU_CALLBACK_NOP;
-}
-
-static int options_emulator_change(MenuList* list, int i) {
-	MenuItem* item = &list->items[i];
-	Option* option = Options_getOption(item->key);
-	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key, 
-		item->values[option->value], option->values[option->value], 
-		item->values[item->value], option->values[item->value]
-	);
-	Options_setOptionRawValue(item->key, item->value);
-}
-static MenuList options_emulator_menu = {
-	.type = MENU_FIXED,
-	.on_change = options_emulator_change,
-	.items = NULL,
-};
-static int options_emulator_confirm(MenuList* list, int i) {
-	if (options_emulator_menu.items==NULL) {
-		// TODO: where do I free this?
-		options_emulator_menu.items = calloc(options.count+1, sizeof(MenuItem));
-		for (int j=0; j<options.count; j++) {
-			Option* option = &options.items[j];
-			MenuItem* item = &options_emulator_menu.items[j];
-			item->key = option->key;
-			item->name = option->name;
-			item->desc = NULL; // gambatte crashes if this isn't set to NULL :thinking_face:
-			// item->desc = option->desc; // TODO: these need to be copyfit/truncated
-			item->value = option->value;
-			// TODO: these need to be uppercased so we'll want to copy instead of reference
-			item->values = option->labels;
-		}
-	}
-	Menu_options(&options_emulator_menu);
-	return MENU_CALLBACK_NOP;
-}
-
-// TODO: generated by core overrides?
-static MenuList options_controls_menu = {
-	.type = MENU_INPUT,
-	.desc = "Press A to set and X to clear.",
-	.on_confirm = options_controls_bind_confirm,
-	.items = (MenuItem[]){
-		{"UP",.values=button_labels},
-		{"DOWN",.values=button_labels},
-		{"LEFT",.values=button_labels},
-		{"RIGHT",.values=button_labels},
-		{"SELECT",.values=button_labels},
-		{"START",.values=button_labels},
-		{"A BUTTON",.values=button_labels},
-		{"B BUTTON",.values=button_labels},
-		{"X BUTTON",.values=button_labels},
-		{"Y BUTTON",.values=button_labels},
-		{"L BUTTON",.values=button_labels},
-		{"R BUTTON",.values=button_labels},
-		{NULL}
-	}
-};
-static MenuList options_shortcuts_menu = {
-	.type = MENU_INPUT,
-	.desc = "Press A to set and X to clear.\nSupports single button and MENU+button.",
-	.on_confirm = options_shortcuts_bind_confirm,
-	.items = (MenuItem[]){
-		{"Save State",.values=shortcut_labels},
-		{"Load State",.values=shortcut_labels},
-		{"Reset Game",.values=shortcut_labels},
-		{"Toggle FF",.values=shortcut_labels},
-		{"Hold FF",.values=shortcut_labels},
-		{NULL}
-	}
-};
-static MenuList options_save_menu = {
-	.type = MENU_LIST,
-	.on_confirm = options_save_confirm,
-	.items = (MenuItem[]){
-		{"Save for all games"},
-		{"Save for this game"},
-		{"Restore defaults"},
-		{NULL},
-	}
-};
-
-static MenuList options_menu = {
-	.type = MENU_LIST,
-	.items = (MenuItem[]){
-		{"Frontend", "MinUI (" BUILD_DATE " " COMMIT_HASH ")",.on_confirm=options_frontend_confirm}, // TODO: build submenu from frontend options
-		{"Emulator",.on_confirm=options_emulator_confirm}, // TODO: build submenu from core options
-		{"Controls",.submenu=&options_controls_menu}, // TODO: build submenu from core buttons using callback then open the submenu manually
-		{"Shortcuts",.submenu=&options_shortcuts_menu}, 
-		{"Save Changes",.submenu=&options_save_menu,},
-		{NULL},
-	}
-};
-
-void Menu_loop(void) {
+static void Menu_loop(void) {
 	POW_enableAutosleep();
 	PAD_reset();
 	
@@ -2965,9 +3274,7 @@ void Menu_loop(void) {
 				}
 				break;
 				case ITEM_OPTS:
-					GFX_setMode(MODE_MAIN);
 					Menu_options(&options_menu);
-					GFX_setMode(MODE_MENU);
 					dirty = 1;
 				break;
 				case ITEM_QUIT:
@@ -3134,7 +3441,8 @@ void Menu_loop(void) {
 	POW_disableAutosleep();
 }
 
-unsigned getUsage(void) { // from picoarch
+// TODO: move to POW_*?
+static unsigned getUsage(void) { // from picoarch
 	long unsigned ticks = 0;
 	long ticksps = 0;
 	FILE *file = NULL;
@@ -3190,6 +3498,9 @@ int main(int argc , char* argv[]) {
 	
 	Game_open(rom_path);
 	Core_load();
+	
+	Config_read(); // TODO: tmp
+	
 	SND_init(core.sample_rate, core.fps);
 	
 	Menu_init();

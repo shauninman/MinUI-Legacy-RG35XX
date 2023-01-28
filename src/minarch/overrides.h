@@ -4,13 +4,15 @@
 typedef struct OptionOverride {
 	char* key;
 	char* value;
-	int disable; // TODO: hide option from user
+	int lock; // TODO: prevent changing this value
 } OptionOverride;
 
 typedef struct ButtonMapping { 
 	char* name;
 	int retro;
-	int local;
+	int local; // TODO: dislike this name...
+	int mod;
+	int default_;
 } ButtonMapping;
 
 typedef struct CoreOverrides {
