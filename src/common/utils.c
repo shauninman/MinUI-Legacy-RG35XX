@@ -120,6 +120,20 @@ void getFile(char* path, char* buffer, size_t buffer_size) {
 		buffer[size] = '\0';
 	}
 }
+char* allocFile(char* path) { // caller must free!
+	char* contents = NULL;
+	FILE *file = fopen(path, "r");
+	if (file) {
+		fseek(file, 0L, SEEK_END);
+		size_t size = ftell(file);
+		contents = calloc(size+1, sizeof(char));
+		fseek(file, 0L, SEEK_SET);
+		fread(contents, sizeof(char), size, file);
+		fclose(file);
+		contents[size] = '\0';
+	}
+	return contents;
+}
 int getInt(char* path) {
 	int i = 0;
 	FILE *file = fopen(path, "r");

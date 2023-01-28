@@ -15,6 +15,7 @@ void trimTrailingNewlines(char* line);
 int exists(char* path);
 void touch(char* path);
 void putFile(char* path, char* contents);
+char* allocFile(char* path); // caller must free
 void getFile(char* path, char* buffer, size_t buffer_size);
 void putInt(char* path, int value);
 int getInt(char* path);
