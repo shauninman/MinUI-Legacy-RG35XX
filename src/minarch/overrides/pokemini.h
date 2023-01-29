@@ -20,6 +20,6 @@ static CoreOverrides pokemini_overrides = {
 		{"C Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
 		{"Shake",		RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
 		{"Power",		RETRO_DEVICE_ID_JOYPAD_SELECT,	BTN_ID_SELECT},
-		{NULL,0,0},
+		{NULL},
 	},
 };

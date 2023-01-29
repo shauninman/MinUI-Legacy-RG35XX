@@ -2694,7 +2694,9 @@ static MenuList options_save_menu = {
 		{NULL},
 	}
 };
+static void update_save_option_desc(void);
 static int options_save_open(MenuList* list, int i) {
+	update_save_option_desc();
 	options_save_menu.desc = getSaveDesc();
 	Menu_options(&options_save_menu);
 	return MENU_CALLBACK_NOP;
@@ -2712,6 +2714,10 @@ static MenuList options_menu = {
 	}
 };
 
+static void update_save_option_desc(void) {
+	options_menu.items[4].desc = getSaveDesc();
+}
+
 static int Menu_options(MenuList* list) {
 	MenuItem* items = list->items;
 	int type = list->type;
@@ -2726,7 +2732,9 @@ static int Menu_options(MenuList* list) {
 	int start = 0;
 	int end = MIN(count,MAX_VISIBLE_OPTIONS);
 	int visible_rows = end;
-
+	
+	update_save_option_desc();
+	
 	while (show_options) {
 		if (await_input) {
 			list->on_confirm(list, selected);

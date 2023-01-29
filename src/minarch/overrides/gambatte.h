@@ -22,6 +22,6 @@ CoreOverrides gambatte_overrides = {
 		{"B Turbo",			RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_NONE},
 		{"Prev. Palette",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_NONE},
 		{"Next Palette",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_NONE},
-		{NULL,0,0},
+		{NULL},
 	},
 };

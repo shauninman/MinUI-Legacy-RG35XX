@@ -19,6 +19,6 @@ static CoreOverrides picodrive_overrides = {
 		{"X Button",	RETRO_DEVICE_ID_JOYPAD_L,		 BTN_ID_B},
 		{"Y Button",	RETRO_DEVICE_ID_JOYPAD_X,		 BTN_ID_L1},
 		{"Z Button",	RETRO_DEVICE_ID_JOYPAD_R,		 BTN_ID_R1},
-		{NULL,0,0},
+		{NULL},
 	},
 };

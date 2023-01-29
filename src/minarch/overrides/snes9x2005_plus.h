@@ -15,6 +15,6 @@ static CoreOverrides snes9x2005_plus_overrides = {
 		{"A Button",	RETRO_DEVICE_ID_JOYPAD_A,		BTN_ID_A},
 		{"L Button",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
 		{"R Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
-		{NULL,0,0},
+		{NULL},
 	},
 };

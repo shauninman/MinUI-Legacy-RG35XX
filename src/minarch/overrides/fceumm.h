@@ -22,7 +22,7 @@ static CoreOverrides fceumm_overrides = {
 		{"Change Disk",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_NONE},
 		{"Insert Disk",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_NONE},
 		{"Insert Coin",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_NONE},
-		{NULL,0,0},
+		{NULL},
 	},
 };
 

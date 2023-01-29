@@ -19,6 +19,6 @@ static CoreOverrides gpsp_overrides = {
 		{"B Turbo",		RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_NONE},
 		{"L Button",	RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
 		{"R Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
-		{NULL,0,0},
+		{NULL},
 	},
 };

@@ -17,6 +17,6 @@ static CoreOverrides pcsx_rearmed_overrides = {
 		{"R1 Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
 		{"L2 Button",	RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
 		{"R2 Button",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
-		{NULL,0,0},
+		{NULL},
 	},
 };
