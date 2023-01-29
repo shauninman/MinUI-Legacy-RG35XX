@@ -674,7 +674,7 @@ static void Config_write(int override) {
 		if (config.loaded==CONFIG_GAME) unlink(path);
 		Config_getPath(path, CONFIG_WRITE_ALL);
 	}
-	config.loaded = CONFIG_GLOBAL;
+	config.loaded = override ? CONFIG_GAME : CONFIG_GLOBAL;
 	
 	FILE *file = fopen(path, "wb");
 	if (!file) return;
@@ -996,24 +996,36 @@ static void input_poll_callback(void) {
 	// }
 	
 	// TODO: test fast_forward once implemented
+	static int toggled_ff_on = 0; // this logic only works because TOGGLE_FF is before HOLD_FF in the menu...
 	for (int i=0; i<SHORTCUT_COUNT; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		int btn = 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // not bound
 		if (!mapping->mod || PAD_isPressed(BTN_MENU)) {
-			if (i==SHORTCUT_HOLD_FF) {
-				if (PAD_justPressed(btn) || PAD_justReleased(btn)) {
+			if (i==SHORTCUT_TOGGLE_FF) {
+				if (PAD_justPressed(btn)) {
+					fast_forward = toggled_ff_on = !fast_forward;
+					if (mapping->mod) ignore_menu = 1;
+					break;
+				}
+				else if (PAD_justReleased(btn)) {
+					if (mapping->mod) ignore_menu = 1;
+					break;
+				}
+			}
+			else if (i==SHORTCUT_HOLD_FF) {
+				// don't allow turn off fast_forward with a release of the hold button 
+				// if it was initially turned on with the toggle button
+				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
 					fast_forward = PAD_isPressed(btn);
 					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
 				}
 			}
 			else if (PAD_justPressed(btn)) {
 				switch (i) {
-					// TODO: do these state functions 
 					case SHORTCUT_SAVE_STATE: State_write(); break;
 					case SHORTCUT_LOAD_STATE: State_read(); break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
-					case SHORTCUT_TOGGLE_FF: fast_forward = !fast_forward; break;
 					default: break;
 				}
 				
@@ -1308,6 +1320,21 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		
 		break;
 	}
+	
+	// unused
+	// case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: {
+	// 	puts("RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK"); fflush(stdout);
+	// 	break;
+	// }
+	// case RETRO_ENVIRONMENT_GET_THROTTLE_STATE: {
+	// 	puts("RETRO_ENVIRONMENT_GET_THROTTLE_STATE"); fflush(stdout);
+	// 	break;
+	// }
+	// case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
+	// 	puts("RETRO_ENVIRONMENT_GET_FASTFORWARDING"); fflush(stdout);
+	// 	break;
+	// };
+	
 	// TODO: these unknowns are probably some flag OR'd to RETRO_ENVIRONMENT_EXPERIMENTAL
 	// TODO: UNKNOWN 65572
 	// TODO: UNKNOWN 65578
@@ -2050,7 +2077,26 @@ static void selectScaler(int width, int height, int pitch) {
 	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
 }
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
+	static uint32_t last_flip_time = 0;
+	
+	// 10 seems to be the sweet spot that allows 2x in NES and SNES and 8x in GB at 60fps
+	// 14 will let GB hit 10x but NES and SNES will drop to 1.5x at 30fps (not sure why)
+	// but 10 hurts PS...
+	if (fast_forward && SDL_GetTicks()-last_flip_time<10) return;
+	
+	
+	// FFVII menus 
+	// 16: 30/200
+	// 15: 30/180
+	// 14: 45/180
+	// 12: 30/150
+	// 10: 30/120 (optimize text off has no effect)
+	//  8: 60/210 (with optimize text off)
+	// you can squeeze more out of every console by turning prevent tearing off
+	// eg. PS@10 60/240
+	
 	if (!data) return;
+
 	fps_ticks += 1;
 	
 	if (width!=renderer.src_w || height!=renderer.src_h) {
@@ -2147,16 +2193,17 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	}
 	
 	GFX_flip(screen);
+	last_flip_time = SDL_GetTicks();
 }
 
 ///////////////////////////////
 
 static void audio_sample_callback(int16_t left, int16_t right) {
-	SND_batchSamples(&(const SND_Frame){left,right}, 1);
+	if (!fast_forward) SND_batchSamples(&(const SND_Frame){left,right}, 1);
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
-	return SND_batchSamples((const SND_Frame*)data, frames);
-	// return frames;
+	if (!fast_forward) return SND_batchSamples((const SND_Frame*)data, frames);
+	else return frames;
 };
 
 ///////////////////////////////////////
@@ -2619,6 +2666,7 @@ static int options_shortcuts_open(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
+static void update_save_option_desc(void);
 static int options_save_confirm(MenuList* list, int i) {
 	char* message;
 	switch (i) {
@@ -2664,6 +2712,7 @@ static int options_save_confirm(MenuList* list, int i) {
 		else GFX_sync();
 	}
 	GFX_setMode(MODE_MENU);
+	update_save_option_desc();
 	return MENU_CALLBACK_EXIT;
 }
 static MenuList options_save_menu = {
@@ -2676,7 +2725,6 @@ static MenuList options_save_menu = {
 		{NULL},
 	}
 };
-static void update_save_option_desc(void);
 static int options_save_open(MenuList* list, int i) {
 	update_save_option_desc();
 	options_save_menu.desc = getSaveDesc();
@@ -3076,6 +3124,7 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 static void Menu_loop(void) {
+	fast_forward = 0;
 	POW_enableAutosleep();
 	PAD_reset();
 	
@@ -3475,6 +3524,26 @@ static void trackFPS(void) {
 	}
 }
 
+static void limitFF(void) {
+	static uint64_t last_time = 0;
+	const uint64_t now = getMicroseconds();
+
+	if (fast_forward && max_ff_speed) {
+		if (last_time == 0) last_time = now;
+		int elapsed = now - last_time;
+		if (elapsed>0 && elapsed<0x80000) {
+			uint64_t ff_frame_time = 1000000 / (core.fps * (max_ff_speed + 1)); // TODO: define this only when max_ff_speed changes
+			if (elapsed<ff_frame_time) {
+				int delay = (ff_frame_time - elapsed) / 1000;
+				if (delay>0) SDL_Delay(delay);
+			}
+			last_time += ff_frame_time;
+			return;
+		}
+	}
+	last_time = now;
+}
+
 int main(int argc , char* argv[]) {
 	// force a stack overflow to ensure asan is linked and actually working
 	// char tmp[2];
@@ -3496,7 +3565,8 @@ int main(int argc , char* argv[]) {
 	Core_open(core_path, tag_name);
 	Core_init();
 	
-	// TODO: find a better place to do this, mixing static and loaded data is messy
+	// TODO: find a better place to do this
+	// mixing static and loaded data is messy
 	options_menu.items[1].desc = (char*)core.version;
 	
 	Game_open(rom_path);
@@ -3516,6 +3586,7 @@ int main(int argc , char* argv[]) {
 		GFX_startFrame();
 		
 		core.run();
+		limitFF();
 		
 		if (show_menu) Menu_loop();
 		

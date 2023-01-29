@@ -1,6 +1,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdint.h>
+
 int prefixMatch(char* pre, char* str);
 int suffixMatch(char* suf, char* str);
 int exactMatch(char* str1, char* str2);
@@ -19,5 +21,7 @@ char* allocFile(char* path); // caller must free
 void getFile(char* path, char* buffer, size_t buffer_size);
 void putInt(char* path, int value);
 int getInt(char* path);
+
+uint64_t getMicroseconds(void);
 
 #endif

@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <ctype.h>
+#include <sys/time.h>
 #include "utils.h"
 #include "defines.h"
 
@@ -147,4 +148,16 @@ void putInt(char* path, int value) {
 	char buffer[8];
 	sprintf(buffer, "%d", value);
 	putFile(path, buffer);
+}
+
+uint64_t getMicroseconds(void) {
+    uint64_t ret;
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+
+    ret = (uint64_t)tv.tv_sec * 1000000;
+    ret += (uint64_t)tv.tv_usec;
+
+    return ret;
 }
