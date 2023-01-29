@@ -1256,28 +1256,38 @@ int main (int argc, char *argv[]) {
 		
 		if (total>0) {
 			if (PAD_justRepeated(BTN_UP)) {
-				selected -= 1;
-				if (selected<0) {
-					selected = total-1;
-					int start = total - MAIN_ROW_COUNT;
-					top->start = (start<0) ? 0 : start;
-					top->end = total; 
+				if (selected==0 && !PAD_justPressed(BTN_UP)) {
+					// stop at top
 				}
-				else if (selected<top->start) {
-					top->start -= 1;
-					top->end -= 1;
+				else {
+					selected -= 1;
+					if (selected<0) {
+						selected = total-1;
+						int start = total - MAIN_ROW_COUNT;
+						top->start = (start<0) ? 0 : start;
+						top->end = total; 
+					}
+					else if (selected<top->start) {
+						top->start -= 1;
+						top->end -= 1;
+					}
 				}
 			}
 			else if (PAD_justRepeated(BTN_DOWN)) {
-				selected += 1;
-				if (selected>=total) {
-					selected = 0;
-					top->start = 0;
-					top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
+				if (selected==total-1 && !PAD_justPressed(BTN_DOWN)) {
+					// stop at bottom
 				}
-				else if (selected>=top->end) {
-					top->start += 1;
-					top->end += 1;
+				else {
+					selected += 1;
+					if (selected>=total) {
+						selected = 0;
+						top->start = 0;
+						top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
+					}
+					else if (selected>=top->end) {
+						top->start += 1;
+						top->end += 1;
+					}
 				}
 			}
 			if (PAD_justRepeated(BTN_LEFT)) {
