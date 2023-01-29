@@ -474,12 +474,14 @@ int GFX_getButtonWidth(char* hint, char* button) {
 	int button_width = 0;
 	int width;
 	
+	int special_case = !strcmp(button,BRIGHTNESS_BUTTON_LABEL); // TODO: oof
+	
 	if (strlen(button)==1) {
 		button_width += SCALE1(BUTTON_SIZE);
 	}
 	else {
 		button_width += SCALE1(BUTTON_SIZE) / 2;
-		TTF_SizeUTF8(font.tiny, button, &width, NULL);
+		TTF_SizeUTF8(special_case ? font.large : font.tiny, button, &width, NULL);
 		button_width += width;
 	}
 	button_width += SCALE1(BUTTON_MARGIN);
@@ -492,6 +494,8 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	SDL_Surface* text;
 	int ox = 0;
 	
+	int special_case = !strcmp(button,BRIGHTNESS_BUTTON_LABEL); // TODO: oof
+	
 	// button
 	if (strlen(button)==1) {
 		GFX_blitAsset(ASSET_BUTTON, NULL, dst, dst_rect);
@@ -503,11 +507,12 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 		SDL_FreeSurface(text);
 	}
 	else {
-		text = TTF_RenderUTF8_Blended(font.tiny, button, COLOR_BUTTON_TEXT);
+		text = TTF_RenderUTF8_Blended(special_case ? font.large : font.tiny, button, COLOR_BUTTON_TEXT);
 		GFX_blitPill(ASSET_BUTTON, dst, &(SDL_Rect){dst_rect->x,dst_rect->y,SCALE1(BUTTON_SIZE)/2+text->w,SCALE1(BUTTON_SIZE)});
 		ox += SCALE1(BUTTON_SIZE)/4;
 		
-		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
+		int oy = special_case ? SCALE1(-2) : 0;
+		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,oy+dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
 		ox += text->w;
 		ox += SCALE1(BUTTON_SIZE)/4;
 		SDL_FreeSurface(text);
@@ -1052,7 +1057,7 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	
 	int was_dirty = dirty; // dirty list (not including settings/battery)
 	
-	#define SETTING_DELAY 500
+	#define SETTING_DELAY 750
 	if (show_setting && now-setting_start>=SETTING_DELAY && !PAD_isPressed(BTN_MENU)) {
 		show_setting = 0;
 		dirty = 1;

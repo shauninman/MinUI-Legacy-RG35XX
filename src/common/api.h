@@ -179,6 +179,7 @@ int PAD_justRepeated(int btn);
 ///////////////////////////////
 
 // TODO: rename PLAT_*?
+#define BRIGHTNESS_BUTTON_LABEL "+ -"
 typedef void (*POW_callback_t)(void);
 void POW_update(int* dirty, int* show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep);
 void POW_disablePowerOff(void);

@@ -1424,7 +1424,8 @@ int main (int argc, char *argv[]) {
 			
 			// buttons
 			if (show_setting) {
-				GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
+				if (PAD_isPressed(BTN_MENU)) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
+				else GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
 			}
 			else if (can_resume) {
 				GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, screen, 0);
