@@ -291,12 +291,7 @@ int main(int argc , char* argv[]) {
 		
 			GFX_flip(screen);
 		}
-		else {
-			// slow down to 60fps
-			uint32_t frame_duration = SDL_GetTicks() - frame_start;
-			#define kTargetFrameDuration 17
-			if (frame_duration<kTargetFrameDuration) SDL_Delay(kTargetFrameDuration-frame_duration);
-		}
+		else GFX_sync();
 	}
 	
 	SDL_FreeSurface(digits);

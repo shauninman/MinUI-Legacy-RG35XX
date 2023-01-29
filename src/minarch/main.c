@@ -2198,6 +2198,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 
 ///////////////////////////////
 
+// NOTE: sound must be disabled for fast forward to work...
 static void audio_sample_callback(int16_t left, int16_t right) {
 	if (!fast_forward) SND_batchSamples(&(const SND_Frame){left,right}, 1);
 }
@@ -2632,9 +2633,9 @@ static MenuList options_shortcuts_menu = {
 };
 static char* getSaveDesc(void) {
 	switch (config.loaded) {
-		case CONFIG_NONE:	return "No config loaded."; break;
-		case CONFIG_GLOBAL:	return "Global config loaded."; break;
-		case CONFIG_GAME:	return "Game config loaded."; break;
+		case CONFIG_NONE:	return "Using defaults."; break;
+		case CONFIG_GLOBAL:	return "Using global config."; break;
+		case CONFIG_GAME:	return "Using game config."; break;
 	}
 }
 static int options_shortcuts_open(MenuList* list, int i) {
@@ -2661,7 +2662,6 @@ static int options_shortcuts_open(MenuList* list, int i) {
 			if (button->mod) item->value += RETRO_BUTTON_COUNT;
 		}
 	}
-	options_shortcuts_menu.desc = getSaveDesc();
 	Menu_options(&options_shortcuts_menu);
 	return MENU_CALLBACK_NOP;
 }
@@ -2687,26 +2687,21 @@ static int options_save_confirm(MenuList* list, int i) {
 		}
 	}
 	
-	#define MESSAGE_WAIT_DELAY 250 // ms
-	uint32_t message_start = SDL_GetTicks();
-	int ready = 0;
+	GFX_setMode(MODE_MAIN);
+
 	int dirty = 1;
 	while (1) {
 		GFX_startFrame();
 		PAD_poll();
-		
-		if (!ready && SDL_GetTicks()-message_start>=MESSAGE_WAIT_DELAY) {
-			ready = dirty = 1;
-			GFX_setMode(MODE_MAIN);
-		}
 
-		if (ready && (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B))) break;
+		if (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B)) break;
 		
+		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
 		if (dirty) {
 			dirty = 0;
 			GFX_clear(screen);
 			GFX_blitMessage(message, screen, NULL);
-			if (ready) GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
+			GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
 			GFX_flip(screen);
 		}
 		else GFX_sync();
@@ -2895,6 +2890,8 @@ static int Menu_options(MenuList* list) {
 				dirty = 1;
 			}
 		}
+		
+		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
 		
 		if (dirty) {
 			dirty = 0;
