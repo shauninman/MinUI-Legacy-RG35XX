@@ -88,7 +88,8 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 SDL_Surface* GFX_getBufferCopy(void); // must be freed by caller
-int GFX_truncateDisplayName(const char* in_name, char* out_name, int max_width); // returns final width (including pill padding)
+int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width); // returns final width (including pill padding)
+int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);

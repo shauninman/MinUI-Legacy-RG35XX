@@ -783,7 +783,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 			if (def->info) {
 				len = strlen(def->info) + 1;
 				item->desc = calloc(len, sizeof(char));
-				strcpy(item->desc, def->info);
+				strncpy(item->desc, def->info, len);
+				item->desc[len-1] = '\0';
+
+				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number! (this is more about chars per line than pixel width so it's not going to be relative to the screen size, only the scale)
 			}
 		
 			item->visible = 1;

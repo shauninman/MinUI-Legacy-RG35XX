@@ -316,23 +316,77 @@ SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
 	memcpy(copy->pixels, (gfx.map + gfx.buffer_size * buffer), (SCREEN_HEIGHT * SCREEN_PITCH));
 	return copy;
 }
-int GFX_truncateDisplayName(const char* in_name, char* out_name, int max_width) {
+int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width) {
 	int text_width;
 	strcpy(out_name, in_name);
-	TTF_SizeUTF8(font.large, out_name, &text_width, NULL);
+	TTF_SizeUTF8(font, out_name, &text_width, NULL);
 	text_width += SCALE1(12*2);
 	
 	while (text_width>max_width) {
 		int len = strlen(out_name);
-		out_name[len-1] = '\0';
-		out_name[len-2] = '.';
-		out_name[len-3] = '.';
-		out_name[len-4] = '.';
-		TTF_SizeUTF8(font.large, out_name, &text_width, NULL);
+		strcpy(&out_name[len-4], "...\0");
+		TTF_SizeUTF8(font, out_name, &text_width, NULL);
 		text_width += SCALE1(12*2);
 	}
 	
 	return text_width;
+}
+int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
+	// TODO: this is kinda buggy mess
+	
+	if (!str) return 0;
+	
+	int line_width;
+	int max_line_width;
+	char* line = str;
+	char buffer[MAX_PATH];
+	
+	TTF_SizeUTF8(font, line, &line_width, NULL);
+	if (line_width<=max_width) {
+		line_width = GFX_truncateText(font,line,buffer,max_width);
+		strcpy(line,buffer);
+		return line_width;
+	}
+	
+	char* prev;
+	char* tmp = line;
+	int lines = 1;
+	int i = 0;
+	while (!max_lines || lines<max_lines) {
+		tmp = strchr(tmp, ' ');
+		if (!tmp) {
+			if (prev) {
+				prev[0] = '\n';
+				line = prev + 1;
+			}
+			break;
+		}
+		tmp[0] = '\0';
+		
+		TTF_SizeUTF8(font, line, &line_width, NULL);
+
+		if (line_width>=max_width) { // wrap
+			if (line_width>max_line_width) max_line_width = line_width;
+			tmp[0] = ' ';
+			tmp += 1;
+			prev[0] = '\n';
+			prev += 1;
+			line = prev;
+			lines += 1;
+		}
+		else { // continue
+			tmp[0] = ' ';
+			prev = tmp;
+			tmp += 1;
+		}
+		i += 1;
+	}
+	
+	line_width = GFX_truncateText(font,line,buffer,max_width);
+	strcpy(line,buffer);
+	
+	if (line_width>max_line_width) max_line_width = line_width;
+	return max_line_width;
 }
 
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
@@ -630,7 +684,7 @@ int GFX_blitButtonGroup(char** pairs, SDL_Surface* dst, int align_right) {
 	return ow;
 }
 
-#define MAX_TEXT_LINES 3
+#define MAX_TEXT_LINES 16
 void GFX_sizeText(TTF_Font* font, char* str, int leading, int* w, int* h) {
 	char* lines[MAX_TEXT_LINES];
 	int count = 0;
@@ -638,7 +692,7 @@ void GFX_sizeText(TTF_Font* font, char* str, int leading, int* w, int* h) {
 	char* tmp;
 	lines[count++] = str;
 	while ((tmp=strchr(lines[count-1], '\n'))!=NULL) {
-		if (count+1>MAX_TEXT_LINES) break; // TODO: bail
+		if (count+1>MAX_TEXT_LINES) break; // TODO: bail?
 		lines[count++] = tmp+1;
 	}
 	*h = count * leading;
@@ -674,7 +728,7 @@ void GFX_blitText(TTF_Font* font, char* str, int leading, SDL_Color color, SDL_S
 	char* tmp;
 	lines[count++] = str;
 	while ((tmp=strchr(lines[count-1], '\n'))!=NULL) {
-		if (count+1>MAX_TEXT_LINES) break; // TODO: bail
+		if (count+1>MAX_TEXT_LINES) break; // TODO: bail?
 		lines[count++] = tmp+1;
 	}
 	int x = dst_rect->x;

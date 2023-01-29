@@ -1384,7 +1384,7 @@ int main (int argc, char *argv[]) {
 					SDL_Color text_color = COLOR_WHITE;
 					
 					char display_name[256];
-					int text_width = GFX_truncateDisplayName(entry_name, display_name, max_width);
+					int text_width = GFX_truncateText(font.large, entry_name, display_name, max_width);
 					max_width = MIN(max_width, text_width);
 					if (j==selected_row) {
 						GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
