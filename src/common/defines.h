@@ -16,8 +16,8 @@
 #define CODE_L2			0x66
 #define CODE_R2			0x67
 #define CODE_MENU		0x68
-#define CODE_VOL_UP		0x6C
-#define CODE_VOL_DN		0x6D
+#define CODE_PLUS		0x6C
+#define CODE_MINUS		0x6D
 #define CODE_POWER		0x74
 
 #define VOLUME_MIN 		0

@@ -985,7 +985,7 @@ static void input_poll_callback(void) {
 	if (PAD_justPressed(BTN_MENU)) {
 		ignore_menu = 0;
 	}
-	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_VOL_UP) || PAD_isPressed(BTN_VOL_DN))) {
+	if (PAD_isPressed(BTN_MENU) && (PAD_isPressed(BTN_PLUS) || PAD_isPressed(BTN_MINUS))) {
 		ignore_menu = 1;
 	}
 	
@@ -3356,7 +3356,7 @@ static void Menu_loop(void) {
 			SDL_FreeSurface(text);
 			
 			if (show_setting) {
-				if (PAD_isPressed(BTN_MENU)) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
+				if (show_setting==1) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
 				else GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
 			}
 			else GFX_blitButtonGroup((char*[]){ "POWER","SLEEP", NULL }, screen, 0);

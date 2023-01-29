@@ -975,8 +975,8 @@ void PAD_poll(void) {
 			else if (code==CODE_L2)		{ btn = BTN_L2; 		id = BTN_ID_L2; }
 			else if (code==CODE_R1)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
 			else if (code==CODE_R2)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
-			else if (code==CODE_VOL_UP)	{ btn = BTN_VOL_UP; 	id = BTN_ID_VOL_UP; }
-			else if (code==CODE_VOL_DN)	{ btn = BTN_VOL_DN; 	id = BTN_ID_VOL_DN; }
+			else if (code==CODE_PLUS)	{ btn = BTN_PLUS; 		id = BTN_ID_PLUS; }
+			else if (code==CODE_MINUS)	{ btn = BTN_MINUS; 		id = BTN_ID_MINUS; }
 			else if (code==CODE_POWER)	{ btn = BTN_POWER; 		id = BTN_ID_POWER; }
 		}
 		
@@ -1063,7 +1063,7 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 		dirty = 1;
 	}
 	
-	if (PAD_justRepeated(BTN_VOL_UP) || PAD_justRepeated(BTN_VOL_DN) || PAD_justPressed(BTN_MENU)) {
+	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || PAD_justPressed(BTN_MENU)) {
 		setting_start = now;
 		if (PAD_isPressed(BTN_MENU)) {
 			show_setting = 1;
