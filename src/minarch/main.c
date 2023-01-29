@@ -55,7 +55,7 @@ static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
 static int fast_forward = 0;
 
-static struct {
+static struct Renderer {
 	int src_w;
 	int src_h;
 	int src_p;
@@ -490,7 +490,7 @@ enum {
 	CONFIG_GAME,
 };
 
-static struct {
+static struct Config {
 	OptionList core;
 	OptionList frontend;
 	ButtonMapping* controls;
@@ -990,10 +990,10 @@ static void input_poll_callback(void) {
 	}
 	
 	// TODO: tmp?
-	if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
-		show_debug = !show_debug;
-		config.frontend.options[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
-	}
+	// if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
+	// 	show_debug = !show_debug;
+	// 	config.frontend.options[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
+	// }
 	
 	// TODO: test fast_forward once implemented
 	for (int i=0; i<SHORTCUT_COUNT; i++) {
@@ -2051,7 +2051,7 @@ static void selectScaler(int width, int height, int pitch) {
 }
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) return;
-	fps_ticks += 1; // comment out with threaded renderer
+	fps_ticks += 1;
 	
 	if (width!=renderer.src_w || height!=renderer.src_h) {
 		renderer.src_w = width;
@@ -2060,12 +2060,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 
 		selectScaler(width,height,pitch);
 		GFX_clearAll();
-
-		// if (renderer.src) {
-		// 	free(renderer.src);
-		// 	renderer.src = NULL;
-		// }
-		// renderer.src = malloc(height * pitch);
 	}
 	
 	static int top_width = 0;
@@ -2153,21 +2147,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	}
 	
 	GFX_flip(screen);
-	
-	return; // TODO: tmp
-	
-	// measure framerate
-	// static int ticks = 0;
-	// static uint32_t start = -1;
-	// ticks += 1;
-	// uint32_t now = SDL_GetTicks();
-	// if (start==-1) start = now;
-	// if (now-start>=1000) {
-	// 	start = now;
-	// 	printf("fps: %i\n", ticks);
-	// 	fflush(stdout);
-	// 	ticks = 0;
-	// }
 }
 
 ///////////////////////////////
@@ -3477,6 +3456,25 @@ finish:
 	return ticks;
 }
 
+static void trackFPS(void) {
+	cpu_ticks += 1;
+	static int last_use_ticks = 0;
+	uint32_t now = SDL_GetTicks();
+	if (now - sec_start>=1000) {
+		double last_time = (double)(now - sec_start) / 1000;
+		fps_double = fps_ticks / last_time;
+		cpu_double = cpu_ticks / last_time;
+		use_ticks = getUsage();
+		if (use_ticks && last_use_ticks) {
+			use_double = (use_ticks - last_use_ticks) / last_time;
+		}
+		last_use_ticks = use_ticks;
+		sec_start = now;
+		cpu_ticks = 0;
+		fps_ticks = 0;
+	}
+}
+
 int main(int argc , char* argv[]) {
 	// force a stack overflow to ensure asan is linked and actually working
 	// char tmp[2];
@@ -3492,9 +3490,6 @@ int main(int argc , char* argv[]) {
 	
 	screen = GFX_init(MODE_MENU);
 	
-	// doesn't even help that much with Star Fox after overclocking
-	// GFX_setVsync(VSYNC_STRICT);
-	
 	MSG_init();
 	InitSettings();
 	
@@ -3502,9 +3497,6 @@ int main(int argc , char* argv[]) {
 	Core_init();
 	
 	// TODO: find a better place to do this, mixing static and loaded data is messy
-	// char core_desc[MAX_PATH];
-	// sprintf(core_desc, "%s / %s", core.tag, core.version);
-	// options_menu.items[1].desc = core_desc;
 	options_menu.items[1].desc = (char*)core.version;
 	
 	Game_open(rom_path);
@@ -3527,26 +3519,7 @@ int main(int argc , char* argv[]) {
 		
 		if (show_menu) Menu_loop();
 		
-		if (1) {
-			cpu_ticks += 1;
-			static int last_use_ticks = 0;
-			uint32_t now = SDL_GetTicks();
-			if (now - sec_start>=1000) {
-				double last_time = (double)(now - sec_start) / 1000;
-				fps_double = fps_ticks / last_time;
-				cpu_double = cpu_ticks / last_time;
-				use_ticks = getUsage();
-				if (use_ticks && last_use_ticks) {
-					use_double = (use_ticks - last_use_ticks) / last_time;
-				}
-				last_use_ticks = use_ticks;
-				sec_start = now;
-				cpu_ticks = 0;
-				fps_ticks = 0;
-
-				// printf("fps: %f (%f)\n", fps_double, cpu_double); fflush(stdout);
-			}
-		}
+		trackFPS();
 	}
 	
 	Menu_quit();
