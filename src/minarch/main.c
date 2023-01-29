@@ -349,7 +349,7 @@ typedef struct OptionList OptionList;
 typedef struct OptionList {
 	int count;
 	int changed;
-	Option* items;
+	Option* options;
 	// OptionList_callback_t on_set;
 } OptionList;
 
@@ -499,7 +499,7 @@ static struct {
 } config = {
 	.frontend = (OptionList){
 		.count = FE_OPT_COUNT,
-		.items = (Option[]){
+		.options = (Option[]){
 			[FE_OPT_SCANLINES] = {
 				.key	= "minarch_scanlines_grid", 
 				.name	= "Scanlines/Grid",
@@ -611,16 +611,16 @@ static void Config_read(void) {
 	
 	char key[256];
 	char value[256];
-	for (int i=0; config.frontend.items[i].key; i++) {
-		Option* option = &config.frontend.items[i];
+	for (int i=0; config.frontend.options[i].key; i++) {
+		Option* option = &config.frontend.options[i];
 		Config_getValue(cfg, option->key, value);
 		// TODO: handle not finding the expected value
 		OptionList_setOptionValue(&config.frontend, option->key, value);
 		Config_syncFrontend(i, option->value);
 	}
 	
-	for (int i=0; config.core.items[i].key; i++) {
-		Option* option = &config.core.items[i];
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
 		Config_getValue(cfg, option->key, value);
 		// TODO: handle not finding the expected value
 		OptionList_setOptionValue(&config.core, option->key, value);
@@ -679,12 +679,12 @@ static void Config_write(int override) {
 	FILE *file = fopen(path, "wb");
 	if (!file) return;
 	
-	for (int i=0; config.frontend.items[i].key; i++) {
-		Option* option = &config.frontend.items[i];
+	for (int i=0; config.frontend.options[i].key; i++) {
+		Option* option = &config.frontend.options[i];
 		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 	}
-	for (int i=0; config.core.items[i].key; i++) {
-		Option* option = &config.core.items[i];
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
 		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 	}
 	for (int i=0; config.controls[i].name; i++) {
@@ -715,13 +715,13 @@ static void Config_restore(void) {
 	}
 	config.loaded = CONFIG_NONE;
 	
-	for (int i=0; config.frontend.items[i].key; i++) {
-		Option* option = &config.frontend.items[i];
+	for (int i=0; config.frontend.options[i].key; i++) {
+		Option* option = &config.frontend.options[i];
 		option->value = option->default_value;
 		Config_syncFrontend(i, option->value);
 	}
-	for (int i=0; config.core.items[i].key; i++) {
-		Option* option = &config.core.items[i];
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
 		option->value = option->default_value;
 	}
 	config.core.changed = 1; // let the core know
@@ -765,12 +765,12 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 	
 	config.core.count = count;
 	if (count) {
-		config.core.items = calloc(count, sizeof(Option));
+		config.core.options = calloc(count+1, sizeof(Option));
 	
 		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_core_option_definition *def = &defs[i];
-			Option* item = &config.core.items[i];
+			Option* item = &config.core.options[i];
 			len = strlen(def->key) + 1;
 		
 			item->key = calloc(len, sizeof(char));
@@ -843,12 +843,12 @@ static void OptionList_vars(const struct retro_variable *vars) {
 	
 	config.core.count = count;
 	if (count) {
-		config.core.items = calloc(count, sizeof(Option));
+		config.core.options = calloc(count+1, sizeof(Option));
 	
 		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_variable *var = &vars[i];
-			Option* item = &config.core.items[i];
+			Option* item = &config.core.options[i];
 
 			len = strlen(var->key) + 1;
 			item->key = calloc(len, sizeof(char));
@@ -910,7 +910,7 @@ static void OptionList_reset(void) {
 	if (!config.core.count) return;
 	
 	for (int i=0; i<config.core.count; i++) {
-		Option* item = &config.core.items[i];
+		Option* item = &config.core.options[i];
 		if (item->var) {
 			// values/labels are all points to var
 			// so no need to free individually
@@ -930,12 +930,12 @@ static void OptionList_reset(void) {
 		free(item->key);
 		free(item->name);
 	}
-	free(config.core.items);
+	free(config.core.options);
 }
 
 static Option* OptionList_getOption(OptionList* list, const char* key) {
 	for (int i=0; i<list->count; i++) {
-		Option* item = &list->items[i];
+		Option* item = &list->options[i];
 		if (!strcmp(item->key, key)) return item;
 	}
 	return NULL;
@@ -992,7 +992,7 @@ static void input_poll_callback(void) {
 	// TODO: tmp?
 	if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
 		show_debug = !show_debug;
-		config.frontend.items[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
+		config.frontend.options[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
 	}
 	
 	// TODO: test fast_forward once implemented
@@ -2432,7 +2432,7 @@ static int Menu_options(MenuList* list);
 
 static int options_frontend_change(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
-	Option* option = &config.frontend.items[i];
+	Option* option = &config.frontend.options[i];
 	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key,
 		item->values[option->value], option->values[option->value],
 		item->values[item->value], option->values[item->value]
@@ -2450,7 +2450,7 @@ static int options_frontend_open(MenuList* list, int i) {
 		// TODO: where do I free this?
 		options_frontend_menu.items = calloc(config.frontend.count+1, sizeof(MenuItem));
 		for (int j=0; j<config.frontend.count; j++) {
-			Option* option = &config.frontend.items[j];
+			Option* option = &config.frontend.options[j];
 			MenuItem* item = &options_frontend_menu.items[j];
 			item->key = option->key;
 			item->name = option->name;
@@ -2462,7 +2462,7 @@ static int options_frontend_open(MenuList* list, int i) {
 	else {
 		// update values
 		for (int j=0; j<config.frontend.count; j++) {
-			Option* option = &config.frontend.items[j];
+			Option* option = &config.frontend.options[j];
 			MenuItem* item = &options_frontend_menu.items[j];
 			item->value = option->value;
 		}
@@ -2491,12 +2491,12 @@ static int options_emulator_open(MenuList* list, int i) {
 		// TODO: where do I free this?
 		options_emulator_menu.items = calloc(config.core.count+1, sizeof(MenuItem));
 		for (int j=0; j<config.core.count; j++) {
-			Option* option = &config.core.items[j];
+			Option* option = &config.core.options[j];
 			MenuItem* item = &options_emulator_menu.items[j];
 			item->key = option->key;
 			item->name = option->name;
 			item->desc = NULL; // gambatte crashes if this isn't set to NULL :thinking_face:
-			// item->desc = option->desc; // TODO: these need to be copyfit/truncated
+			item->desc = option->desc; // TODO: these need to be copyfit/truncated
 			item->value = option->value;
 			item->values = option->labels;
 		}
@@ -2504,7 +2504,7 @@ static int options_emulator_open(MenuList* list, int i) {
 	else {
 		// update values
 		for (int j=0; j<config.core.count; j++) {
-			Option* option = &config.core.items[j];
+			Option* option = &config.core.options[j];
 			MenuItem* item = &options_emulator_menu.items[j];
 			item->value = option->value;
 		}
@@ -3091,8 +3091,8 @@ static int Menu_options(MenuList* list) {
 		else GFX_sync();
 	}
 	
-	GFX_clearAll();
-	GFX_flip(screen);
+	// GFX_clearAll();
+	// GFX_flip(screen);
 	
 	return 0;
 }
@@ -3308,7 +3308,7 @@ static void Menu_loop(void) {
 			int max_width = SCREEN_WIDTH - SCALE1(PADDING * 2) - ow;
 			
 			char display_name[256];
-			int text_width = GFX_truncateDisplayName(rom_name, display_name, max_width);
+			int text_width = GFX_truncateText(font.large, rom_name, display_name, max_width);
 			max_width = MIN(max_width, text_width);
 
 			SDL_Surface* text;
