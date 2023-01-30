@@ -3,8 +3,11 @@
 /usbdbg.sh device
 
 SDCARD_PATH=/mnt/mmc # TF1
-SYSTEM_FRAG=/.system/rg35xx
+SYSTEM_DIR=/.system
+SYSTEM_FRAG=$SYSTEM_DIR/rg35xx
+UPDATE_FRAG=/MinUI.zip
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
+UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
 mkdir /mnt/sdcard
 if [ -e /dev/block/mmcblk1p1 ]
@@ -23,11 +26,23 @@ if [ ! -d $SYSTEM_PATH ]; then
 	# try TF2
 	SDCARD_PATH=/mnt/sdcard
 	SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
+	UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
+fi
+
+# is there an update available?
+if [ -f $UPDATE_PATH ]; then
+	if [ -d $SYSTEM_PATH ]; then
+		echo update > $SDCARD_PATH/log.txt
+	else
+		echo install > $SDCARD_PATH/log.txt
+	fi
+	# TODO: finish this logic
+	# busybox unzip 
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.img
 if [ ! -f $ROOTFS_IMAGE ]; then
-	# fallback to stock demenu.bin based on dmenu_ln
+	# fallback to stock demenu.bin, based on dmenu_ln
 	ACT="/tmp/.next"
 	CMD="/mnt/vendor/bin/dmenu.bin"
 	touch "$ACT"
