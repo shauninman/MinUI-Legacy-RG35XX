@@ -4,7 +4,7 @@
 typedef struct OptionOverride {
 	char* key;
 	char* value;
-	int lock; // TODO: prevent changing this value
+	int lock; // prevents changing this value
 } OptionOverride;
 
 typedef struct ButtonMapping { 
