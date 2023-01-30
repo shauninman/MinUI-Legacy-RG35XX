@@ -3,7 +3,7 @@
 static CoreOverrides gpsp_overrides = {
 	.core_name = "gpsp",
 	.option_overrides = (OptionOverride[]){
-		{"gpsp_save_method", "libretro", 1},
+		{"gpsp_save_method", "libretro", 1}, // frontend doesn't support other option
 		{NULL,NULL},
 	},
 	.button_mapping = (ButtonMapping[]){

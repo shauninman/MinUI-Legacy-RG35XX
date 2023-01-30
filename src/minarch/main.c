@@ -376,6 +376,8 @@ static char* max_ff_labels[] = {
 	NULL,
 };
 
+///////////////////////////////
+
 enum {
 	FE_OPT_SCANLINES,
 	FE_OPT_TEXT,
@@ -384,8 +386,6 @@ enum {
 	FE_OPT_MAXFF,
 	FE_OPT_COUNT,
 };
-
-///////////////////////////////
 
 enum {
 	SHORTCUT_SAVE_STATE,
@@ -797,7 +797,6 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 			item->values = calloc(count+1, sizeof(char*));
 			item->labels = calloc(count+1, sizeof(char*));
 	
-			// printf("%s (%s)\n", item->name, item->key);
 			for (int j=0; j<count; j++) {
 				const char* value = def->values[j].value;
 				const char* label = def->values[j].label;
@@ -830,12 +829,9 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 			
 			item->value = Option_getValueIndex(item, default_value);
 			item->default_value = item->value;
-			// printf("(%s:%i)\n", item->labels[item->value], item->value);
-			// printf("%s %s\n",item->name, item->labels[item->value]);
-			// if (item->desc) printf("\t%s\n", item->desc);
 		}
 	}
-	fflush(stdout);
+	// fflush(stdout);
 }
 static void OptionList_vars(const struct retro_variable *vars) {
 	int count;

@@ -7,6 +7,7 @@ CoreOverrides gambatte_overrides = {
 		{"gambatte_gb_internal_palette",	"TWB64 - Pack 1"},
 		{"gambatte_gb_palette_twb64_1",		"TWB64 038 - Pokemon mini Ver."},
 		{"gambatte_gb_bootloader",			"disabled"},
+		{"gambatte_audio_resampler",		"sinc", 1}, // alternatives don't work
 		{NULL,NULL},
 	},
 	.button_mapping = (ButtonMapping[]){

@@ -2,6 +2,15 @@
 
 static CoreOverrides pcsx_rearmed_overrides = {
 	.core_name = "pcsx_rearmed",
+	.option_overrides = (OptionOverride[]){
+		{"pcsx_rearmed_display_internal_fps",		"disabled", 1},	// doesn't work?
+		{"pcsx_rearmed_gpu_slow_llists", 			"auto", 1},		// slow or crashes frontend
+		{"pcsx_rearmed_neon_interlace_enable",		"disabled", 1},	// slow or crashes frontend
+		{"pcsx_rearmed_neon_enhancement_enable",	"disabled", 1},	// slow or crashes frontend
+		{"pcsx_rearmed_neon_enhancement_no_main",	"disabled", 1},	// slow or crashes frontend
+		{"pcsx_rearmed_show_input_settings",		"disabled", 1}, // not available
+		{NULL,NULL},
+	},
 	.button_mapping = (ButtonMapping[]){
 		{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 		{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
