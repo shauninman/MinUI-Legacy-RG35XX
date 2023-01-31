@@ -22,6 +22,8 @@ enum {
 };
 
 int main(int argc , char* argv[]) {
+	POW_setCPUSpeed(CPU_SPEED_MENU);
+	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	InitSettings();
 	

@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# disable MicroSD card powersaving (should help reduce load stutter, test)
+echo on > /sys/devices/b0238000.mmc/mmc_host/mmc0/power/control
+echo on > /sys/devices/b0230000.mmc/mmc_host/mmc1/power/control
+
 export SDCARD_PATH="/mnt/sdcard"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"
@@ -14,7 +18,11 @@ export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
 mkdir -p "$LOGS_PATH"
 mkdir -p "$USERDATA_PATH/.minui"
 
-CPU_PATH="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+export CPU_SPEED_MENU=504000
+export CPU_SPEED_GAME=1296000
+export CPU_SPEED_PERF=1488000 # improves binary launch times
+export CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 
 cd $(dirname "$0")
 
@@ -25,11 +33,10 @@ export EXEC_PATH=/tmp/minui_exec
 touch "$EXEC_PATH" && sync
 
 while [ -f "$EXEC_PATH" ]; do
-	echo ondemand > "$CPU_PATH"
-	
 	./minui.elf &> $LOGS_PATH/minui.txt
 	
-	echo performance > "$CPU_PATH"
+	# overclock to speedup binary launch time
+	echo $CPU_SPEED_PERF > "$CPU_PATH"
 	sync
 	
 	NEXT="/tmp/next"

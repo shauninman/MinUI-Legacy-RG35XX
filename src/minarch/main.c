@@ -54,6 +54,7 @@ static int optimize_text = 1;
 static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
 static int fast_forward = 0;
+static int overclock = 1; // normal
 
 static struct Renderer {
 	int src_w;
@@ -384,6 +385,7 @@ enum {
 	FE_OPT_SCANLINES,
 	FE_OPT_TEXT,
 	FE_OPT_TEARING,
+	FE_OPT_OVERCLOCK,
 	FE_OPT_DEBUG,
 	FE_OPT_MAXFF,
 	FE_OPT_COUNT,
@@ -485,10 +487,16 @@ static char* shortcut_labels[] = {
 	"MENU+R2",
 	NULL,
 };
+static char* overclock_labels[] = {
+	"Powersave",
+	"Normal",
+	"Performance",
+	NULL,
+};
 
 enum {
 	CONFIG_NONE,
-	CONFIG_GLOBAL,
+	CONFIG_CONSOLE,
 	CONFIG_GAME,
 };
 
@@ -531,6 +539,16 @@ static struct Config {
 				.count = 3,
 				.values = tearing_labels,
 				.labels = tearing_labels,
+			},
+			[FE_OPT_OVERCLOCK] = {
+				.key	= "minarch_cpu_speed",
+				.name	= "CPU Speed",
+				.desc	= "Over- or underclock the CPU to prioritize\npure performance or power savings.",
+				.default_value = 1,
+				.value = 1,
+				.count = 3,
+				.values = overclock_labels,
+				.labels = overclock_labels,
 			},
 			[FE_OPT_DEBUG] = {
 				.key	= "minarch_debug_hud",
@@ -579,11 +597,21 @@ static void Config_getValue(char* cfg, const char* key, char* out_value) {
 	if (!tmp) tmp = strchr(out_value, '\r');
 	if (tmp) *tmp = '\0';
 }
+
+static void setOverclock(int i) {
+	overclock = i;
+	switch (i) {
+		case 0: POW_setCPUSpeed(CPU_SPEED_POWERSAVE); break;
+		case 1: POW_setCPUSpeed(CPU_SPEED_NORMAL); break;
+		case 2: POW_setCPUSpeed(CPU_SPEED_PERFORMANCE); break;
+	}
+}
 static void Config_syncFrontend(int i, int value) {
 	switch (i) {
 		case FE_OPT_SCANLINES:	show_scanlines 	= value; renderer.src_w = 0; break;
 		case FE_OPT_TEXT:		optimize_text 	= value; renderer.src_w = 0; break;
 		case FE_OPT_TEARING:	GFX_setVsync(value); break;
+		case FE_OPT_OVERCLOCK:	setOverclock(value); break;
 		case FE_OPT_DEBUG:		show_debug 		= value; break;
 		case FE_OPT_MAXFF:		max_ff_speed 	= value; break;
 	}
@@ -609,7 +637,7 @@ static void Config_read(void) {
 	char* cfg = allocFile(path);
 	if (!cfg) return;
 	
-	config.loaded = override ? CONFIG_GAME : CONFIG_GLOBAL;
+	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
 	
 	char key[256];
 	char value[256];
@@ -676,7 +704,7 @@ static void Config_write(int override) {
 		if (config.loaded==CONFIG_GAME) unlink(path);
 		Config_getPath(path, CONFIG_WRITE_ALL);
 	}
-	config.loaded = override ? CONFIG_GAME : CONFIG_GLOBAL;
+	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
 	
 	FILE *file = fopen(path, "wb");
 	if (!file) return;
@@ -711,7 +739,7 @@ static void Config_restore(void) {
 		sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
 		unlink(path);
 	}
-	else if (config.loaded==CONFIG_GLOBAL) {
+	else if (config.loaded==CONFIG_CONSOLE) {
 		sprintf(path, "%s/minarch.cfg", core.config_dir);
 		unlink(path);
 	}
@@ -2427,9 +2455,12 @@ void Menu_quit(void) {
 void Menu_beforeSleep(void) {
 	State_autosave();
 	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
+	POW_setCPUSpeed(CPU_SPEED_MENU);
 }
 void Menu_afterSleep(void) {
 	unlink(AUTO_RESUME_PATH);
+	setOverclock(overclock);
+	// POW_setCPUSpeed(CPU_SPEED_NORMAL);
 }
 
 typedef struct MenuList MenuList;
@@ -2658,9 +2689,9 @@ static MenuList OptionShortcuts_menu = {
 };
 static char* getSaveDesc(void) {
 	switch (config.loaded) {
-		case CONFIG_NONE:	return "Using defaults."; break;
-		case CONFIG_GLOBAL:	return "Using global config."; break;
-		case CONFIG_GAME:	return "Using game config."; break;
+		case CONFIG_NONE:		return "Using defaults."; break;
+		case CONFIG_CONSOLE:	return "Using console config."; break;
+		case CONFIG_GAME:		return "Using game config."; break;
 	}
 }
 static int OptionShortcuts_openMenu(MenuList* list, int i) {
@@ -2697,17 +2728,18 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 	switch (i) {
 		case 0: {
 			Config_write(CONFIG_WRITE_ALL);
-			message = "Saved for all games.";
+			message = "Saved for console.";
 			break;
 		}
 		case 1: {
 			Config_write(CONFIG_WRITE_GAME);
-			message = "Saved for this game.";
+			message = "Saved for game.";
 			break;
 		}
 		default: {
 			Config_restore();
-			message = "Restored defaults.";
+			if (config.loaded) message = "Restored console defaults.";
+			else message = "Restored defaults.";
 			break;
 		}
 	}
@@ -2739,8 +2771,8 @@ static MenuList OptionSaveChanges_menu = {
 	.type = MENU_LIST,
 	.on_confirm = OptionSaveChanges_onConfirm,
 	.items = (MenuItem[]){
-		{"Save for all games"},
-		{"Save for this game"},
+		{"Save for console"},
+		{"Save for game"},
 		{"Restore defaults"},
 		{NULL},
 	}
@@ -3146,6 +3178,8 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 static void Menu_loop(void) {
+	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
+	
 	fast_forward = 0;
 	POW_enableAutosleep();
 	PAD_reset();
@@ -3504,6 +3538,8 @@ static void Menu_loop(void) {
 	GFX_flip(screen);
 	
 	POW_disableAutosleep();
+	
+	if (!quit) setOverclock(overclock); // restore overclock value
 }
 
 // TODO: move to POW_*?
@@ -3561,7 +3597,11 @@ static void limitFF(void) {
 			uint64_t ff_frame_time = 1000000 / (core.fps * (max_ff_speed + 1)); // TODO: define this only when max_ff_speed changes
 			if (elapsed<ff_frame_time) {
 				int delay = (ff_frame_time - elapsed) / 1000;
-				if (delay>0) SDL_Delay(delay);
+				if (delay>0) {
+					// TODO: huh, this isn't causing the Tekken 3 hangs...
+					// printf("limitFF delay: %i\n", delay); fflush(stdout);
+					SDL_Delay(delay);
+				}
 			}
 			last_time += ff_frame_time;
 			return;
@@ -3571,6 +3611,7 @@ static void limitFF(void) {
 }
 
 int main(int argc , char* argv[]) {
+	setOverclock(overclock); // default to normal
 	// force a stack overflow to ensure asan is linked and actually working
 	// char tmp[2];
 	// tmp[2] = 'a';

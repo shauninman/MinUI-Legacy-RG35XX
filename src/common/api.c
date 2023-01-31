@@ -1099,26 +1099,33 @@ void POW_powerOff(void) {
 }
 
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
-static char governor[128];
+
+#define CPU_SPEED_SET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+#define CPU_SPEED_GET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+static int previous_speed = CPU_SPEED_NORMAL;
+
+void POW_setCPUSpeed(int speed) {
+	putInt(CPU_SPEED_SET_PATH, speed);
+	sync();
+}
 
 static void POW_enterSleep(void) {
 	SetRawVolume(0);
 	putInt(BACKLIGHT_PATH, FB_BLANK_POWERDOWN);
 	
-	// save current governor (either ondemand or performance)
-	getFile(GOVERNOR_PATH, governor, 128);
-	trimTrailingNewlines(governor);
-
-	putFile(GOVERNOR_PATH, "powersave");
+	// TODO: not sure this is necessary
+	// previous_speed = getInt(CPU_SPEED_GET_PATH);
+	// POW_setCPUSpeed(CPU_SPEED_MENU);
+	
 	sync();
 }
 static void POW_exitSleep(void) {
 	putInt(BACKLIGHT_PATH, FB_BLANK_UNBLANK);
 	SetVolume(GetVolume());
 	
-	// restore previous governor
-	putFile(GOVERNOR_PATH, governor);
+	// TODO: not sure this is necessary
+	// POW_setCPUSpeed(previous_speed);
+	
 	sync();
 }
 static void POW_waitForWake(void) {

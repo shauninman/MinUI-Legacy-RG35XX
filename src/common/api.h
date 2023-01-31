@@ -192,6 +192,12 @@ int POW_isCharging(void);
 int POW_getBattery(void);
 void POW_setRumble(int strength); // 0-100
 
+#define CPU_SPEED_MENU			 504000 // 240000 was having latency issues
+#define CPU_SPEED_POWERSAVE 	1104000
+#define CPU_SPEED_NORMAL 		1296000
+#define CPU_SPEED_PERFORMANCE	1488000
+void POW_setCPUSpeed(int speed);
+
 ///////////////////////////////
 
 #endif
