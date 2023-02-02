@@ -2787,7 +2787,7 @@ static int OptionSaveChanges_openMenu(MenuList* list, int i) {
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]) {
-		{"Frontend", "MinUI (" RELEASE_NAME " " COMMIT_HASH ")",.on_confirm=OptionFrontend_openMenu},
+		{"Frontend", "MinUI (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 

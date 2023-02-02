@@ -12,6 +12,10 @@ LDFLAGS	 = -ldl -lSDL -lSDL_image -lSDL_ttf -lmsettings -lpthread
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan
 
+BUILD_DATE!=date +%Y.%m.%d
+BUILD_HASH!=git rev-parse --short HEAD
+CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
+
 all:
 	$(CC) main.c ../common/scaler_neon.c ../common/utils.c ../common/api.c -o $(TARGET) $(CFLAGS) $(LDFLAGS)
 clean:
