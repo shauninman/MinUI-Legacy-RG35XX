@@ -19,7 +19,7 @@ RELEASE_BASE=MinUI-$(RELEASE_TIME)
 RELEASE_DOT!=find ./releases/. -regex ".*/$(RELEASE_BASE)-[0-9]+-base\.zip" -printf '.' | wc -m
 RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
 
-all: lib sys cores tools payload readmes zip report
+all: lib sys cores tools dtb payload readmes zip report
 	
 lib:
 	cd ./src/libmsettings && make
@@ -36,17 +36,24 @@ tools:
 	cd ./src/clock && make
 	cd ./third-party/DinguxCommander && make -j
 
+dtb:
+	cd ./src/dts/ && make
+
 payload:
 	rm -rf ./build
 	mkdir -p ./releases
 	mkdir -p ./build
 	
 	echo "TODO: payload"
+	echo "TDOO: remove .keep and *.meta files"
 
 readmes:
 	echo "TODO: readmes"
 
 zip:
+	cd ./build && find . -type f -name '.keep' -delete
+	cd ./build && find . -type f -name '*.meta' -delete
+	cd ./build && find . -type f -name '.DS_Store' -delete
 	echo "TODO: zip"
 
 report:
