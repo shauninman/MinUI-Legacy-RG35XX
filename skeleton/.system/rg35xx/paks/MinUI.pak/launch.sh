@@ -24,6 +24,11 @@ export CPU_SPEED_GAME=1296000
 export CPU_SPEED_PERF=1488000 # improves binary launch times
 export CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 
+AUTO_PATH=$USERDATA_PATH/auto.sh
+if [ -f "$AUTO_PATH" ]; then
+	"$AUTO_PATH"
+fi
+
 cd $(dirname "$0")
 
 keymon.elf & # &> /mnt/sdcard/keymon.txt &
