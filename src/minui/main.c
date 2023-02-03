@@ -1233,7 +1233,6 @@ int main (int argc, char *argv[]) {
 	if (autoResume()) return 0; // nothing to do
 	
 	dump("MinUI");
-	POW_setCPUSpeed(CPU_SPEED_MENU);
 	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	InitSettings();
@@ -1243,6 +1242,9 @@ int main (int argc, char *argv[]) {
 	
 	Menu_init();
 	
+	// now that (most of) the heavy lifting is done, take a load off
+	POW_setCPUSpeed(CPU_SPEED_MENU);
+
 	PAD_reset();
 	int dirty = 1;
 	int show_setting = 0; // 1=brightness,2=volume
