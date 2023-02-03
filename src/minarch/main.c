@@ -1093,7 +1093,7 @@ static void input_poll_callback(void) {
 		if (PAD_isPressed(btn)) buttons |= 1 << config.controls[i].retro;
 	}
 }
-static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) { // copied from picoarch
+static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	// id == RETRO_DEVICE_ID_JOYPAD_MASK or RETRO_DEVICE_ID_JOYPAD_*
 	if (port == 0 && device == RETRO_DEVICE_JOYPAD && index == 0) {
 		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return buttons;
@@ -1284,7 +1284,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
 			OptionList_reset();
-			OptionList_init(*(const struct retro_core_option_definition **)data); 
+			OptionList_init((const struct retro_core_option_definition *)data); 
 		}
 		break;
 	}

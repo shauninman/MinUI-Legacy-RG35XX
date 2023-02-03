@@ -3,7 +3,7 @@
 static CoreOverrides fceumm_overrides = {
 	.core_name = "fceumm",
 	.option_overrides = (OptionOverride[]){
-		{"fceumm_sndquality",	"High"}, // why does it default too low :sob:
+		{"fceumm_sndquality",	"High"},
 		{"fceumm_sndvolume",	"10"},
 		{"fceumm_show_adv_system_options","disabled",1}, // doesn't do anything
 		{"fceumm_show_adv_sound_options","disabled", 1}, // doesn't do anything
