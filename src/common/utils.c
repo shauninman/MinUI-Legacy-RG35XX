@@ -30,10 +30,17 @@ int hide(char* file_name) {
 
 void getDisplayName(const char* in_name, char* out_name) {
 	char* tmp;
+	char work_name[256];
+	strcpy(work_name, in_name);
 	strcpy(out_name, in_name);
 	
+	if (suffixMatch("/" PLATFORM, work_name)) { // hide platform from Tools path...
+		tmp = strrchr(work_name, '/');
+		tmp[0] = '\0';
+	}
+	
 	// extract just the filename if necessary
-	tmp = strrchr(in_name, '/');
+	tmp = strrchr(work_name, '/');
 	if (tmp) strcpy(out_name, tmp+1);
 	
 	// remove extension
@@ -41,8 +48,7 @@ void getDisplayName(const char* in_name, char* out_name) {
 	if (tmp && strlen(tmp)<=4) tmp[0] = '\0'; // 3 letter extension plus dot
 	
 	// remove trailing parens (round and square)
-	char safe_name[256];
-	strcpy(safe_name,out_name);
+	strcpy(work_name, out_name);
 	while ((tmp=strrchr(out_name, '('))!=NULL || (tmp=strrchr(out_name, '['))!=NULL) {
 		if (tmp==out_name) break;
 		tmp[0] = '\0';
@@ -50,7 +56,7 @@ void getDisplayName(const char* in_name, char* out_name) {
 	}
 	
 	// make sure we haven't nuked the entire name
-	if (out_name[0]=='\0') strcpy(out_name, safe_name);
+	if (out_name[0]=='\0') strcpy(out_name, work_name);
 	
 	// remove trailing whitespace
 	tmp = out_name + strlen(out_name) - 1;

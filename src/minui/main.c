@@ -120,9 +120,6 @@ typedef struct Entry {
 	char* unique;
 	int type;
 	int alpha; // index in parent Directory's alphas Array, which points to the index of an Entry in its entries Array :sweat_smile:
-	
-	int has_alt;
-	int use_alt;
 } Entry;
 
 static Entry* Entry_new(char* path, int type) {
@@ -134,8 +131,6 @@ static Entry* Entry_new(char* path, int type) {
 	self->unique = NULL;
 	self->type = type;
 	self->alpha = 0;
-	self->has_alt = type!=ENTRY_ROM?0:-1;
-	self->use_alt = type!=ENTRY_ROM?0:-1;
 	return self;
 }
 static void Entry_free(Entry* self) {
@@ -411,18 +406,13 @@ static int hasEmu(char* emu_name) {
 	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, emu_name);
 	if (exists(pak_path)) return 1;
 
-	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", SDCARD_PATH, emu_name);
+	sprintf(pak_path, "%s/Emus/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, emu_name);
 	return exists(pak_path);
 }
 static void getEmuPath(char* emu_name, char* pak_path) {
-	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", SDCARD_PATH, emu_name);
+	sprintf(pak_path, "%s/Emus/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, emu_name);
 	if (exists(pak_path)) return;
 	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, emu_name);
-}
-static int hasAlt(char* emu_name) {
-	char pak_path[256];
-	sprintf(pak_path, "%s/Emus/%s.pak/has-alt", PAKS_PATH, emu_name);
-	return exists(pak_path);
 }
 static int hasCue(char* dir_path, char* cue_path) { // NOTE: dir_path not rom_path
 	char* tmp = strrchr(dir_path, '/') + 1; // folder name
@@ -457,59 +447,6 @@ static int hasM3u(char* rom_path, char* m3u_path) { // NOTE: rom_path not dir_pa
 	strcpy(tmp, ".m3u");
 	
 	return exists(m3u_path);
-}
-
-static int Entry_hasAlt(Entry* self) {
-	// has_alt can be set by getEntries()
-	// but won't be set by getRecents()
-	// otherwise delayed until selected
-	if (self->has_alt==-1) {
-		// check
-		char emu_name[256];
-		getEmuName(self->path, emu_name);
-		self->has_alt = hasAlt(emu_name);
-	}
-	return self->has_alt;
-}
-static int Entry_useAlt(Entry* self) {
-	// has to be checked on an individual basis
-	// but delayed until selected
-	
-	if (self->use_alt==-1) {
-		// check
-		char emu_name[256];
-		getEmuName(self->path, emu_name);
-		
-		char rom_name[256];
-		char* tmp = strrchr(self->path, '/');
-		if (tmp) strcpy(rom_name, tmp+1);
-		
-		char use_alt[256];
-		sprintf(use_alt, "%s/.minui/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
-		
-		self->use_alt = exists(use_alt);
-	}
-	return self->use_alt;
-}
-static int Entry_toggleAlt(Entry* self) {
-	if (!Entry_hasAlt(self)) return 0;
-
-	self->use_alt = !Entry_useAlt(self);
-	
-	char emu_name[256];
-	getEmuName(self->path, emu_name);
-	
-	char rom_name[256];
-	char* tmp = strrchr(self->path, '/');
-	if (tmp) strcpy(rom_name, tmp+1);
-	
-	char use_alt_path[256];
-	sprintf(use_alt_path, "%s/.minui/%s/%s.use-alt", USERDATA_PATH, emu_name, rom_name);
-	
-	if (self->use_alt==1) touch(use_alt_path);
-	else unlink(use_alt_path);
-		
-	return 1;
 }
 
 static int hasRecents(void) {
@@ -691,8 +628,7 @@ static Array* getRoot(void) {
 	}
 	Array_free(entries); // root now owns entries' entries
 	
-	char tools_path[256];
-	sprintf(tools_path, "%s/Tools", SDCARD_PATH);
+	char* tools_path = SDCARD_PATH "/Tools/" PLATFORM;
 	if (exists(tools_path)) Array_push(root, Entry_new(tools_path, ENTRY_DIR));
 	
 	return root;
