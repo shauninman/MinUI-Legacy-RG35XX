@@ -26,6 +26,7 @@
 #include "overrides/fceumm.h"
 #include "overrides/gambatte.h"
 #include "overrides/gpsp.h"
+#include "overrides/mednafen_vb.h"
 #include "overrides/pcsx_rearmed.h"
 #include "overrides/picodrive.h"
 #include "overrides/pokemini.h"
@@ -35,6 +36,7 @@ static CoreOverrides* overrides[] = {
 	&fceumm_overrides,
 	&gambatte_overrides,
 	&gpsp_overrides,
+	&mednafen_vb_overrides,
 	&pcsx_rearmed_overrides,
 	&picodrive_overrides,
 	&pokemini_overrides,
@@ -1178,8 +1180,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 				const struct retro_input_descriptor* var = &vars[i];
 				if (var->port==0 && var->device==RETRO_DEVICE_JOYPAD && var->index==0) {
 					if (var->id>=RETRO_BUTTON_COUNT) {
-						printf("%s unavailable\n", var->description); fflush(stdout);
+						printf("UNAVAILABLE: %s\n", var->description); fflush(stdout);
 						continue;
+					}
+					else {
+						printf("PRESENT    : %s\n", var->description); fflush(stdout);
 					}
 					present[var->id] = 1;
 					core_button_names[var->id] = var->description;
@@ -1188,7 +1193,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			
 			for (int i=0;default_button_mapping[i].name; i++) {
 				ButtonMapping* mapping = &default_button_mapping[i];
-				LOG_info("DEFAULT %s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
+				LOG_info("DEFAULT %s (%s): <%s>\n", core_button_names[mapping->retro], mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
 			}
 			
 			for (int i=0; config.controls[i].name; i++) {
