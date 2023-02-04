@@ -32,7 +32,7 @@ sys:
 	cd ./src/minui && make
 
 cores:
-	echo "TODO: cores"
+	cd ./src/minarch/cores && make
 
 tools:
 	cd ./src/clock && make
@@ -59,6 +59,18 @@ bundle:
 	cp ./src/minarch/minarch.elf ./build/SYSTEM/rg35xx/bin
 	cp ./src/minui/minui.elf ./build/SYSTEM/rg35xx/paks/MinUI.pak
 	cp ./src/clock/clock.elf ./build/EXTRAS/Tools/rg35xx/Clock.pak
+	
+	# stock cores
+	cp ./src/minarch/cores/fceumm_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./src/minarch/cores/gambatte_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./src/minarch/cores/gpsp_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./src/minarch/cores/pcsx_rearmed_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./src/minarch/cores/picodrive_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
+	cp ./src/minarch/cores/snes9x2005_plus_libretro.so ./build/SYSTEM/rg35xx/cores
+
+	# extras
+	cp ./src/minarch/cores/beetle-vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
+	cp ./src/minarch/cores/pokemini_libretro.so ./build/SYSTEM/rg35xx/cores
 	cp ./third-party/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
 	cp -R ./third-party/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
 	

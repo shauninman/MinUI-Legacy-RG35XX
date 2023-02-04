@@ -8,3 +8,7 @@ releases/
 *.so
 *.elf
 *.dtb
+
+# thanks I hate it
+src/minarch/cores/*
+!src/minarch/cores/makefile
