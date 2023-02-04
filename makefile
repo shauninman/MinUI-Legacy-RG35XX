@@ -43,9 +43,11 @@ payload:
 	rm -rf ./build
 	mkdir -p ./releases
 	mkdir -p ./build
+	# cp ~/buildroot/output/images/rootfs.ext2 ./build/rootfs.img
 	
 	echo "TODO: payload"
 	echo "TDOO: remove .keep and *.meta files"
+	
 
 readmes:
 	echo "TODO: readmes"
