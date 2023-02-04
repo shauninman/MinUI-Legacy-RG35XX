@@ -402,8 +402,9 @@ enum {
 	SHORTCUT_COUNT,
 };
 
-#define RETRO_BUTTON_COUNT 14
-static const char* device_button_names[RETRO_BUTTON_COUNT] = {
+#define LOCAL_BUTTON_COUNT 14
+#define RETRO_BUTTON_COUNT 16 // allow L3/R3 to be remapped by user if desired, eg. Virtual Boy uses extra buttons for right d-pad
+static const char* device_button_names[LOCAL_BUTTON_COUNT] = {
 	[BTN_ID_UP]		= "UP",
 	[BTN_ID_DOWN]	= "DOWN",
 	[BTN_ID_LEFT]	= "LEFT",
@@ -434,6 +435,8 @@ static ButtonMapping default_button_mapping[] = {
 	{"R1 Button",	RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
 	{"L2 Button",	RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
 	{"R2 Button",	RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
+	{"L3 Button",	RETRO_DEVICE_ID_JOYPAD_L3,		BTN_ID_NONE},
+	{"R3 Button",	RETRO_DEVICE_ID_JOYPAD_R3,		BTN_ID_NONE},
 	{NULL,0,0}
 };
 static const char* core_button_names[RETRO_BUTTON_COUNT];
@@ -687,8 +690,8 @@ static void Config_read(void) {
 		}
 		
 		int mod = 0;
-		if (id>RETRO_BUTTON_COUNT) {
-			id -= RETRO_BUTTON_COUNT;
+		if (id>LOCAL_BUTTON_COUNT) {
+			id -= LOCAL_BUTTON_COUNT;
 			mod = 1;
 		}
 		mapping->local = id;
@@ -722,13 +725,13 @@ static void Config_write(int override) {
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		int j = mapping->local + 1;
-		if (mapping->mod) j += RETRO_BUTTON_COUNT;
+		if (mapping->mod) j += LOCAL_BUTTON_COUNT;
 		fprintf(file, "bind %s = %s\n", mapping->name, shortcut_labels[j]);
 	}
 	for (int i=0; config.shortcuts[i].name; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		int j = mapping->local + 1;
-		if (mapping->mod) j += RETRO_BUTTON_COUNT;
+		if (mapping->mod) j += LOCAL_BUTTON_COUNT;
 		fprintf(file, "bind %s = %s\n", mapping->name, shortcut_labels[j]);
 	}
 	
@@ -1165,6 +1168,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// default_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
 		// override_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
 		
+		// ButtonMapping needs to be redefined to include retro_name local_name retro_id local_id local_default
+		
 		// TODO: move all this to an Input_init()?
 		config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
 		
@@ -1178,17 +1183,18 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			memset(&present, 0, RETRO_BUTTON_COUNT * sizeof(int));
 			for (int i=0; vars[i].description; i++) {
 				const struct retro_input_descriptor* var = &vars[i];
-				if (var->port==0 && var->device==RETRO_DEVICE_JOYPAD && var->index==0) {
-					if (var->id>=RETRO_BUTTON_COUNT) {
-						printf("UNAVAILABLE: %s\n", var->description); fflush(stdout);
-						continue;
-					}
-					else {
-						printf("PRESENT    : %s\n", var->description); fflush(stdout);
-					}
-					present[var->id] = 1;
-					core_button_names[var->id] = var->description;
+				if (var->port!=0 || var->device!=RETRO_DEVICE_JOYPAD || var->index!=0) continue;
+
+				// TODO: don't ignore unavailable buttons, just override them to BTN_ID_NONE!
+				if (var->id>=RETRO_BUTTON_COUNT) {
+					printf("UNAVAILABLE: %s\n", var->description); fflush(stdout);
+					continue;
 				}
+				else {
+					printf("PRESENT    : %s\n", var->description); fflush(stdout);
+				}
+				present[var->id] = 1;
+				core_button_names[var->id] = var->description;
 			}
 			
 			for (int i=0;default_button_mapping[i].name; i++) {
@@ -2611,7 +2617,7 @@ int OptionControls_bind(MenuList* list, int i) {
 		PAD_poll();
 		
 		// NOTE: off by one because of the initial NONE value
-		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+		for (int id=0; id<=LOCAL_BUTTON_COUNT; id++) {
 			if (PAD_justPressed(1 << id-1)) {
 				item->value = id;
 				button->local = id - 1;
@@ -2637,7 +2643,6 @@ static int OptionControls_openMenu(MenuList* list, int i) {
 			ButtonMapping* button = &config.controls[j];
 			MenuItem* item = &OptionControls_menu.items[j];
 			item->id = j;
-			// item->key = button->name; // TODO: tmp, lowercase this? prefix with "bind_" or don't lowercase and "bind "
 			item->name = button->name;
 			item->desc = NULL;
 			item->value = button->local + 1;
@@ -2665,13 +2670,13 @@ static int OptionShortcuts_bind(MenuList* list, int i) {
 		PAD_poll();
 		
 		// NOTE: off by one because of the initial NONE value
-		for (int id=0; id<=RETRO_BUTTON_COUNT; id++) {
+		for (int id=0; id<=LOCAL_BUTTON_COUNT; id++) {
 			if (PAD_justPressed(1 << id-1)) {
 				fflush(stdout);
 				item->value = id;
 				button->local = id - 1;
 				if (PAD_isPressed(BTN_MENU)) {
-					item->value += RETRO_BUTTON_COUNT;
+					item->value += LOCAL_BUTTON_COUNT;
 					button->mod = 1;
 				}
 				else {
@@ -2710,7 +2715,7 @@ static int OptionShortcuts_openMenu(MenuList* list, int i) {
 			item->name = button->name;
 			item->desc = NULL;
 			item->value = button->local + 1;
-			if (button->mod) item->value += RETRO_BUTTON_COUNT;
+			if (button->mod) item->value += LOCAL_BUTTON_COUNT;
 			item->values = shortcut_labels;
 		}
 	}
@@ -2720,7 +2725,7 @@ static int OptionShortcuts_openMenu(MenuList* list, int i) {
 			ButtonMapping* button = &config.shortcuts[j];
 			MenuItem* item = &OptionShortcuts_menu.items[j];
 			item->value = button->local + 1;
-			if (button->mod) item->value += RETRO_BUTTON_COUNT;
+			if (button->mod) item->value += LOCAL_BUTTON_COUNT;
 		}
 	}
 	Menu_options(&OptionShortcuts_menu);
