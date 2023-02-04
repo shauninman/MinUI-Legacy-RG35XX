@@ -2,7 +2,9 @@
 
 /usbdbg.sh device
 
-SDCARD_PATH=/mnt/mmc # TF1
+TF1_PATH=/mnt/mmc
+TF2_PATH=/mnt/sdcard
+SDCARD_PATH=$TF1_PATH
 SYSTEM_DIR=/.system
 SYSTEM_FRAG=$SYSTEM_DIR/rg35xx
 UPDATE_FRAG=/MinUI.zip
@@ -24,23 +26,37 @@ fi
 
 if [ ! -d $SYSTEM_PATH ]; then
 	# try TF2
-	SDCARD_PATH=/mnt/sdcard
+	SDCARD_PATH=$TF2_PATH
 	SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 	UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 fi
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
-	if [ -d $SYSTEM_PATH ]; then
-		echo update > $SDCARD_PATH/log.txt
-	else
-		echo install > $SDCARD_PATH/log.txt
-	fi
-	# TODO: finish this logic
-	# busybox unzip 
+	# TODO: TEST!
+	
+	# busybox unzip -o $UPDATE_PATH -d $SDCARD_PATH
+	# FLAG_PATH=/misc/.minstalled
+	# if [ ! -f $FLAG_PATH ]; then
+	# 	BAK_PATH=$TF1_PATH/bak
+	# 	mkdir -p $BAK_PATH
+	# 	cp /misc/modules/gpio_keys_polled.ko $BAK_PATH
+	# 	cp /misc/boot_logo.bmp.gz $BAK_PATH
+	# 	cp /misc/kernel.dtb $BAK_PATH
+	# 	cp /misc/uImage $BAK_PATH
+	# 	mount -o remount,rw /dev/block/actb /misc
+	# 	rm -f /misc/uImage
+	# 	cp $SYSTEM_PATH/dat/uImage /misc
+	# 	cp $SYSTEM_PATH/dat/boot_logo.bmp.gz /misc
+	# 	cp $SYSTEM_PATH/dat/kernel.dtb /misc
+	# 	cp $SYSTEM_PATH/dat/gpio_keys_polled.ko /misc/modules
+	# 	touch $FLAG_PATH
+	# fi
+	# rm -f $UPDATE_PATH
+	# sync && reboot
 fi
 
-ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.img
+ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2
 if [ ! -f $ROOTFS_IMAGE ]; then
 	# fallback to stock demenu.bin, based on dmenu_ln
 	ACT="/tmp/.next"
