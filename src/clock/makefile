@@ -2,7 +2,7 @@ ifeq (,$(CROSS_COMPILE))
 $(error missing CROSS_COMPILE for this toolchain)
 endif
 
-TARGET = Clock.pak/clock.elf
+TARGET = clock.elf
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS   = -marm -mtune=cortex-a9 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer

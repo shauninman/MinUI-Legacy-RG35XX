@@ -19,15 +19,17 @@ RELEASE_BASE=MinUI-$(RELEASE_TIME)
 RELEASE_DOT!=find ./releases/. -regex ".*/$(RELEASE_BASE)-[0-9]+-base\.zip" -printf '.' | wc -m
 RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
 
-all: lib sys cores tools dtb payload readmes zip report
+# TODO: this needs to consider the different platforms, eg. rootfs.ext2 should only be copied in rg35xx-toolchain
+
+all: lib sys cores tools dtb bundle readmes zip report
 	
 lib:
 	cd ./src/libmsettings && make
 
 sys:
 	cd ./src/keymon && make
-	cd ./src/minui && make
 	cd ./src/minarch && make
+	cd ./src/minui && make
 
 cores:
 	echo "TODO: cores"
@@ -39,24 +41,42 @@ tools:
 dtb:
 	cd ./src/dts/ && make
 
-payload:
+bundle:
+	# ready build
 	rm -rf ./build
 	mkdir -p ./releases
-	mkdir -p ./build
-	# cp ~/buildroot/output/images/rootfs.ext2 ./build/rootfs.img
+	cp -R ./skeleton ./build
 	
-	echo "TODO: payload"
-	echo "TDOO: remove .keep and *.meta files"
-	
-
-readmes:
-	echo "TODO: readmes"
-
-zip:
+	# remove authoring detritus
 	cd ./build && find . -type f -name '.keep' -delete
 	cd ./build && find . -type f -name '*.meta' -delete
-	cd ./build && find . -type f -name '.DS_Store' -delete
-	echo "TODO: zip"
+	
+	# populate system
+	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx/
+	cp ./src/dts/kernel.dtb ./build/SYSTEM/rg35xx/dat
+	cp ./src/libmsettings/libmsettings.so ./build/SYSTEM/rg35xx/lib
+	cp ./src/keymon/keymon.elf ./build/SYSTEM/rg35xx/bin
+	cp ./src/minarch/minarch.elf ./build/SYSTEM/rg35xx/bin
+	cp ./src/minui/minui.elf ./build/SYSTEM/rg35xx/paks/MinUI.pak
+	cp ./src/clock/clock.elf ./build/EXTRAS/Tools/rg35xx/Clock.pak
+	cp ./third-party/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
+	cp -R ./third-party/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
+	
+	mkdir -p ./build/PAYLOAD
+	mv ./build/SYSTEM ./build/PAYLOAD/.system
+	
+	# TODO: move to zip target
+	cd ./build/PAYLOAD && find . -type f -name '.DS_Store' -delete # TODO: do this before echo zip
+	cd ./build/PAYLOAD && zip -r MinUI.zip .system
+	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
+	
+readmes:
+	# TODO
+	echo
+
+zip:
+	# TODO: 
+	echo
 
 report:
 	echo "finished building r${RELEASE_TIME}-${RELEASE_DOT}"
