@@ -72,90 +72,9 @@ static struct Renderer {
 
 ///////////////////////////////////////
 
-static struct Game {
-	char path[MAX_PATH];
-	char name[MAX_PATH]; // TODO: rename to basename?
-	char m3u_path[MAX_PATH];
-	void* data;
-	size_t size;
-} game;
-static void Game_open(char* path) {
-	strcpy((char*)game.path, path);
-	strcpy((char*)game.name, strrchr(path, '/')+1);
-		
-	FILE *file = fopen(game.path, "r");
-	if (file==NULL) {
-		LOG_error("Error opening game: %s\n\t%s\n", game.path, strerror(errno));
-		return;
-	}
-	
-	fseek(file, 0, SEEK_END);
-	game.size = ftell(file);
-	
-	rewind(file);
-	game.data = malloc(game.size);
-	fread(game.data, sizeof(uint8_t), game.size, file);
-	
-	fclose(file);
-	
-	// m3u-based?
-	char* tmp;
-	char m3u_path[256];
-	char base_path[256];
-	char dir_name[256];
-
-	strcpy(m3u_path, game.path);
-	tmp = strrchr(m3u_path, '/') + 1;
-	tmp[0] = '\0';
-	
-	strcpy(base_path, m3u_path);
-	
-	tmp = strrchr(m3u_path, '/');
-	tmp[0] = '\0';
-
-	tmp = strrchr(m3u_path, '/');
-	strcpy(dir_name, tmp);
-	
-	tmp = m3u_path + strlen(m3u_path); 
-	strcpy(tmp, dir_name);
-	
-	tmp = m3u_path + strlen(m3u_path);
-	strcpy(tmp, ".m3u");
-	
-	if (exists(m3u_path)) {
-		strcpy(game.m3u_path, m3u_path);
-		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
-	}
-	else {
-		game.m3u_path[0] = '\0';
-	}
-}
-static void Game_close(void) {
-	free(game.data);
-	POW_setRumble(0); // just in case
-}
-
-static struct retro_disk_control_ext_callback disk_control_ext;
-static void Game_changeDisc(char* path) {
-	
-	if (exactMatch(game.path, path) || !exists(path)) return;
-	
-	Game_close();
-	Game_open(path);
-	
-	struct retro_game_info game_info = {};
-	game_info.path = game.path;
-	game_info.data = game.data;
-	game_info.size = game.size;
-	
-	disk_control_ext.replace_image_index(0, &game_info);
-	putFile(CHANGE_DISC_PATH, path); // MinUI still needs to know this to update recents.txt
-}
-
-///////////////////////////////
-
 static struct Core {
 	int initialized;
+	int need_fullpath;
 	
 	const char tag[8]; // eg. GBC
 	const char name[128]; // eg. gambatte
@@ -191,6 +110,99 @@ static struct Core {
 	void *(*get_memory_data)(unsigned id);
 	size_t (*get_memory_size)(unsigned id);
 } core;
+
+///////////////////////////////////////
+
+static struct Game {
+	char path[MAX_PATH];
+	char name[MAX_PATH]; // TODO: rename to basename?
+	char m3u_path[MAX_PATH];
+	void* data;
+	size_t size;
+} game;
+static void Game_open(char* path) {
+	memset(&game, 0, sizeof(game));
+	
+	strcpy((char*)game.path, path);
+	strcpy((char*)game.name, strrchr(path, '/')+1);
+	
+	// some cores handle opening files themselves, eg. pcsx_rearmed
+	// if the frontend tries to load a 500MB file itself bad things happen
+	if (!core.need_fullpath) {
+		FILE *file = fopen(game.path, "r");
+		if (file==NULL) {
+			LOG_error("Error opening game: %s\n\t%s\n", game.path, strerror(errno));
+			return;
+		}
+	
+		fseek(file, 0, SEEK_END);
+		game.size = ftell(file);
+	
+		rewind(file);
+		game.data = malloc(game.size);
+		if (game.data==NULL) {
+			LOG_error("Couldn't allocate memory for file: %s\n", game.path);
+			return;
+		}
+	
+		fread(game.data, sizeof(uint8_t), game.size, file);
+	
+		fclose(file);
+	}
+	
+	// m3u-based?
+	char* tmp;
+	char m3u_path[256];
+	char base_path[256];
+	char dir_name[256];
+
+	strcpy(m3u_path, game.path);
+	tmp = strrchr(m3u_path, '/') + 1;
+	tmp[0] = '\0';
+	
+	strcpy(base_path, m3u_path);
+	
+	tmp = strrchr(m3u_path, '/');
+	tmp[0] = '\0';
+
+	tmp = strrchr(m3u_path, '/');
+	strcpy(dir_name, tmp);
+	
+	tmp = m3u_path + strlen(m3u_path); 
+	strcpy(tmp, dir_name);
+	
+	tmp = m3u_path + strlen(m3u_path);
+	strcpy(tmp, ".m3u");
+	
+	if (exists(m3u_path)) {
+		strcpy(game.m3u_path, m3u_path);
+		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
+	}
+	else {
+		game.m3u_path[0] = '\0';
+	}
+}
+static void Game_close(void) {
+	if (game.data) free(game.data);
+	POW_setRumble(0); // just in case
+}
+
+static struct retro_disk_control_ext_callback disk_control_ext;
+static void Game_changeDisc(char* path) {
+	
+	if (exactMatch(game.path, path) || !exists(path)) return;
+	
+	Game_close();
+	Game_open(path);
+	
+	struct retro_game_info game_info = {};
+	game_info.path = game.path;
+	game_info.data = game.data;
+	game_info.size = game.size;
+	
+	disk_control_ext.replace_image_index(0, &game_info);
+	putFile(CHANGE_DISC_PATH, path); // MinUI still needs to know this to update recents.txt
+}
 
 ///////////////////////////////////////
 
@@ -1363,6 +1375,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	
 	// TODO: RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE 64
+	case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE: { /* 65 */
+		// const struct retro_system_content_info_override* info = (const struct retro_system_content_info_override* )data;
+		// if (info) LOG_info("has overrides");
+		break;
+	}
 	// TODO: RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK 69
 	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
 	case RETRO_ENVIRONMENT_SET_VARIABLE: {
@@ -2316,7 +2333,9 @@ void Core_open(const char* core_path, const char* tag_name) {
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
 	
-	LOG_info("core: %s version: %s tag: %s\n", core.name, core.version, core.tag);
+	core.need_fullpath = info.need_fullpath;
+	
+	LOG_info("core: %s version: %s tag: %s\n\t(valid_extensions: %s need_fullpath: %i)\n", core.name, core.version, core.tag, info.valid_extensions, info.need_fullpath);
 	
 	for (int i=0; overrides[i]; i++) {
 		if (!strcmp(overrides[i]->core_name, core.name)) {
