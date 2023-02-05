@@ -1,6 +1,6 @@
-[submodule "third-party/DinguxCommander"]
-	path = third-party/DinguxCommander
-	url = https://github.com/shauninman/DinguxCommander.git
 [submodule "src/minarch/libretro-common"]
 	path = src/minarch/libretro-common
 	url = https://github.com/libretro/libretro-common
+[submodule "other/DinguxCommander"]
+	path = other/DinguxCommander
+	url = https://github.com/shauninman/DinguxCommander.git
