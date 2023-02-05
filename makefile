@@ -65,27 +65,30 @@ bundle:
 	cp ./cores/output/gambatte_libretro.so ./build/SYSTEM/rg35xx/cores
 	cp ./cores/output/gpsp_libretro.so ./build/SYSTEM/rg35xx/cores
 	cp ./cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./cores/output/picodrive_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
+	cp ./cores/output/picodrive_libretro.so ./build/SYSTEM/rg35xx/cores
 	cp ./cores/output/snes9x2005_plus_libretro.so ./build/SYSTEM/rg35xx/cores
 
 	# extras
-	cp ./cores/output/beetle-vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
-	cp ./cores/output/pokemini_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/mednafen_vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
+	cp ./cores/output/pokemini_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
 	cp ./other/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
 	cp -R ./other/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
 	
-	# prep .system for zipping
-	mkdir -p ./build/PAYLOAD
-	mv ./build/SYSTEM ./build/PAYLOAD/.system	
-
 readmes:
 	fmt -w 40 -s ./skeleton/BASE/README.txt > ./build/BASE/README.txt
 	fmt -w 40 -s ./skeleton/EXTRAS/README.txt > ./build/EXTRAS/README.txt
 
 zip:
-	cd ./build/PAYLOAD && find . -type f -name '.DS_Store' -delete # TODO: do this before echo zip
+	cd ./build && find . -type f -name '.DS_Store' -delete
+	mkdir -p ./build/PAYLOAD
+	mv ./build/SYSTEM ./build/PAYLOAD/.system	
+	
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
+	
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves dmenu.bin MinUI.zip README.txt
+	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Tools README.txt
+	echo "$(RELEASE_NAME)" > ./build/latest.txt
 
 report:
 	echo "finished building r${RELEASE_TIME}-${RELEASE_DOT}"
