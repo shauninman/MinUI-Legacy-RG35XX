@@ -35,10 +35,15 @@ fi
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
-	# TODO: TEST!
+	FLAG_PATH=/misc/.minstalled
+	if [ ! -f $FLAG_PATH ]; then
+		echo "INSTALL"
+	else
+		echo "UPDATE"
+	fi
 	
 	busybox unzip -o $UPDATE_PATH -d $SDCARD_PATH
-	FLAG_PATH=/misc/.minstalled
+	rm -f $UPDATE_PATH
 	if [ ! -f $FLAG_PATH ]; then
 		BAK_PATH=$TF1_PATH/bak
 		mkdir -p $BAK_PATH
@@ -53,9 +58,8 @@ if [ -f $UPDATE_PATH ]; then
 		cp $SYSTEM_PATH/dat/kernel.dtb /misc
 		cp $SYSTEM_PATH/dat/gpio_keys_polled.ko /misc/modules
 		touch $FLAG_PATH
+		sync && reboot
 	fi
-	rm -f $UPDATE_PATH
-	sync && reboot
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2
