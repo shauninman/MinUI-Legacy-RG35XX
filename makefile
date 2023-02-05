@@ -22,7 +22,7 @@ RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
 # TODO: this needs to consider the different platforms, eg. rootfs.ext2 should only be copied in rg35xx-toolchain
 
 all: lib sys all-cores tools dtb bundle readmes zip report
-	
+
 lib:
 	cd ./src/libmsettings && make
 
@@ -74,21 +74,18 @@ bundle:
 	cp ./other/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
 	cp -R ./other/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
 	
+	# prep .system for zipping
 	mkdir -p ./build/PAYLOAD
-	mv ./build/SYSTEM ./build/PAYLOAD/.system
-	
-	# TODO: move to zip target
+	mv ./build/SYSTEM ./build/PAYLOAD/.system	
+
+readmes:
+	fmt -w 40 -s ./skeleton/BASE/README.txt > ./build/BASE/README.txt
+	fmt -w 40 -s ./skeleton/EXTRAS/README.txt > ./build/EXTRAS/README.txt
+
+zip:
 	cd ./build/PAYLOAD && find . -type f -name '.DS_Store' -delete # TODO: do this before echo zip
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
-	
-readmes:
-	# TODO
-	echo
-
-zip:
-	# TODO: 
-	echo
 
 report:
 	echo "finished building r${RELEASE_TIME}-${RELEASE_DOT}"
@@ -99,7 +96,7 @@ clean:
 	cd ./src/keymon && make clean
 	cd ./src/minui && make clean
 	cd ./src/minarch && make clean
-	echo "TODO: clean cores"
+	cd ./cores && make clean
 	cd ./src/clock && make clean
 	cd ./other/DinguxCommander && make clean
 	
