@@ -12,19 +12,21 @@ SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
 mkdir /mnt/sdcard
-if [ -e /dev/block/mmcblk1p1 ]
-then
+if [ -e /dev/block/mmcblk1p1 ]; then
 	SDCARD_DEVICE=/dev/block/mmcblk1p1
 else
 	SDCARD_DEVICE=/dev/block/mmcblk1
 fi
 mount -t vfat -o rw,utf8,noatime $SDCARD_DEVICE /mnt/sdcard
-if [ $? -ne 0 ]
-then
+if [ $? -ne 0 ]; then
 	mount -t exfat -o rw,utf8,noatime $SDCARD_DEVICE /mnt/sdcard
+	if [ $? -ne 0 ]; then
+		rm -rf /mnt/sdcard
+		ln -s /mnt/mmc /mnt/sdcard
+	fi
 fi
 
-if [ ! -d $SYSTEM_PATH ]; then
+if [ ! -d $SYSTEM_PATH ] && [ ! -f $UPDATE_PATH ]; then
 	# try TF2
 	SDCARD_PATH=$TF2_PATH
 	SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
@@ -35,25 +37,25 @@ fi
 if [ -f $UPDATE_PATH ]; then
 	# TODO: TEST!
 	
-	# busybox unzip -o $UPDATE_PATH -d $SDCARD_PATH
-	# FLAG_PATH=/misc/.minstalled
-	# if [ ! -f $FLAG_PATH ]; then
-	# 	BAK_PATH=$TF1_PATH/bak
-	# 	mkdir -p $BAK_PATH
-	# 	cp /misc/modules/gpio_keys_polled.ko $BAK_PATH
-	# 	cp /misc/boot_logo.bmp.gz $BAK_PATH
-	# 	cp /misc/kernel.dtb $BAK_PATH
-	# 	cp /misc/uImage $BAK_PATH
-	# 	mount -o remount,rw /dev/block/actb /misc
-	# 	rm -f /misc/uImage
-	# 	cp $SYSTEM_PATH/dat/uImage /misc
-	# 	cp $SYSTEM_PATH/dat/boot_logo.bmp.gz /misc
-	# 	cp $SYSTEM_PATH/dat/kernel.dtb /misc
-	# 	cp $SYSTEM_PATH/dat/gpio_keys_polled.ko /misc/modules
-	# 	touch $FLAG_PATH
-	# fi
-	# rm -f $UPDATE_PATH
-	# sync && reboot
+	busybox unzip -o $UPDATE_PATH -d $SDCARD_PATH
+	FLAG_PATH=/misc/.minstalled
+	if [ ! -f $FLAG_PATH ]; then
+		BAK_PATH=$TF1_PATH/bak
+		mkdir -p $BAK_PATH
+		cp /misc/modules/gpio_keys_polled.ko $BAK_PATH
+		cp /misc/boot_logo.bmp.gz $BAK_PATH
+		cp /misc/kernel.dtb $BAK_PATH
+		cp /misc/uImage $BAK_PATH
+		mount -o remount,rw /dev/block/actb /misc
+		rm -f /misc/uImage
+		cp $SYSTEM_PATH/dat/uImage /misc
+		cp $SYSTEM_PATH/dat/boot_logo.bmp.gz /misc
+		cp $SYSTEM_PATH/dat/kernel.dtb /misc
+		cp $SYSTEM_PATH/dat/gpio_keys_polled.ko /misc/modules
+		touch $FLAG_PATH
+	fi
+	rm -f $UPDATE_PATH
+	sync && reboot
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2
