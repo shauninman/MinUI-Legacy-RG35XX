@@ -1,6 +1,8 @@
 .DS_Store
 
 build/
+cores/src
+cores/output
 private/
 releases/
 
@@ -8,7 +10,3 @@ releases/
 *.so
 *.elf
 *.dtb
-
-# thanks I hate it
-src/minarch/cores/*
-!src/minarch/cores/makefile
