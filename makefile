@@ -21,7 +21,7 @@ RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
 
 # TODO: this needs to consider the different platforms, eg. rootfs.ext2 should only be copied in rg35xx-toolchain
 
-all: lib sys cores tools dtb bundle readmes zip report
+all: lib sys all-cores tools dtb bundle readmes zip report
 	
 lib:
 	cd ./src/libmsettings && make
@@ -31,12 +31,12 @@ sys:
 	cd ./src/minarch && make
 	cd ./src/minui && make
 
-cores:
-	cd ./src/minarch/cores && make
+all-cores:
+	cd ./cores && make
 
 tools:
 	cd ./src/clock && make
-	cd ./third-party/DinguxCommander && make -j
+	cd ./other/DinguxCommander && make -j
 
 dtb:
 	cd ./src/dts/ && make
@@ -61,18 +61,18 @@ bundle:
 	cp ./src/clock/clock.elf ./build/EXTRAS/Tools/rg35xx/Clock.pak
 	
 	# stock cores
-	cp ./src/minarch/cores/fceumm_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./src/minarch/cores/gambatte_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./src/minarch/cores/gpsp_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./src/minarch/cores/pcsx_rearmed_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./src/minarch/cores/picodrive_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
-	cp ./src/minarch/cores/snes9x2005_plus_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/fceumm_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/gambatte_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/gpsp_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./cores/output/picodrive_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
+	cp ./cores/output/snes9x2005_plus_libretro.so ./build/SYSTEM/rg35xx/cores
 
 	# extras
-	cp ./src/minarch/cores/beetle-vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
-	cp ./src/minarch/cores/pokemini_libretro.so ./build/SYSTEM/rg35xx/cores
-	cp ./third-party/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
-	cp -R ./third-party/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
+	cp ./cores/output/beetle-vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
+	cp ./cores/output/pokemini_libretro.so ./build/SYSTEM/rg35xx/cores
+	cp ./other/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
+	cp -R ./other/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
 	
 	mkdir -p ./build/PAYLOAD
 	mv ./build/SYSTEM ./build/PAYLOAD/.system
@@ -101,5 +101,5 @@ clean:
 	cd ./src/minarch && make clean
 	echo "TODO: clean cores"
 	cd ./src/clock && make clean
-	cd ./third-party/DinguxCommander && make clean
+	cd ./other/DinguxCommander && make clean
 	
