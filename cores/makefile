@@ -76,3 +76,9 @@ all: cores
 $(foreach CORE,$(CORES),$(eval $(call TEMPLATE,$(CORE))))
 
 cores: $(foreach CORE,$(CORES),$(CORE))
+	
+clean: $(foreach CORE,$(CORES),clean-$(CORE))
+	
+nuke:
+	rm -rf ./output
+	rm -rf ./src
