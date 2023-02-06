@@ -3,8 +3,9 @@
 build/
 cores/src
 cores/output
-private/
-releases/
+private
+releases
+src/boot/output
 
 *.o
 *.so

@@ -30,6 +30,7 @@ sys:
 	cd ./src/keymon && make
 	cd ./src/minarch && make
 	cd ./src/minui && make
+	cd ./src/boot && ./build.sh
 
 all-cores:
 	cd ./cores && make
@@ -51,8 +52,10 @@ bundle:
 	cd ./build && find . -type f -name '.keep' -delete
 	cd ./build && find . -type f -name '*.meta' -delete
 	
+	cp ./src/boot/output/dmenu.bin ./build/BASE
+	
 	# populate system
-	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx/
+	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx
 	cp ./src/dts/kernel.dtb ./build/SYSTEM/rg35xx/dat
 	cp ./src/libmsettings/libmsettings.so ./build/SYSTEM/rg35xx/lib
 	cp ./src/keymon/keymon.elf ./build/SYSTEM/rg35xx/bin
@@ -99,6 +102,7 @@ clean:
 	cd ./src/keymon && make clean
 	cd ./src/minui && make clean
 	cd ./src/minarch && make clean
+	cd ./src/boot && rm -rf ./output
 	cd ./cores && make clean
 	cd ./src/clock && make clean
 	cd ./other/DinguxCommander && make clean
