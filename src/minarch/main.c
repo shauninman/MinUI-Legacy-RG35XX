@@ -3208,7 +3208,7 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 static void Menu_loop(void) {
-	GFX_setVsync(VSYNC_LENIENT);
+	GFX_setVsync(VSYNC_STRICT);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	
 	fast_forward = 0;
@@ -3669,7 +3669,10 @@ int main(int argc , char* argv[]) {
 	Game_open(rom_path);
 	Core_load();
 	
-	Config_read(); // TODO: tmp
+	// restore configs
+	Config_read();
+	setOverclock(overclock);
+	GFX_setVsync(prevent_tearing);
 	
 	SND_init(core.sample_rate, core.fps);
 	

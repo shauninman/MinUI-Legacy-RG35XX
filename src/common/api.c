@@ -159,7 +159,7 @@ SDL_Surface* GFX_init(int mode) {
 	SDL_ShowCursor(0);
 	TTF_Init();
 	
-	gfx.vsync = VSYNC_LENIENT;
+	gfx.vsync = VSYNC_STRICT;
 	gfx.mode = mode;
 	
 	// we're drawing to the (triple-buffered) framebuffer directly
