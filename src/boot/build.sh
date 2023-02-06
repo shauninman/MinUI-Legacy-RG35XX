@@ -20,4 +20,3 @@ fi
 cat ../boot.sh > $TARGET
 echo BINARY >> $TARGET
 uuencode data data >> $TARGET
-echo >> $TARGET
