@@ -53,6 +53,7 @@ static int show_menu;
 // default frontend options
 static int show_scanlines = 0;
 static int optimize_text = 1;
+static int prevent_tearing = 1; // lenient
 static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
 static int fast_forward = 0;
@@ -627,8 +628,8 @@ static void Config_syncFrontend(int i, int value) {
 	switch (i) {
 		case FE_OPT_SCANLINES:	show_scanlines 	= value; renderer.src_w = 0; break;
 		case FE_OPT_TEXT:		optimize_text 	= value; renderer.src_w = 0; break;
-		case FE_OPT_TEARING:	GFX_setVsync(value); break;
-		case FE_OPT_OVERCLOCK:	setOverclock(value); break;
+		case FE_OPT_TEARING:	prevent_tearing = value; break;
+		case FE_OPT_OVERCLOCK:	overclock		= value; break;
 		case FE_OPT_DEBUG:		show_debug 		= value; break;
 		case FE_OPT_MAXFF:		max_ff_speed 	= value; break;
 	}
@@ -3207,6 +3208,7 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 static void Menu_loop(void) {
+	GFX_setVsync(VSYNC_LENIENT);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	
 	fast_forward = 0;
@@ -3547,10 +3549,6 @@ static void Menu_loop(void) {
 						GFX_blitAsset(ASSET_DOT, NULL, screen, &(SDL_Rect){SCALE2(ox+(i*15)+4,oy+2)});
 					}
 				}
-				
-				// SDL_BlitSurface(slot_overlay, NULL, screen, &preview_rect);
-				// SDL_BlitSurface(slot_dots, NULL, screen, &(SDL_Rect){Screen.menu.slots.x,Screen.menu.slots.y});
-				// SDL_BlitSurface(slot_dot_selected, NULL, screen, &(SDL_Rect){Screen.menu.slots.x+(Screen.menu.slots.ox*slot),Screen.menu.slots.y});
 			}
 	
 			GFX_flip(screen);
@@ -3568,7 +3566,10 @@ static void Menu_loop(void) {
 	
 	POW_disableAutosleep();
 	
-	if (!quit) setOverclock(overclock); // restore overclock value
+	if (!quit) {
+		GFX_setVsync(prevent_tearing); // restore vsync value
+		setOverclock(overclock); // restore overclock value
+	}
 }
 
 // TODO: move to POW_*?
