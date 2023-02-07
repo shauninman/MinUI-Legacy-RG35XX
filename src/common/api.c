@@ -96,7 +96,8 @@ struct owlfb_sync_info {
 
 ///////////////////////////////
 
-#define GFX_BUFFER_COUNT 3
+// is triple buffering necessary without threaded rendering?
+#define GFX_BUFFER_COUNT 2
 
 ///////////////////////////////
 
@@ -278,6 +279,14 @@ void GFX_startFrame(void) {
 void GFX_flip(SDL_Surface* screen) {
 	static int ticks = 0;
 	ticks += 1;
+	
+	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
+	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
+	
+	gfx.buffer += 1;
+	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
+	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
+	
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		#define FRAME_BUDGET 17 // 60fps
@@ -286,13 +295,6 @@ void GFX_flip(SDL_Surface* screen) {
 			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
 		}
 	}
-
-	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
-	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
-
-	gfx.buffer += 1;
-	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
-	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
 }
 void GFX_sync(void) {
 	#define FRAME_BUDGET 17 // ~60fps
