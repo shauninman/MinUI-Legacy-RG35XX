@@ -6,6 +6,11 @@ TF1_PATH=/mnt/mmc
 TF2_PATH=/mnt/sdcard # TF1 is linked to this path if TF2 is missing
 SYSTEM_PATH=/mnt/sdcard/.system/rg35xx
 
+# old rootfs.img (alpha-only)
+if [ -f $SYSTEM_PATH/rootfs.img ]; then
+	rm $SYSTEM_PATH/rootfs.img
+fi
+
 if [ ! -f $FLAG_PATH ]; then
 	BAK_PATH=$TF1_PATH/bak
 	mkdir -p $BAK_PATH
