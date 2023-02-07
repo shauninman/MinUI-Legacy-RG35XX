@@ -54,6 +54,7 @@ bundle:
 	
 	cp ./src/boot/output/dmenu.bin ./build/BASE
 	cp ./src/boot/output/dmenu.bin ./build/SYSTEM/rg35xx/dat
+	echo "$(BUILD_HASH)" > ./build/SYSTEM/commit.txt
 	
 	# populate system
 	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx
