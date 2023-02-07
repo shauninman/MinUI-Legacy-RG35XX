@@ -53,6 +53,7 @@ bundle:
 	cd ./build && find . -type f -name '*.meta' -delete
 	
 	cp ./src/boot/output/dmenu.bin ./build/BASE
+	cp ./src/boot/output/dmenu.bin ./build/SYSTEM/rg35xx/dat
 	
 	# populate system
 	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx
