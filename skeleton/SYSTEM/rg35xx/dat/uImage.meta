@@ -1,1 +1,1 @@
-stock uImage blob modified by BlackSeraph with under- and overclocked cpu speeds
+stock uImage blob modified by BlackSeraph with under- and overclocked cpu speeds and double the buffers per framebuffer (up from 2 to 4)
