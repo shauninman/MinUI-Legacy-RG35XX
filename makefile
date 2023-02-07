@@ -54,6 +54,7 @@ bundle:
 	
 	cp ./src/boot/output/dmenu.bin ./build/BASE
 	cp ./src/boot/output/dmenu.bin ./build/SYSTEM/rg35xx/dat
+	cp ./src/install/install.sh ./build/SYSTEM/rg35xx/bin
 	echo "$(BUILD_HASH)" > ./build/SYSTEM/commit.txt
 	
 	# populate system
