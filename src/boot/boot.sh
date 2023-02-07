@@ -35,7 +35,6 @@ fi
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
-	{
 	FLAG_PATH=/misc/.minstalled
 	if [ ! -f $FLAG_PATH ]; then
 		ACTION=installing
@@ -57,8 +56,6 @@ if [ -f $UPDATE_PATH ]; then
 	
 	# the updated system finishes the install/update
 	$SYSTEM_PATH/bin/install.sh
-	
-	} &> /mnt/sdcard/install.txt
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2
