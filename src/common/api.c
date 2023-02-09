@@ -64,16 +64,14 @@ struct owlfb_disp_device{
     __u32 mPrivateInfo[MAX_PRIVATE_DATA_SIZE];
 };
 
-struct display_private_info
-{
+struct display_private_info {
 	int LCD_TYPE; // 1
 	int	LCD_LIGHTENESS; // 128
 	int LCD_SATURATION; // 7
 	int LCD_CONSTRAST;  // 5
 };
 
-enum CmdMode
-{
+enum CmdMode {
     SET_LIGHTENESS = 0,
     SET_SATURATION = 1,
     SET_CONSTRAST = 2,
