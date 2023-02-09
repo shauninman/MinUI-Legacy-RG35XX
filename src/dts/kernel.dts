@@ -1380,7 +1380,7 @@
 		xres = < 0x280 >;
 		yres = < 0x1e0 >;
 		bpp = < 0x04 >;
-		mode = < 0x01 >;
+		mode = < 0x00 >;
 	};
 
 	vibrator {
