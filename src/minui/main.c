@@ -16,10 +16,6 @@
 
 ///////////////////////////////////////
 
-#define dump(msg) puts((msg));fflush(stdout);
-
-///////////////////////////////////////
-
 typedef struct Array {
 	int count;
 	int capacity;
@@ -1168,7 +1164,7 @@ static void Menu_quit(void) {
 int main (int argc, char *argv[]) {
 	if (autoResume()) return 0; // nothing to do
 	
-	dump("MinUI");
+	LOG_info("MinUI\n");
 	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	InitSettings();
@@ -1180,6 +1176,7 @@ int main (int argc, char *argv[]) {
 	
 	// now that (most of) the heavy lifting is done, take a load off
 	POW_setCPUSpeed(CPU_SPEED_MENU);
+	GFX_setVsync(VSYNC_STRICT);
 
 	PAD_reset();
 	int dirty = 1;
@@ -1386,25 +1383,11 @@ int main (int argc, char *argv[]) {
 					GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, screen, 1);
 				}
 			}
-		}
-		
-		// scroll long names
-		if (total>0) {
-			int selected_row = top->selected - top->start;
-			Entry* entry = top->entries->items[top->selected];
-			// if (GFX_scrollMenu(screen, entry->name, entry->path, entry->unique, selected_row, top->selected, was_dirty, dirty)) dirty = 1;
-		}
-		
-		if (dirty) {
+
 			GFX_flip(screen);
 			dirty = 0;
 		}
-		else {
-			// slow down to 60fps
-			unsigned long frame_duration = SDL_GetTicks() - frame_start;
-			#define TARGET_FRAME_DURATION 17
-			if (frame_duration<TARGET_FRAME_DURATION) SDL_Delay(TARGET_FRAME_DURATION-frame_duration);
-		}
+		else GFX_sync();
 	}
 	
 	if (version) SDL_FreeSurface(version);

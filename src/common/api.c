@@ -177,11 +177,9 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.vinfo.yres_virtual = SCREEN_HEIGHT * GFX_BUFFER_COUNT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
-    gfx.vinfo.activate = FB_ACTIVATE_VBL;
+    // gfx.vinfo.activate = FB_ACTIVATE_VBL;
     
-	if (ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo)) {
-		printf("FBIOPUT_VSCREENINFO failed: %s (%i)\n", strerror(errno),  errno);
-	}
+	ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo);
 	
 	// get fixed screen info
    	ioctl(gfx.fb, FBIOGET_FSCREENINFO, &gfx.finfo);
@@ -191,12 +189,10 @@ SDL_Surface* GFX_init(int mode) {
 	
 	struct owlfb_sync_info sinfo;
 	sinfo.enabled = 1;
-	if (ioctl(gfx.fb, OWLFB_VSYNC_EVENT_EN, &sinfo)) {
-		printf("OWLFB_VSYNC_EVENT_EN failed: %s (%i)\n", strerror(errno),  errno);
-	}
+	ioctl(gfx.fb, OWLFB_VSYNC_EVENT_EN, &sinfo);
 	
 	// buffer tracking
-	gfx.buffer = 1;
+	gfx.buffer = 1; // start on back buffer
 	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
 
 	// return screen
@@ -285,6 +281,7 @@ void GFX_flip(SDL_Surface* screen) {
 	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
 	
+	// TODO: this doesn't make sense here but it's the only way to reduce flickering when changing volume/brightness...
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		#define FRAME_BUDGET 17 // 60fps

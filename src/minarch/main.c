@@ -3208,8 +3208,8 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 static void Menu_loop(void) {
-	GFX_setVsync(VSYNC_STRICT);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
+	GFX_setVsync(VSYNC_STRICT);
 	
 	fast_forward = 0;
 	POW_enableAutosleep();
