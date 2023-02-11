@@ -20,6 +20,27 @@ void LOG_note(int level, const char* fmt, ...);
 
 ///////////////////////////////
 
+#define FIXED_WIDTH 640
+#define FIXED_HEIGHT 480
+#define FIXED_BPP 2
+#define FIXED_DEPTH FIXED_BPP * 8
+#define FIXED_PITCH FIXED_WIDTH * FIXED_BPP
+#define FIXED_SIZE FIXED_HEIGHT * FIXED_PITCH
+
+#define PAGE_COUNT 2
+#define PAGE_SCALE 2
+#define PAGE_WIDTH FIXED_WIDTH * PAGE_SCALE
+#define PAGE_HEIGHT FIXED_HEIGHT * PAGE_SCALE
+#define PAGE_PITCH PAGE_WIDTH * FIXED_BPP
+#define PAGE_SIZE PAGE_HEIGHT * PAGE_PITCH
+
+#define VIRTUAL_WIDTH PAGE_WIDTH
+#define VIRTUAL_HEIGHT PAGE_HEIGHT * PAGE_COUNT
+#define VIRTUAL_PITCH PAGE_WIDTH * FIXED_BPP
+#define VIRTUAL_SIZE VIRTUAL_HEIGHT * VIRTUAL_PITCH
+
+///////////////////////////////
+
 extern uint32_t RGB_WHITE;
 extern uint32_t RGB_BLACK;
 extern uint32_t RGB_LIGHT_GRAY;
@@ -70,6 +91,7 @@ enum {
 };
 
 SDL_Surface* GFX_init(int mode);
+SDL_Surface* GFX_resize(int width, int height, int pitch);
 void GFX_setMode(int mode);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);

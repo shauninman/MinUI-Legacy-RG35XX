@@ -94,6 +94,7 @@
 
 #define MAX(a, b) (a) > (b) ? (a) : (b)
 #define MIN(a, b) (a) < (b) ? (a) : (b)
+#define CEIL_DIV(a,b) ((a) + (b) - 1) / (b)
 
 #define SCALE1(a) ((a)*SCREEN_SCALE)
 #define SCALE2(a,b) ((a)*SCREEN_SCALE),((b)*SCREEN_SCALE)

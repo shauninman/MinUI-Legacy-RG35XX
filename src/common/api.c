@@ -94,11 +94,6 @@ struct owlfb_sync_info {
 
 ///////////////////////////////
 
-// is triple buffering necessary without threaded rendering?
-#define GFX_BUFFER_COUNT 2
-
-///////////////////////////////
-
 uint32_t RGB_WHITE;
 uint32_t RGB_BLACK;
 uint32_t RGB_LIGHT_GRAY;
@@ -106,17 +101,16 @@ uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 
 static struct GFX_Context {
+	int fb0_fd;
+	int page;
+	int resized;
+	
 	int mode;
 	int vsync;
-	int fb;
-	int pitch;
-	int buffer;
-	int buffer_size;
-	int map_size;
-	void* map;
+
 	struct fb_var_screeninfo vinfo;
-	struct fb_fix_screeninfo finfo;
-	
+	void* fb0_buffer;
+
 	SDL_Surface* screen;
 	SDL_Surface* assets;
 } gfx;
@@ -159,45 +153,36 @@ SDL_Surface* GFX_init(int mode) {
 	SDL_ShowCursor(0);
 	TTF_Init();
 	
-	gfx.vsync = VSYNC_STRICT;
-	gfx.mode = mode;
+	//////////////////////////////
 	
-	// we're drawing to the (triple-buffered) framebuffer directly
-	// but we still need to set video mode to initialize input events
-	SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, SDL_HWSURFACE);
+	SDL_SetVideoMode(FIXED_WIDTH, FIXED_HEIGHT, FIXED_DEPTH, SDL_SWSURFACE);
 	
-	// open framebuffer
-	gfx.fb = open("/dev/fb0", O_RDWR);
-	
-	// configure framebuffer
-	ioctl(gfx.fb, FBIOGET_VSCREENINFO, &gfx.vinfo);
-	gfx.vinfo.bits_per_pixel = SCREEN_DEPTH;
-	gfx.vinfo.xres = SCREEN_WIDTH;
-	gfx.vinfo.yres = SCREEN_HEIGHT;
-	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
-	gfx.vinfo.yres_virtual = SCREEN_HEIGHT * GFX_BUFFER_COUNT;
+	gfx.fb0_fd = open("/dev/fb0", O_RDWR);
+
+	ioctl(gfx.fb0_fd, FBIOGET_VSCREENINFO, &gfx.vinfo);
+	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
+	gfx.vinfo.xres = FIXED_WIDTH;
+	gfx.vinfo.yres = FIXED_HEIGHT;
+	gfx.vinfo.xres_virtual = VIRTUAL_WIDTH;
+	gfx.vinfo.yres_virtual = VIRTUAL_HEIGHT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
-    // gfx.vinfo.activate = FB_ACTIVATE_VBL;
-    
-	ioctl(gfx.fb, FBIOPUT_VSCREENINFO, &gfx.vinfo);
-	
-	// get fixed screen info
-   	ioctl(gfx.fb, FBIOGET_FSCREENINFO, &gfx.finfo);
-	gfx.map_size = gfx.finfo.smem_len;
-	gfx.map = mmap(0, gfx.map_size, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb, 0);
-	memset(gfx.map, 0, gfx.map_size);
+	ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo);
 	
 	struct owlfb_sync_info sinfo;
 	sinfo.enabled = 1;
-	ioctl(gfx.fb, OWLFB_VSYNC_EVENT_EN, &sinfo);
+	ioctl(gfx.fb0_fd, OWLFB_VSYNC_EVENT_EN, &sinfo);
 	
-	// buffer tracking
-	gfx.buffer = 1; // start on back buffer
-	gfx.buffer_size = SCREEN_PITCH * SCREEN_HEIGHT;
-
-	// return screen
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.map + gfx.buffer_size * gfx.buffer, SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_DEPTH,SCREEN_PITCH, 0,0,0,0);
+	gfx.page = 1; // start on the backbuffer
+	gfx.fb0_buffer = mmap(0, VIRTUAL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
+	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE); // clear both buffers
+	
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), FIXED_WIDTH,FIXED_HEIGHT, FIXED_DEPTH,FIXED_PITCH, 0,0,0,0);
+	
+	//////////////////////////////
+	
+	gfx.vsync = VSYNC_STRICT;
+	gfx.mode = mode;
 	
 	RGB_WHITE		= SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK		= SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
@@ -230,9 +215,7 @@ SDL_Surface* GFX_init(int mode) {
 	
 	return gfx.screen;
 }
-void GFX_setMode(int mode) {
-	gfx.mode = mode;
-}
+
 void GFX_quit(void) {
 	TTF_CloseFont(font.large);
 	TTF_CloseFont(font.medium);
@@ -241,24 +224,27 @@ void GFX_quit(void) {
 	
 	SDL_FreeSurface(gfx.assets);
 	
-	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
+	ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
 
 	GFX_clearAll();
-	munmap(gfx.map, gfx.map_size);
-	close(gfx.fb);
+	munmap(gfx.fb0_buffer, VIRTUAL_SIZE);
+	close(gfx.fb0_fd);
 	SDL_Quit();
 }
 
 void GFX_clear(SDL_Surface* screen) {
-	memset(screen->pixels, 0, gfx.buffer_size); // this buffer is offscreen when cleared
+	memset(screen->pixels, 0, PAGE_SIZE); // this buffer is offscreen when cleared
 }
 void GFX_clearAll(void) {
 	// TODO: one of the buffers is onscreen when cleared producing tearing
 	// so clear our working buffer immediately (screen->pixels)
 	// then set a flag and clear the other two after vsync?
-	memset(gfx.map, 0, gfx.map_size);
+	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE);
 }
 
+void GFX_setMode(int mode) {
+	gfx.mode = mode;
+}
 int GFX_getVsync(void) {
 	return gfx.vsync;
 }
@@ -271,26 +257,48 @@ static uint32_t frame_start = 0;
 void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
+SDL_Surface* GFX_resize(int w, int h, int pitch) {
+	LOG_info("resize: %ix%i (%i)\n", w,h, pitch);
+	// callee should decide if resizing is actually necessary
+	
+	if (gfx.screen) SDL_FreeSurface(gfx.screen);
+	
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), w,h, FIXED_DEPTH,pitch, 0,0,0,0);
+	memset(gfx.screen->pixels, 0, PAGE_SIZE);
+	
+	gfx.vinfo.xres = w;
+	gfx.vinfo.yres = h;
+	
+	// triggers FBIOPUT_VSCREENINFO instead 
+	// of FBIOPAN_DISPLAY in GFX_flip()
+	gfx.resized = 1;
+	
+	return gfx.screen;
+}
 void GFX_flip(SDL_Surface* screen) {
-	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
-	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
-	
-	gfx.buffer += 1;
-	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
-	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
-	
+	// point framebuffer at the first line of the backbuffer
+	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
+	ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo);
+	gfx.resized = 0;
+
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
+			ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
 		}
 	}
+	
+	// swap backbuffer
+	gfx.page += 1;
+	if (gfx.page>=PAGE_COUNT) gfx.page -= PAGE_COUNT;
+	gfx.screen->pixels = gfx.fb0_buffer + (gfx.page * PAGE_SIZE);
+
 }
 void GFX_sync(void) {
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
+			ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
 		}
 	}
 	else {
@@ -300,10 +308,10 @@ void GFX_sync(void) {
 }
 
 SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
-	int buffer = gfx.buffer - 1;
-	if (buffer<0) buffer += GFX_BUFFER_COUNT;
-	SDL_Surface* copy = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_DEPTH,0,0,0,0);
-	memcpy(copy->pixels, (gfx.map + gfx.buffer_size * buffer), (SCREEN_HEIGHT * SCREEN_PITCH));
+	int buffer = gfx.page - 1;
+	if (buffer<0) buffer += PAGE_COUNT;
+	SDL_Surface* copy = SDL_CreateRGBSurface(SDL_SWSURFACE, gfx.screen->w,gfx.screen->h,FIXED_DEPTH,0,0,0,0);
+	SDL_BlitSurface(gfx.screen, NULL, copy, NULL);
 	return copy;
 }
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width) {

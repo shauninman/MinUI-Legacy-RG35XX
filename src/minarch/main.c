@@ -50,7 +50,14 @@ static SDL_Surface* screen;
 static int quit;
 static int show_menu;
 
+enum {
+	SCALE_NATIVE,
+	SCALE_ASPECT,
+	SCALE_FULLSCREEN,
+};
+
 // default frontend options
+static int screen_scaling = SCALE_ASPECT; // aspect
 static int show_scanlines = 0;
 static int optimize_text = 1;
 static int prevent_tearing = 1; // lenient
@@ -67,6 +74,7 @@ static struct Renderer {
 	int dst_offset;
 	int dst_w;
 	int dst_h;
+	int dst_p;
 
 	scale_neon_t scaler;
 } renderer;
@@ -376,6 +384,12 @@ static char* onoff_labels[] = {
 	"On",
 	NULL
 };
+static char* scaling_labels[] = {
+	"Native",
+	"Aspect",
+	"Fullscreen",
+	NULL
+};
 static char* tearing_labels[] = {
 	"Off",
 	"Lenient",
@@ -397,6 +411,7 @@ static char* max_ff_labels[] = {
 ///////////////////////////////
 
 enum {
+	FE_OPT_SCALING,
 	FE_OPT_SCANLINES,
 	FE_OPT_TEXT,
 	FE_OPT_TEARING,
@@ -410,6 +425,8 @@ enum {
 	SHORTCUT_SAVE_STATE,
 	SHORTCUT_LOAD_STATE,
 	SHORTCUT_RESET_GAME,
+	SHORTCUT_CYCLE_SCALE,
+	SHORTCUT_TOGGLE_SCANLINES,
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_COUNT,
@@ -528,10 +545,20 @@ static struct Config {
 	.frontend = (OptionList){
 		.count = FE_OPT_COUNT,
 		.options = (Option[]){
+			[FE_OPT_SCALING] = {
+				.key	= "minarch_screen_scaling", 
+				.name	= "Screen Scaling",
+				.desc	= "Native uses integer scaling. Aspect uses the core reported\naspect ratio. Fullscreen will produce non-square pixels. Gross.",
+				.default_value = 1,
+				.value = 1,
+				.count = 3,
+				.values = scaling_labels,
+				.labels = scaling_labels,
+			},
 			[FE_OPT_SCANLINES] = {
 				.key	= "minarch_scanlines_grid", 
 				.name	= "Scanlines/Grid",
-				.desc	= "Simulate scanlines (or a pixel grid at odd scales). Darkens\nthe overall image by about 50%. Reduces CPU load.",
+				.desc	= "Simulate scanlines (or a pixel grid at odd scales).\nDarkens the overall image by about 50%. Reduces CPU load.\nOnly applies to native scaling.",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -541,7 +568,7 @@ static struct Config {
 			[FE_OPT_TEXT] = {
 				.key	= "minarch_optimize_text", 
 				.name	= "Optimize Text",
-				.desc	= "Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load.",
+				.desc	= "Prioritize a consistent stroke width when upscaling single\npixel lines using nearest neighbor scaler. Increases CPU load.\nOnly applies to native scaling.",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -592,11 +619,13 @@ static struct Config {
 		}
 	},
 	.shortcuts = (ButtonMapping[]){
-		[SHORTCUT_SAVE_STATE]	= {"Save State",	-1, BTN_ID_NONE, 0},
-		[SHORTCUT_LOAD_STATE]	= {"Load State",	-1, BTN_ID_NONE, 0},
-		[SHORTCUT_RESET_GAME]	= {"Reset Game",	-1, BTN_ID_NONE, 0},
-		[SHORTCUT_TOGGLE_FF]	= {"Toggle FF",		-1, BTN_ID_NONE, 0},
-		[SHORTCUT_HOLD_FF]		= {"Hold FF",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_LOAD_STATE]			= {"Load State",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_RESET_GAME]			= {"Reset Game",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scale",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_SCANLINES]		= {"Toggle Scanlines",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
+		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 		{NULL}
 	},
 };
@@ -626,6 +655,7 @@ static void setOverclock(int i) {
 }
 static void Config_syncFrontend(int i, int value) {
 	switch (i) {
+		case FE_OPT_SCALING:	screen_scaling 	= value; renderer.src_w = 0; break;
 		case FE_OPT_SCANLINES:	show_scanlines 	= value; renderer.src_w = 0; break;
 		case FE_OPT_TEXT:		optimize_text 	= value; renderer.src_w = 0; break;
 		case FE_OPT_TEARING:	prevent_tearing = value; break;
@@ -633,6 +663,8 @@ static void Config_syncFrontend(int i, int value) {
 		case FE_OPT_DEBUG:		show_debug 		= value; break;
 		case FE_OPT_MAXFF:		max_ff_speed 	= value; break;
 	}
+	Option* option = &config.frontend.options[i];
+	option->value = value;
 }
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
 enum {
@@ -677,6 +709,7 @@ static void Config_read(void) {
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		sprintf(key, "bind %s", mapping->name);
+		sprintf(value, "NONE");
 		Config_getValue(cfg, key, value);
 		int id = -1;
 		for (int j=0; button_labels[j]; j++) {
@@ -692,6 +725,7 @@ static void Config_read(void) {
 	for (int i=0; config.shortcuts[i].name; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		sprintf(key, "bind %s", mapping->name);
+		sprintf(value, "NONE");
 		Config_getValue(cfg, key, value);
 		
 		int id = -1;
@@ -1092,6 +1126,16 @@ static void input_poll_callback(void) {
 					case SHORTCUT_SAVE_STATE: State_write(); break;
 					case SHORTCUT_LOAD_STATE: State_read(); break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
+					case SHORTCUT_CYCLE_SCALE:
+						screen_scaling += 1;
+						if (screen_scaling>=3) screen_scaling -= 3;
+						Config_syncFrontend(FE_OPT_SCALING, screen_scaling);
+						break;
+					case SHORTCUT_TOGGLE_SCANLINES:
+						if (screen_scaling==SCALE_NATIVE) {
+							Config_syncFrontend(FE_OPT_SCANLINES, !show_scanlines);
+						}
+						break;
 					default: break;
 				}
 				
@@ -1476,11 +1520,16 @@ static int MSG_blitInt(int num, int x, int y) {
 		i -= n * 100;
 		x = MSG_blitChar(n,x,y);
 	}
-	
+	else if (num>99) {
+		x = MSG_blitChar(0,x,y);
+	}
 	if (i > 9) {
 		n = i / 10;
 		i -= n * 10;
 		x = MSG_blitChar(n,x,y);
+	}
+	else if (num>9) {
+		x = MSG_blitChar(0,x,y);
 	}
 	
 	n = i;
@@ -2009,8 +2058,10 @@ static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, ui
 }
 
 static SDL_Surface* scaler_surface;
-static void selectScaler(int width, int height, int pitch) {
+static void selectScaler_PAR(int width, int height, int pitch) {
 	renderer.scaler = scaleNull;
+	renderer.dst_p = SCREEN_PITCH;
+
 	int use_nearest = 0;
 	
 	int scale_x = SCREEN_WIDTH / width;
@@ -2120,7 +2171,7 @@ static void selectScaler(int width, int height, int pitch) {
 		if (show_scanlines) renderer.scaler = optimize_text ? scaleNN_text_scanline : scaleNN_scanline;
 		else renderer.scaler = optimize_text ? scaleNN_text : scaleNN;
 	else {
-		sprintf(scaler_name, "%ix", scale);
+		sprintf(scaler_name, "%iX", scale);
 		if (show_scanlines) {
 			switch (scale) {
 				case 4: 	renderer.scaler = scale4x_scanline; break;
@@ -2150,8 +2201,86 @@ static void selectScaler(int width, int height, int pitch) {
 		}
 	}
 	
+	//////////////////////////////
+	
+	// DEBUG HUD
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
 	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
+	
+	screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_PITCH);
+}
+static void selectScaler_AR(int width, int height, int pitch) {
+	renderer.scaler = scaleNull;
+	
+	int src_w = width;
+	int src_h = height;
+	
+	int x_scale = CEIL_DIV(FIXED_WIDTH, src_w);
+	int y_scale = CEIL_DIV(FIXED_HEIGHT,src_h);
+	int scale = MAX(x_scale, y_scale);
+	
+	// if (scale>6) scale = 6;
+	// else
+	if (scale>2) scale = 4; // TODO: pillar/letterboxing at 3x produces vertical banding (some kind of alignment issue?)
+
+	// reduce scale if we don't have enough memory to accomodate it
+	// TODO: some resolutions are getting through here unadjusted? oh maybe because of aspect ratio adjustments below? revisit
+	while (src_w * scale * FIXED_BPP * src_h * scale > PAGE_SIZE) scale -= 1; 
+	
+	int dst_w = src_w * scale;
+	int dst_h = src_h * scale;
+	int target_w = dst_w;
+	int target_h = dst_h;
+	
+	char scaler_name[8];
+#define FOUR_THREE 4.0f / 3
+	if (screen_scaling==1) {
+		sprintf(scaler_name, "AR_%iX", scale);
+		if (core.aspect_ratio==FOUR_THREE) {
+			// puts("already 4:3");
+		}
+		else if (core.aspect_ratio<FOUR_THREE) {
+			// puts("pillarbox");
+			int tmp = CEIL_DIV(src_h, 3);
+			target_w = tmp * 4 * scale;
+			target_h = tmp * 3 * scale;
+			if (target_h%2) target_h += 1;
+		}
+		else {
+			// puts("letterbox");
+			int tmp = CEIL_DIV(src_w, 4);
+			target_w = tmp * 4 * scale;
+			target_h = tmp * 3 * scale;
+			if (target_h%2) target_h += 1;
+		}
+	}
+	else {
+		sprintf(scaler_name, "FS_%iX", scale);
+	}
+	
+
+	int dx = (target_w - dst_w) / 2;
+	int dy = (target_h - dst_h) / 2;
+	
+	int target_pitch = target_w * FIXED_BPP;
+	
+	renderer.dst_w = target_w;
+	renderer.dst_h = target_h;
+	renderer.dst_p = target_pitch;
+	renderer.dst_offset = (dy * target_pitch) + (dx * FIXED_BPP);
+	switch (scale) {
+		case 6: renderer.scaler = scale6x_n16; break;
+		case 5: renderer.scaler = scale5x_n16; break;
+		case 4: renderer.scaler = scale4x_n16; break;
+		case 3: renderer.scaler = scale3x_n16; break;
+		case 2: renderer.scaler = scale2x_n16; break;
+		default: renderer.scaler = scale1x_n16; break;
+	}
+	
+	if (scaler_surface) SDL_FreeSurface(scaler_surface);
+	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
+	
+	screen = GFX_resize(target_w,target_h, target_pitch);
 }
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
 	static uint32_t last_flip_time = 0;
@@ -2160,7 +2289,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	// 14 will let GB hit 10x but NES and SNES will drop to 1.5x at 30fps (not sure why)
 	// but 10 hurts PS...
 	if (fast_forward && SDL_GetTicks()-last_flip_time<10) return;
-	
 	
 	// FFVII menus 
 	// 16: 30/200
@@ -2181,7 +2309,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 		renderer.src_h = height;
 		renderer.src_p = pitch;
 
-		selectScaler(width,height,pitch);
+		(screen_scaling==SCALE_NATIVE ? selectScaler_PAR : selectScaler_AR)(width,height,pitch);
 		GFX_clearAll();
 	}
 	
@@ -2189,9 +2317,9 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	static int bottom_width = 0;
 	
 	if (top_width) SDL_FillRect(screen, &(SDL_Rect){0,0,top_width,DIGIT_HEIGHT}, RGB_BLACK);
-	if (bottom_width) SDL_FillRect(screen, &(SDL_Rect){0,SCREEN_HEIGHT-DIGIT_HEIGHT,bottom_width,DIGIT_HEIGHT}, RGB_BLACK);
+	if (bottom_width) SDL_FillRect(screen, &(SDL_Rect){0,screen->h-DIGIT_HEIGHT,bottom_width,DIGIT_HEIGHT}, RGB_BLACK);
 	
-	renderer.scaler((void*)data,screen->pixels+renderer.dst_offset,width,height,pitch,SCREEN_PITCH);
+	renderer.scaler((void*)data,screen->pixels+renderer.dst_offset,width,height,pitch,renderer.dst_p);
 	
 	if (0) {
 		static int frame = 0;
@@ -2225,7 +2353,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	
 	if (show_debug) {
 		int x = 0;
-		int y = SCREEN_HEIGHT - DIGIT_HEIGHT;
+		int y = screen->h - DIGIT_HEIGHT;
 		
 		if (fps_double) x = MSG_blitDouble(fps_double, x,y);
 		
@@ -2547,12 +2675,6 @@ static int MenuList_freeItems(MenuList* list, int i) {
 
 static int OptionFrontend_optionChanged(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
-	Option* option = &config.frontend.options[i];
-	LOG_info("%s (%s) changed from `%s` (%s) to `%s` (%s)\n", item->name, item->key,
-		item->values[option->value], option->values[option->value],
-		item->values[item->value], option->values[item->value]
-	);
-	option->value = item->value;
 	Config_syncFrontend(i, item->value);
 }
 static MenuList OptionFrontend_menu = {
@@ -2649,10 +2771,18 @@ int OptionControls_bind(MenuList* list, int i) {
 	}
 	return MENU_CALLBACK_NEXT_ITEM;
 }
+static int OptionControls_unbind(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	ButtonMapping* button = &config.controls[item->id];
+	button->local = -1;
+	button->mod = 0;
+	return MENU_CALLBACK_NOP;
+}
 static MenuList OptionControls_menu = {
 	.type = MENU_INPUT,
 	.desc = "Press A to set and X to clear.",
 	.on_confirm = OptionControls_bind,
+	.on_change = OptionControls_unbind,
 	.items = NULL
 };
 static int OptionControls_openMenu(MenuList* list, int i) {
@@ -2711,10 +2841,18 @@ static int OptionShortcuts_bind(MenuList* list, int i) {
 	fflush(stdout);
 	return MENU_CALLBACK_NEXT_ITEM;
 }
+static int OptionShortcuts_unbind(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	ButtonMapping* button = &config.shortcuts[item->id];
+	button->local = -1;
+	button->mod = 0;
+	return MENU_CALLBACK_NOP;
+}
 static MenuList OptionShortcuts_menu = {
 	.type = MENU_INPUT,
 	.desc = "Press A to set and X to clear.\nSupports single button and MENU+button.",
 	.on_confirm = OptionShortcuts_bind,
+	.on_change = OptionShortcuts_unbind,
 	.items = NULL
 };
 static char* getSaveDesc(void) {
@@ -3207,7 +3345,66 @@ static int Menu_options(MenuList* list) {
 	
 	return 0;
 }
+
+static void downsample_ORIGINAL(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	double x_step = w / (double)FIXED_WIDTH; // TODO: broken when pcsx_rearmed is the active core, returns -0.0
+	double y_step = h / (double)FIXED_HEIGHT;
+	
+	double ox = 0;
+	double oy = 0;
+	for (int y=0; y<FIXED_HEIGHT; y++) {
+		uint16_t* restrict src_row = (void*)src + ((int)oy * pitch);
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch;
+		for (int x=0; x<FIXED_WIDTH; x++) {
+			*dst_row = *(src_row + (int)ox);
+			dst_row += 1;
+			ox += x_step;
+		}
+		ox = 0;
+		oy += y_step;
+	}
+}
+
+static void downsample(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	int dx = w - FIXED_WIDTH;
+	int dy = h - FIXED_HEIGHT;
+	int ax = 0;
+	int ay = 0;
+	int ox = 0;
+	int oy = 0;
+	for (int y=0; y<FIXED_HEIGHT; y++) {
+		uint16_t* restrict src_row = (void*)src + (oy * pitch);
+		uint16_t* restrict dst_row = (void*)dst + (y * dst_pitch);
+		for (int x=0; x<FIXED_WIDTH; x++) {
+			*dst_row = *(src_row + ox);
+			dst_row += 1;
+			ox += 1;
+			ax += dx;
+			while (ax>=FIXED_WIDTH) {
+				ax -= FIXED_WIDTH;
+				ox += 1;
+			}
+		}
+		ox = 0;
+		oy += 1;
+		ay += dy;
+		while (ay>=FIXED_HEIGHT) {
+			ay -= FIXED_HEIGHT;
+			oy += 1;
+		}
+	}
+}
+
 static void Menu_loop(void) {
+	// current screen is on the previous buffer
+	SDL_Surface* backing = GFX_getBufferCopy();
+	SDL_Surface* resized = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_DEPTH,0,0,0,0);
+	if (backing->w==SCREEN_WIDTH && backing->h==SCREEN_HEIGHT) SDL_BlitSurface(backing, NULL, resized, NULL);
+	else {
+		downsample(backing->pixels,resized->pixels,backing->w,backing->h,backing->pitch,SCREEN_PITCH);
+		screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_PITCH);
+	}
+
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	GFX_setVsync(VSYNC_STRICT);
 	
@@ -3215,8 +3412,6 @@ static void Menu_loop(void) {
 	POW_enableAutosleep();
 	PAD_reset();
 	
-	// current screen is on the previous buffer
-	SDL_Surface* backing = GFX_getBufferCopy();
 	
 	// path and string things
 	char* tmp;
@@ -3367,7 +3562,7 @@ static void Menu_loop(void) {
 					state_slot = menu.slot;
 					State_write();
 					status = STATUS_SAVE;
-					SDL_Surface* preview = Menu_thumbnail(backing);
+					SDL_Surface* preview = Menu_thumbnail(resized);
 					SDL_RWops* out = SDL_RWFromFile(bmp_path, "wb");
 					if (total_discs) {
 						char* disc_path = disc_paths[disc];
@@ -3415,7 +3610,7 @@ static void Menu_loop(void) {
 		POW_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
 		
 		if (dirty) {
-			SDL_BlitSurface(backing, NULL, screen, NULL);
+			SDL_BlitSurface(resized, NULL, screen, NULL);
 			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
 
 			int ox, oy;
@@ -3560,16 +3755,21 @@ static void Menu_loop(void) {
 	PAD_reset();
 
 	GFX_clearAll();
-	if (!quit) SDL_BlitSurface(backing, NULL, screen, NULL);
-	SDL_FreeSurface(backing);
-	GFX_flip(screen);
-	
-	POW_disableAutosleep();
-	
 	if (!quit) {
+		if (backing->w!=SCREEN_WIDTH || backing->h!=SCREEN_HEIGHT) {
+			screen = GFX_resize(renderer.dst_w,renderer.dst_h, renderer.dst_p);
+		}
+		
+		SDL_BlitSurface(backing, NULL, screen, NULL);
+		GFX_flip(screen);
+
 		GFX_setVsync(prevent_tearing); // restore vsync value
 		setOverclock(overclock); // restore overclock value
 	}
+		
+	SDL_FreeSurface(backing);
+	SDL_FreeSurface(resized);
+	POW_disableAutosleep();
 }
 
 // TODO: move to POW_*?
