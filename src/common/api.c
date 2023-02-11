@@ -153,6 +153,7 @@ GFX_Fonts font;
 
 ///////////////////////////////
 
+static int _;
 SDL_Surface* GFX_init(int mode) {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
@@ -240,8 +241,7 @@ void GFX_quit(void) {
 	
 	SDL_FreeSurface(gfx.assets);
 	
-	int arg = 1;
-	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+	ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
 
 	GFX_clearAll();
 	munmap(gfx.map, gfx.map_size);
@@ -266,14 +266,12 @@ void GFX_setVsync(int vsync) {
 	gfx.vsync = vsync;
 }
 
+#define FRAME_BUDGET 17 // 60fps
 static uint32_t frame_start = 0;
 void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
 void GFX_flip(SDL_Surface* screen) {
-	static int ticks = 0;
-	ticks += 1;
-	
 	gfx.vinfo.yoffset = gfx.buffer * SCREEN_HEIGHT;
 	ioctl(gfx.fb, FBIOPAN_DISPLAY, &gfx.vinfo);
 	
@@ -281,23 +279,18 @@ void GFX_flip(SDL_Surface* screen) {
 	if (gfx.buffer>=GFX_BUFFER_COUNT) gfx.buffer -= GFX_BUFFER_COUNT;
 	screen->pixels = gfx.map + (gfx.buffer * gfx.buffer_size);
 	
-	// TODO: this doesn't make sense here but it's the only way to reduce flickering when changing volume/brightness...
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
-		#define FRAME_BUDGET 17 // 60fps
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			int arg = 1;
-			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
 		}
 	}
 }
 void GFX_sync(void) {
-	#define FRAME_BUDGET 17 // ~60fps
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			int arg = 1;
-			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &arg);
+			ioctl(gfx.fb, OWLFB_WAITFORVSYNC, &_);
 		}
 	}
 	else {
@@ -762,7 +755,8 @@ void GFX_blitText(TTF_Font* font, char* str, int leading, SDL_Color color, SDL_S
 
 // based on picoarch's audio 
 // implementation, rewritten 
-// to understand it better
+// to (try to) understand it 
+// better
 
 #define MAX_SAMPLE_RATE 48000
 #define BATCH_SIZE 100
@@ -993,7 +987,6 @@ void PAD_poll(void) {
 	}
 }
 
-// TODO: switch to macros? not if I want to move it to a separate file
 int PAD_anyPressed(void)		{ return pad.is_pressed!=BTN_NONE; }
 int PAD_justPressed(int btn)	{ return pad.just_pressed & btn; }
 int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
