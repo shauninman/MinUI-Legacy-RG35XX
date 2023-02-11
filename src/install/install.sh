@@ -5,6 +5,7 @@
 TF1_PATH=/mnt/mmc
 TF2_PATH=/mnt/sdcard # TF1 is linked to this path if TF2 is missing
 SYSTEM_PATH=/mnt/sdcard/.system/rg35xx
+FLAG_PATH=/misc/.minstalled
 
 # old rootfs.img (alpha-only)
 if [ -f $SYSTEM_PATH/rootfs.img ]; then
@@ -55,3 +56,4 @@ if [ ! -f $FLAG_PATH ] || was_updated; then
 	touch $FLAG_PATH
 	sync && reboot
 fi
+
