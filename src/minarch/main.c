@@ -3346,52 +3346,22 @@ static int Menu_options(MenuList* list) {
 	return 0;
 }
 
-static void downsample_ORIGINAL(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	double x_step = w / (double)FIXED_WIDTH; // TODO: broken when pcsx_rearmed is the active core, returns -0.0
-	double y_step = h / (double)FIXED_HEIGHT;
+static void downsample(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	uint32_t ox = 0;
+	uint32_t oy = 0;
+	uint32_t ix = (w<<16) / FIXED_WIDTH;
+	uint32_t iy = (h<<16) / FIXED_HEIGHT;
 	
-	double ox = 0;
-	double oy = 0;
 	for (int y=0; y<FIXED_HEIGHT; y++) {
-		uint16_t* restrict src_row = (void*)src + ((int)oy * pitch);
+		uint16_t* restrict src_row = (void*)src + (oy>>16) * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch;
 		for (int x=0; x<FIXED_WIDTH; x++) {
-			*dst_row = *(src_row + (int)ox);
+			*dst_row = *(src_row + (ox>>16));
 			dst_row += 1;
-			ox += x_step;
+			ox += ix;
 		}
 		ox = 0;
-		oy += y_step;
-	}
-}
-
-static void downsample(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int dx = w - FIXED_WIDTH;
-	int dy = h - FIXED_HEIGHT;
-	int ax = 0;
-	int ay = 0;
-	int ox = 0;
-	int oy = 0;
-	for (int y=0; y<FIXED_HEIGHT; y++) {
-		uint16_t* restrict src_row = (void*)src + (oy * pitch);
-		uint16_t* restrict dst_row = (void*)dst + (y * dst_pitch);
-		for (int x=0; x<FIXED_WIDTH; x++) {
-			*dst_row = *(src_row + ox);
-			dst_row += 1;
-			ox += 1;
-			ax += dx;
-			while (ax>=FIXED_WIDTH) {
-				ax -= FIXED_WIDTH;
-				ox += 1;
-			}
-		}
-		ox = 0;
-		oy += 1;
-		ay += dy;
-		while (ay>=FIXED_HEIGHT) {
-			ay -= FIXED_HEIGHT;
-			oy += 1;
-		}
+		oy += iy;
 	}
 }
 
