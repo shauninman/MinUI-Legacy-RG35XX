@@ -15,7 +15,7 @@ index ffaba21e7a88f90786d818ab550b68acd05738bf..3c5a057d89d12e6c34910350859e9842
 +   SHARED := -shared -Wl,--version-script=$(version_script)
 +   LDFLAGS += -fPIC -flto
 +   PLATFORM_DEFINES := -DCC_RESAMPLER -DCC_RESAMPLER_NO_HIGHPASS
-+   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
++   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
 +   CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +   CXXFLAGS += $(CFLAGS)
 +

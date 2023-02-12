@@ -15,7 +15,7 @@ index ef2f9e7d1c6041bea8e2c8a61cdd363ed73a7482..6c525fe787e205fbd1352b74c00ebfca
 +   SHARED := -shared -Wl,--version-script=libretro/link.T
 +   fpic += -fPIC -flto
 +   CFLAGS += $(PTHREAD_FLAGS)
-+   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
++   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
 +   CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +   CFLAGS += -DDINGUX
 +

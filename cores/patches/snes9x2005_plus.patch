@@ -25,7 +25,7 @@ index 07d5368a8e78a020813732239ec369d83e931ede..8a9d2cd5415021f8288fb930db89ee4a
 +   CFLAGS += -fPIC
 +   CFLAGS += -DLSB_FIRST -DFAST_ALIGNED_LSB_WORD_ACCESS -DRIGHTSHIFT_IS_SAR
 +   CFLAGS += -std=c99 -fomit-frame-pointer -ffast-math
-+   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
++   CFLAGS += -marm -mtune=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard -march=armv7-a -fomit-frame-pointer
 +   # CFLAGS += -marm -mtune=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=hard -march=armv7-a
 +   LDFLAGS += -flto
 +   OPTIMIZE += -Ofast -DNDEBUG=1
