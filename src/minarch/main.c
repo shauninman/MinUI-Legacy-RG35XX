@@ -618,6 +618,13 @@ static struct Config {
 			[FE_OPT_COUNT] = {NULL}
 		}
 	},
+	.core = (OptionList){
+		.count = 0,
+		.options = (Option[]){
+			{NULL},
+		},
+	},
+	.controls = default_button_mapping,
 	.shortcuts = (ButtonMapping[]){
 		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_LOAD_STATE]			= {"Load State",		-1, BTN_ID_NONE, 0},
@@ -1089,13 +1096,6 @@ static void input_poll_callback(void) {
 		ignore_menu = 1;
 	}
 	
-	// TODO: tmp?
-	// if ((PAD_isPressed(BTN_L2) && PAD_justPressed(BTN_R2)) || PAD_isPressed(BTN_R2) && PAD_justPressed(BTN_L2)) {
-	// 	show_debug = !show_debug;
-	// 	config.frontend.options[FE_OPT_DEBUG].value = show_debug; // TODO: standardize this for all config.frontend?
-	// }
-	
-	// TODO: test fast_forward once implemented
 	static int toggled_ff_on = 0; // this logic only works because TOGGLE_FF is before HOLD_FF in the menu...
 	for (int i=0; i<SHORTCUT_COUNT; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
@@ -1212,7 +1212,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
-		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS");
+		// LOG_info("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 		// TODO: this is useless
 		// (some? all?) cores don't sort these in any logical way
 		// which explains why picoarch didn't implement this...
@@ -2660,6 +2660,28 @@ typedef struct MenuList {
 static void Menu_detail(MenuItem* item) {
 	// TODO: name
 }
+static int Menu_message(char* message) {
+	GFX_setMode(MODE_MAIN);
+	int dirty = 1;
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+
+		if (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B)) break;
+		
+		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+		if (dirty) {
+			dirty = 0;
+			GFX_clear(screen);
+			GFX_blitMessage(message, screen, NULL);
+			GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
+			GFX_flip(screen);
+		}
+		else GFX_sync();
+	}
+	GFX_setMode(MODE_MENU);
+	return MENU_CALLBACK_NOP; // TODO: this should probably be an arg
+}
 
 #define OPTION_PADDING 8
 #define MAX_VISIBLE_OPTIONS 7
@@ -2745,7 +2767,16 @@ static int OptionEmulator_openMenu(MenuList* list, int i) {
 			item->value = option->value;
 		}
 	}
-	Menu_options(&OptionEmulator_menu);
+	
+	// try to handle no options
+	// TODO: show a message
+	if (OptionEmulator_menu.items[0].name) {
+		Menu_options(&OptionEmulator_menu);
+	}
+	else {
+		Menu_message("This core doesn't have any options.");
+	}
+	
 	return MENU_CALLBACK_NOP;
 }
 
@@ -2911,27 +2942,7 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 			break;
 		}
 	}
-	
-	GFX_setMode(MODE_MAIN);
-
-	int dirty = 1;
-	while (1) {
-		GFX_startFrame();
-		PAD_poll();
-
-		if (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B)) break;
-		
-		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
-		if (dirty) {
-			dirty = 0;
-			GFX_clear(screen);
-			GFX_blitMessage(message, screen, NULL);
-			GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
-			GFX_flip(screen);
-		}
-		else GFX_sync();
-	}
-	GFX_setMode(MODE_MENU);
+	Menu_message(message);
 	OptionSaveChanges_updateDesc();
 	return MENU_CALLBACK_EXIT;
 }
