@@ -1,0 +1,31 @@
+dtb
+	compile:
+		dtc -O dtb -o kernel.dtb kernel.dts
+	decompile:
+		dtc -I dtb -O dts -o kernel.dts kernel.dtb
+
+---------------------------------------------------------------------------------------------------------
+MinUI			code	dec		video/fbcon/SDL_fbkeys.h		SDL_keysym.h	linux/input-event-codes.h
+---------------------------------------------------------------------------------------------------------
+CODE_UP			0x5A	 90														KEY_KATAKANA
+CODE_DOWN		0x5B	 91														KEY_HIRAGANA
+CODE_LEFT		0x5C	 92														KEY_HENKAN
+CODE_RIGHT		0x5D	 93														KEY_KATAKANAHIRAGANA
+CODE_A			0x5E	 94														KEY_MUHENKAN
+CODE_B			0x5F	 95														KEY_KPJPCOMMA
+CODE_X			0x60	 96		SCANCODE_KEYPADENTER							KEY_KPENTER
+CODE_Y			0x61	 97		SCANCODE_RIGHTCONTROL			SDLK_RCTRL		KEY_RIGHTCTRL
+CODE_START		0x62	 98		SCANCODE_KEYPADDIVIDE							KEY_KPSLASH
+CODE_SELECT		0x63	 99		SCANCODE_PRINTSCREEN			SDLK_PRINT		KEY_SYSRQ
+CODE_L1			0x64	100		SCANCODE_RIGHTALT				SDLK_RALT		KEY_RIGHTALT
+CODE_R1			0x65	101		SCANCODE_BREAK					SDLK_BREAK		KEY_LINEFEED
+CODE_L2			0x66	102		SCANCODE_HOME					SDLK_HOME		KEY_HOME
+CODE_R2			0x67	103		SCANCODE_CURSORBLOCKUP							KEY_UP
+CODE_MENU		0x68	104		SCANCODE_PAGEUP					SDLK_PAGEUP		KEY_PAGEUP
+CODE_PLUS		0x6C	108		SCANCODE_CURSORBLOCKDOWN						KEY_DOWN
+CODE_MINUS		0x6D	109		SCANCODE_PAGEDOWN				SDLK_PAGEDOWN	KEY_PAGEDOWN
+CODE_POWER		0x74	116		SCANCODE_POWER					SDLK_POWER		KEY_POWER
+---------------------------------------------------------------------------------------------------------
+See also: FB_InitOSKeymap() in
+	video/fbcon/SDL_fbevents.c:1079
+---------------------------------------------------------------------------------------------------------
