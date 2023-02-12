@@ -58,6 +58,9 @@ bundle:
 	echo "$(BUILD_HASH)" > ./build/SYSTEM/commit.txt
 	echo "$(RELEASE_NAME)" > ./build/SYSTEM/release.txt
 	
+	# prepare boot logo
+	cd ./build/SYSTEM/rg35xx/dat && convert boot_logo.png -type truecolor boot_logo.bmp && rm boot_logo.png && gzip boot_logo.bmp
+
 	# populate system
 	cp ~/buildroot/output/images/rootfs.ext2 ./build/SYSTEM/rg35xx
 	cp ./src/dts/kernel.dtb ./build/SYSTEM/rg35xx/dat
