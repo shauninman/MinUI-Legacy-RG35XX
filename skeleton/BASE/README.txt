@@ -30,12 +30,16 @@ Features
 ----------------------------------------
 Install
 
-TODO
+Step 1. Copy "dmenu.bin" to the root of the MISC partition of the SD card that goes in the TF1 slot. 
+
+Step 2. Where you copy "MinUI.zip" will depend on if you are using one or two SD cards (using two SD cards is recommended). If using one SD card, copy "MinUI.zip" to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy "MinUI.zip" to the root of the SD card that goes in the TF2 slot. 
+
+During installation (but not on subsequent updates) MinUI will install a custom boot logo. It will save a backup of your existing "boot_logo.bmp.gz" in a folder named "bak" at the root of the ROMS partition of the SD card that goes into the TF1 slot. 
 
 ----------------------------------------
 Update
 
-TODO
+Follow Step 2 of the Install instructions above.
 
 ----------------------------------------
 Shortcuts
@@ -49,7 +53,7 @@ Roms
 
 Included in this zip is a Roms folder containing folders for each console MinUI currently supports. You can rename these folders but you must keep the uppercase tag name in parentheses in order to retain the mapping to the correct emulator (eg. "Nintendo Entertainment System (FC)" could be renamed to "Nintendo (FC)", "NES (FC)", or "Famicom (FC)"). 
 
-You should probably preload these folders with roms and copy each one to the Roms folder on your SD card before installing. Or not, I'm not the boss of you.
+You can (and probably should) preload these folders with roms and copy each one to the Roms folder on your SD card before installing.
 
 When one or more folder share the same display name (eg. "Game Boy Advance (GBA)" and "Game Boy Advance (MGBA)") they will be combined into a single menu item containing the roms from both folders (continuing the previous example, "Game Boy Advance"). This allows opening specific roms with an alternate pak.
 
@@ -89,7 +93,7 @@ the m3u file would contain just:
   Policenauts (Japan) (Disc 1).cue
   Policenauts (Japan) (Disc 2).cue
 
-MinUI also reportedly supports chd files and official pbp files (multi-disc pbp files larger than 2GB are not supported).
+MinUI also supports chd files and official pbp files (multi-disc pbp files larger than 2GB are not supported). Regardless of the multi-disc file format used, every disc of the same game share the same memory card and save state slots.
 
 ----------------------------------------
 Collections
@@ -106,4 +110,19 @@ Advanced
 
 MinUI can automatically run a user-authored shell script on boot. Just place a file named "auto.sh" to "/.userdata/".
 
-TODO
+----------------------------------------
+Thanks
+
+To BlackSeraph, for sharing his modified uImage which provides overclocking (and underclocking) and increases the available framebuffer memory.
+
+To eggs, for his NEON scalers, years of top-notch example code, and patience in the face of my endless questions.
+
+Check out eggs' RG35XX releases: https://www.dropbox.com/sh/3av70t99ffdgzk1/AAAKPQ4y0kBtTsO3e_Xlrhqha
+
+To neonloop, for putting together the Trimui toolchain from which I learned everything I know about docker and buildroot and is the basis for every toolchain I've put together since, and for picoarch, the inspiration for minarch.
+
+Check out neonloop's repos: https://git.crowdedwood.com
+
+And to Jim Gray, for commiserating during development, for early alpha testing, and for providing the soundtrack for much of MinUI's development.
+
+Check out Jim's music: https://ourghosts.bandcamp.com/music
