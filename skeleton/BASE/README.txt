@@ -88,7 +88,7 @@ For multi-disc games, put all the files for all the discs in a single folder and
     Policenauts (Japan) (Disc 2).bin
     Policenauts (Japan) (Disc 2).cue
 
-the m3u file would contain just:
+The m3u file would contain just:
 
   Policenauts (Japan) (Disc 1).cue
   Policenauts (Japan) (Disc 2).cue
