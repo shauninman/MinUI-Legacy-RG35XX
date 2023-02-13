@@ -24,6 +24,7 @@
 
 #include "overrides.h"
 #include "overrides/fceumm.h"
+#include "overrides/fake-08.h"
 #include "overrides/gambatte.h"
 #include "overrides/gpsp.h"
 #include "overrides/mednafen_vb.h"
@@ -33,6 +34,7 @@
 #include "overrides/snes9x2005_plus.h"
 
 static CoreOverrides* overrides[] = {
+	&fake08_overrides,
 	&fceumm_overrides,
 	&gambatte_overrides,
 	&gpsp_overrides,
@@ -536,8 +538,8 @@ enum {
 };
 
 static struct Config {
-	OptionList core;
 	OptionList frontend;
+	OptionList core;
 	ButtonMapping* controls;
 	ButtonMapping* shortcuts;
 	int loaded;
@@ -1165,12 +1167,65 @@ static int16_t input_state_callback(unsigned port, unsigned device, unsigned ind
 }
 ///////////////////////////////
 
+void Input_init(const struct retro_input_descriptor *vars) {
+	static int input_initialized = 0;
+	if (input_initialized) return;
+	
+	config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
+	
+	puts("---------------------------------");
+
+	int present[RETRO_BUTTON_COUNT];
+	int core_mapped = 0;
+	if (vars) {
+		core_mapped = 1;
+		// identify buttons available in this core
+		for (int i=0; vars[i].description; i++) {
+			const struct retro_input_descriptor* var = &vars[i];
+			if (var->port!=0 || var->device!=RETRO_DEVICE_JOYPAD || var->index!=0) continue;
+
+			// TODO: don't ignore unavailable buttons, just override them to BTN_ID_NONE!
+			if (var->id>=RETRO_BUTTON_COUNT) {
+				printf("UNAVAILABLE: %s\n", var->description); fflush(stdout);
+				continue;
+			}
+			else {
+				printf("PRESENT    : %s\n", var->description); fflush(stdout);
+			}
+			present[var->id] = 1;
+			core_button_names[var->id] = var->description;
+		}
+	}
+	
+	for (int i=0;default_button_mapping[i].name; i++) {
+		ButtonMapping* mapping = &default_button_mapping[i];
+		LOG_info("DEFAULT %s (%s): <%s>\n", core_button_names[mapping->retro], mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
+	}
+	
+	for (int i=0; config.controls[i].name; i++) {
+		ButtonMapping* mapping = &config.controls[i];
+		mapping->default_ = mapping->local;
+
+		// null mappings that aren't available in this core
+		if (core_mapped && !present[mapping->retro]) {
+			mapping->name = NULL;
+			continue;
+		}
+		LOG_info("%s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
+	}
+	
+	puts("---------------------------------");
+	input_initialized = 1;
+}
+
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
 	POW_setRumble(strength);
 }
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// printf("environment_callback: %i\n", cmd); fflush(stdout);
+	
+	// LOG_info("environment_callback: %i\n", cmd);
 	
 	switch(cmd) {
 	case RETRO_ENVIRONMENT_GET_OVERSCAN: { /* 2 */
@@ -1213,68 +1268,8 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
 		// LOG_info("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
-		// TODO: this is useless
-		// (some? all?) cores don't sort these in any logical way
-		// which explains why picoarch didn't implement this...
-
-		// TODO: this needs further refactoring (and to be moved elsewhere)
-		// we need:
-		// core_button_names (indexed by RETRO_DEVICE_ID_JOYPAD_*) from input_descriptors
-		// override_button_names (indexed by RETRO_DEVICE_ID_JOYPAD_*) from core.overrides
-		// device_button_names (indexed by BTN_ID_*)
-		// default_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
-		// override_button_mapping (indexed by RETRO_DEVICE_ID_JOYPAD_*?)
-		
-		// ButtonMapping needs to be redefined to include retro_name local_name retro_id local_id local_default
-		
-		// TODO: move all this to an Input_init()?
-		config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
-		
-		const struct retro_input_descriptor *vars = (const struct retro_input_descriptor *)data;
-		if (vars) {
-			// TODO: is this guaranteed to be called?
-			puts("---------------------------------");
-			
-			// identify buttons available in this core
-			int present[RETRO_BUTTON_COUNT];
-			memset(&present, 0, RETRO_BUTTON_COUNT * sizeof(int));
-			for (int i=0; vars[i].description; i++) {
-				const struct retro_input_descriptor* var = &vars[i];
-				if (var->port!=0 || var->device!=RETRO_DEVICE_JOYPAD || var->index!=0) continue;
-
-				// TODO: don't ignore unavailable buttons, just override them to BTN_ID_NONE!
-				if (var->id>=RETRO_BUTTON_COUNT) {
-					printf("UNAVAILABLE: %s\n", var->description); fflush(stdout);
-					continue;
-				}
-				else {
-					printf("PRESENT    : %s\n", var->description); fflush(stdout);
-				}
-				present[var->id] = 1;
-				core_button_names[var->id] = var->description;
-			}
-			
-			for (int i=0;default_button_mapping[i].name; i++) {
-				ButtonMapping* mapping = &default_button_mapping[i];
-				LOG_info("DEFAULT %s (%s): <%s>\n", core_button_names[mapping->retro], mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
-			}
-			
-			for (int i=0; config.controls[i].name; i++) {
-				ButtonMapping* mapping = &config.controls[i];
-				mapping->default_ = mapping->local;
-
-				// null mappings that aren't available in this core
-				if (!present[mapping->retro]) {
-					mapping->name = NULL;
-					continue;
-				}
-				LOG_info("%s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
-			}
-			
-			puts("---------------------------------");
-			
-			return false;
-		}
+		Input_init((const struct retro_input_descriptor *)data);
+		return false;
 	} break;
 	case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: { /* 13 */
 		const struct retro_disk_control_callback *var =
@@ -1308,12 +1303,21 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		}
 		break;
 	}
+	case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: { /* 18 */
+		bool flag = *(bool*)data;
+		// LOG_info("%i: RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: %i\n", cmd, flag);
+		break;
+	}
 	case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: { /* 17 */
 		bool *out = (bool *)data;
 		if (out) {
 			*out = config.core.changed;
 			config.core.changed = 0;
 		}
+		break;
+	}
+	case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: { /* 21 */
+		// LOG_info("%i: RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n", cmd);
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
@@ -2237,26 +2241,25 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	if (screen_scaling==1) {
 		sprintf(scaler_name, "AR_%iX", scale);
 		if (core.aspect_ratio==FOUR_THREE) {
-			// puts("already 4:3");
+			// LOG_info("already 4:3\n");
 		}
 		else if (core.aspect_ratio<FOUR_THREE) {
-			// puts("pillarbox");
-			int tmp = CEIL_DIV(src_h, 3);
-			target_w = tmp * 4 * scale;
-			target_h = tmp * 3 * scale;
-			if (target_h%2) target_h += 1;
+			// LOG_info("pillarbox\n");
+			target_w = CEIL_DIV(src_h, 3) * 4 * scale;
+			target_h = src_h * scale;
 		}
 		else {
-			// puts("letterbox");
-			int tmp = CEIL_DIV(src_w, 4);
-			target_w = tmp * 4 * scale;
-			target_h = tmp * 3 * scale;
-			if (target_h%2) target_h += 1;
+			// LOG_info("letterbox\n");
+			target_w = src_w * scale;
+			target_h = CEIL_DIV(src_w, 4) * 3 * scale;
 		}
 	}
 	else {
 		sprintf(scaler_name, "FS_%iX", scale);
 	}
+	
+	if (target_w%2) target_w += 1;
+	if (target_h%2) target_h += 1;
 	
 
 	int dx = (target_w - dst_w) / 2;
@@ -2420,6 +2423,7 @@ void Core_getName(char* in_name, char* out_name) {
 	tmp[0] = '\0';
 }
 void Core_open(const char* core_path, const char* tag_name) {
+	// LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
 	
 	if (!core.handle) LOG_error("%s\n", dlerror());
@@ -2464,11 +2468,13 @@ void Core_open(const char* core_path, const char* tag_name) {
 	
 	core.need_fullpath = info.need_fullpath;
 	
-	LOG_info("core: %s version: %s tag: %s\n\t(valid_extensions: %s need_fullpath: %i)\n", core.name, core.version, core.tag, info.valid_extensions, info.need_fullpath);
+	LOG_info("core: %s version: %s tag: %s (valid_extensions: %s need_fullpath: %i)\n", core.name, core.version, core.tag, info.valid_extensions, info.need_fullpath);
 	
 	for (int i=0; overrides[i]; i++) {
+		// LOG_info("override: %s core: %s\n", overrides[i]->core_name, core.name);
 		if (!strcmp(overrides[i]->core_name, core.name)) {
 			core.overrides = overrides[i];
+			break;
 		}
 	}
 	
@@ -2487,10 +2493,12 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_input_state_callback(input_state_callback);
 }
 void Core_init(void) {
+	// LOG_info("Core_init\n");
 	core.init();
 	core.initialized = 1;
 }
 void Core_load(void) {
+	// LOG_info("Core_load\n");
 	struct retro_game_info game_info;
 	game_info.path = game.path;
 	game_info.data = game.data;
@@ -3849,6 +3857,7 @@ int main(int argc , char* argv[]) {
 	
 	Game_open(rom_path);
 	Core_load();
+	Input_init(NULL);
 	
 	// restore configs
 	Config_read();
