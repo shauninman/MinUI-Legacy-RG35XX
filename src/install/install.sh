@@ -23,8 +23,15 @@ fi
 
 was_updated() {
 	for FILE in /misc/* /misc/*/*; do
+		A_NAME=$(busybox basename "$A_PATH")
+		
+		if [[ "$A_NAME" == "boot_logo.bmp.gz" ]]; then
+			# we don't care if the user has changed their boot logo
+			continue
+		fi
+		
 		A_PATH=$FILE
-		B_PATH=$SYSTEM_PATH/dat/$(busybox basename "$A_PATH")
+		B_PATH=$SYSTEM_PATH/dat/$A_NAME
 	
 		if [ ! -f "$B_PATH" ]; then
 			continue
