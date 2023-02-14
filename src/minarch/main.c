@@ -2731,8 +2731,6 @@ static int Menu_message(char* message) {
 
 #define OPTION_PADDING 8
 #define MAX_VISIBLE_OPTIONS 7
-#define RELEASE_NAME "r20230127"
-#define COMMIT_HASH "0b74e5f8"
 static int Menu_options(MenuList* list);
 
 static int MenuList_freeItems(MenuList* list, int i) {
