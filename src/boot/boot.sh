@@ -2,7 +2,7 @@
 
 /usbdbg.sh device
 
-TF1_PATH=/mnt/mmc
+TF1_PATH=/mnt/mmc # ROMS partition
 TF2_PATH=/mnt/sdcard
 SDCARD_PATH=$TF1_PATH
 SYSTEM_DIR=/.system
@@ -21,17 +21,24 @@ mount -t vfat -o rw,utf8,noatime $SDCARD_DEVICE /mnt/sdcard
 if [ $? -ne 0 ]; then
 	mount -t exfat -o rw,utf8,noatime $SDCARD_DEVICE /mnt/sdcard
 	if [ $? -ne 0 ]; then
-		rm -rf /mnt/sdcard
-		ln -s /mnt/mmc /mnt/sdcard
+		rm -rf $TF2_PATH
+		ln -s $TF1_PATH $TF2_PATH
 	fi
 fi
 
-if [ ! -d $SYSTEM_PATH ] && [ ! -f $UPDATE_PATH ]; then
-	# try TF2
-	SDCARD_PATH=$TF2_PATH
-	SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
-	UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
+if [ -d ${TF1_PATH}${SYSTEM_FRAG} ] || [ -f ${TF1_PATH}${UPDATE_FRAG} ]; then
+	if [ ! -L $TF2_PATH ]; then
+		# .system found on TF1 but TF2 is present
+		# so unmount and symlink to TF1 path
+		umount $TF2_PATH
+		rm -rf $TF2_PATH
+		ln -s $TF1_PATH $TF2_PATH
+	fi
 fi
+
+SDCARD_PATH=$TF2_PATH
+SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
+UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
@@ -41,7 +48,7 @@ if [ -f $UPDATE_PATH ]; then
 	else
 		ACTION=updating
 	fi
-	
+
 	# extract the zip file appended to the end of this script to tmp
 	# and display one of the two images it contains 
 	CUT=$((`busybox grep -n '^BINARY' $0 | busybox cut -d ':' -f 1 | busybox tail -1` + 1))

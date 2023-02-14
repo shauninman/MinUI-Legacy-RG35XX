@@ -3,8 +3,8 @@
 # NOTE: this file is not chrooted so it's using stock's everything!
 
 TF1_PATH=/mnt/mmc
-TF2_PATH=/mnt/sdcard # TF1 is linked to this path if TF2 is missing
-SYSTEM_PATH=/mnt/sdcard/.system/rg35xx
+TF2_PATH=/mnt/sdcard # TF1 should be linked to this path if TF2 is missing or doesn't contain our system folder
+SYSTEM_PATH=${TF2_PATH}/.system/rg35xx
 FLAG_PATH=/misc/.minstalled
 
 # old rootfs.img (alpha-only)
