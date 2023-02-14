@@ -2257,9 +2257,9 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	int src_w = width;
 	int src_h = height;
 	
-	int x_scale = CEIL_DIV(FIXED_WIDTH, src_w);
-	int y_scale = CEIL_DIV(FIXED_HEIGHT,src_h);
-	int scale = MAX(x_scale, y_scale);
+	int scale_x = CEIL_DIV(FIXED_WIDTH, src_w);
+	int scale_y = CEIL_DIV(FIXED_HEIGHT,src_h);
+	int scale = MAX(scale_x, scale_y);
 	
 	// if (scale>6) scale = 6;
 	// else
@@ -2267,7 +2267,8 @@ static void selectScaler_AR(int width, int height, int pitch) {
 
 	// reduce scale if we don't have enough memory to accomodate it
 	// TODO: some resolutions are getting through here unadjusted? oh maybe because of aspect ratio adjustments below? revisit
-	while (src_w * scale * FIXED_BPP * src_h * scale > PAGE_SIZE) scale -= 1; 
+	// scaled width and height can't be greater than our fixed page width or height
+	while (src_w * scale * FIXED_BPP * src_h * scale > PAGE_SIZE || src_w * scale > PAGE_WIDTH || src_h * scale > PAGE_HEIGHT) scale -= 1; 
 	
 	int dst_w = src_w * scale;
 	int dst_h = src_h * scale;
