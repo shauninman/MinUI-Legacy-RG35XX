@@ -28,6 +28,7 @@
 #include "overrides/gambatte.h"
 #include "overrides/gpsp.h"
 #include "overrides/mednafen_vb.h"
+#include "overrides/mednafen_supafaust.h"
 #include "overrides/pcsx_rearmed.h"
 #include "overrides/picodrive.h"
 #include "overrides/pokemini.h"
@@ -38,6 +39,7 @@ static CoreOverrides* overrides[] = {
 	&fceumm_overrides,
 	&gambatte_overrides,
 	&gpsp_overrides,
+	&mednafen_supafaust_overrides,
 	&mednafen_vb_overrides,
 	&pcsx_rearmed_overrides,
 	&picodrive_overrides,
@@ -560,7 +562,7 @@ static struct Config {
 			[FE_OPT_SCANLINES] = {
 				.key	= "minarch_scanlines_grid", 
 				.name	= "Scanlines/Grid",
-				.desc	= "Simulate scanlines (or a pixel grid at odd scales).\nDarkens the overall image by about 50%. Reduces CPU load.\nOnly applies to native scaling.",
+				.desc	= "Simulate scanlines (or a pixel grid at odd scales).\nOnly applies to native scaling.",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1578,6 +1580,24 @@ static double cpu_double = 0;
 static double use_double = 0;
 static uint32_t sec_start = 0;
 
+
+//from RGB565
+#define cR(A) (((A) & 0xf800) >> 11)
+#define cG(A) (((A) & 0x7e0) >> 5)
+#define cB(A) ((A) & 0x1f)
+//to RGB565
+#define Weight1_1(A, B)  ((((cR(A) + cR(B)) >> 1) & 0x1f) << 11 | (((cG(A) + cG(B)) >> 1) & 0x3f) << 5 | (((cB(A) + cB(B)) >> 1) & 0x1f))
+#define Weight1_2(A, B)  ((((cR(A) + (cR(B) << 1)) / 3) & 0x1f) << 11 | (((cG(A) + (cG(B) << 1)) / 3) & 0x3f) << 5 | (((cB(A) + (cB(B) << 1)) / 3) & 0x1f))
+#define Weight2_1(A, B)  ((((cR(B) + (cR(A) << 1)) / 3) & 0x1f) << 11 | (((cG(B) + (cG(A) << 1)) / 3) & 0x3f) << 5 | (((cB(B) + (cB(A) << 1)) / 3) & 0x1f))
+#define Weight1_3(A, B)  ((((cR(A) + (cR(B) * 3)) >> 2) & 0x1f) << 11 | (((cG(A) + (cG(B) * 3)) >> 2) & 0x3f) << 5 | (((cB(A) + (cB(B) * 3)) >> 2) & 0x1f))
+#define Weight3_1(A, B)  ((((cR(B) + (cR(A) * 3)) >> 2) & 0x1f) << 11 | (((cG(B) + (cG(A) * 3)) >> 2) & 0x3f) << 5 | (((cB(B) + (cB(A) * 3)) >> 2) & 0x1f))
+#define Weight1_4(A, B)  ((((cR(A) + (cR(B) << 2)) / 5) & 0x1f) << 11 | (((cG(A) + (cG(B) << 2)) / 5) & 0x3f) << 5 | (((cB(A) + (cB(B) << 2)) / 5) & 0x1f))
+#define Weight4_1(A, B)  ((((cR(B) + (cR(A) << 2)) / 5) & 0x1f) << 11 | (((cG(B) + (cG(A) << 2)) / 5) & 0x3f) << 5 | (((cB(B) + (cB(A) << 2)) / 5) & 0x1f))
+#define Weight2_3(A, B)  (((((cR(A) << 1) + (cR(B) * 3)) / 5) & 0x1f) << 11 | ((((cG(A) << 1) + (cG(B) * 3)) / 5) & 0x3f) << 5 | ((((cB(A) << 1) + (cB(B) * 3)) / 5) & 0x1f))
+#define Weight3_2(A, B)  (((((cR(B) << 1) + (cR(A) * 3)) / 5) & 0x1f) << 11 | ((((cG(B) << 1) + (cG(A) * 3)) / 5) & 0x3f) << 5 | ((((cB(B) << 1) + (cB(A) * 3)) / 5) & 0x1f))
+#define Weight1_1_1_1(A, B, C, D)  ((((cR(A) + cR(B) + cR(C) + cR(D)) >> 2) & 0x1f) << 11 | (((cG(A) + cG(B) + cG(C) + cG(D)) >> 2) & 0x3f) << 5 | (((cB(A) + cB(B) + cB(C) + cB(D)) >> 2) & 0x1f))
+
+
 static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
 static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	// pitch of src image not src buffer!
@@ -1608,12 +1628,18 @@ static void scale1x_scanline(void* __restrict src, void* __restrict dst, uint32_
 	int dst_stride = 2 * dst_pitch / SCREEN_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
+	uint16_t k = 0x0000;
 	uint16_t* restrict src_row = (uint16_t*)src;
 	uint16_t* restrict dst_row = (uint16_t*)dst;
-	for (int y=0; y<h; y++) {
+	for (int y=0; y<h; y+=2) {
 		memcpy(dst_row, src_row, cpy_pitch);
 		dst_row += dst_stride;
 		src_row += src_stride;
+		
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t s = *(src_row + x);
+			*(dst_row + x) = Weight3_2(s, k);
+		}
 	}
 	
 }
@@ -1660,14 +1686,19 @@ static void scale2x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 	}
 }
 static void scale2x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	uint16_t k = 0x0000;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 2;
 		for (unsigned x = 0; x < w; x++) {
-			uint16_t s = *src_row;
+			uint16_t c1 = *src_row;
+			uint16_t c2 = Weight3_2( c1, k);
 			
-			*(dst_row     ) = s;
-			*(dst_row + 1 ) = s;
+			*(dst_row     ) = c1;
+			*(dst_row + 1 ) = c1;
+			
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c2;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1766,27 +1797,29 @@ static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, 
 	}
 }
 static void scale3x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	// uint16_t k = 0x0000;
+	uint16_t k = 0x0000;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
 		for (unsigned x = 0; x < w; x++) {
-			uint16_t s = *src_row;
+			uint16_t c1 = *src_row;
+			uint16_t c2 = Weight3_2( c1, k);
+			uint16_t c3 = Weight2_3( c1, k);
 			
 			// row 1
-			*(dst_row                       ) = s;
-			*(dst_row                    + 1) = s;
-			// *(dst_row                    + 2) = k;
+			*(dst_row                       ) = c2;
+			*(dst_row                    + 1) = c1;
+			*(dst_row                    + 2) = c1;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH * 1    ) = s;
-			*(dst_row + SCREEN_WIDTH * 1 + 1) = s;
-			// *(dst_row + SCREEN_WIDTH * 1 + 2) = k;
+			*(dst_row + SCREEN_WIDTH * 1    ) = c2;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
 
 			// row 3
-			// *(dst_row + SCREEN_WIDTH * 2    ) = k;
-			// *(dst_row + SCREEN_WIDTH * 2 + 1) = k;
-			// *(dst_row + SCREEN_WIDTH * 2 + 2) = k;
+			*(dst_row + SCREEN_WIDTH * 2    ) = c3;
+			*(dst_row + SCREEN_WIDTH * 2 + 1) = c2;
+			*(dst_row + SCREEN_WIDTH * 2 + 2) = c2;
 
 			src_row += 1;
 			dst_row += 3;
@@ -1833,36 +1866,38 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 }
 static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	int row3 = SCREEN_WIDTH * 2;
-	// int row4 = SCREEN_WIDTH * 3;
+	int row4 = SCREEN_WIDTH * 3;
+	uint16_t k = 0x0000;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 4;
 		for (unsigned x = 0; x < w; x++) {
-			uint16_t s = *src_row;
+			uint16_t c1 = *src_row;
+			uint16_t c2 = Weight3_2( c1, k);
 			
 			// row 1
-			*(dst_row    ) = s;
-			*(dst_row + 1) = s;
-			*(dst_row + 2) = s;
-			*(dst_row + 3) = s;
+			*(dst_row    ) = c1;
+			*(dst_row + 1) = c1;
+			*(dst_row + 2) = c1;
+			*(dst_row + 3) = c1;
 			
-			// // row 2
-			// *(dst_row + SCREEN_WIDTH    ) = s;
-			// *(dst_row + SCREEN_WIDTH + 1) = s;
-			// *(dst_row + SCREEN_WIDTH + 2) = s;
-			// *(dst_row + SCREEN_WIDTH + 3) = s;
+			// row 2
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c2;
+			*(dst_row + SCREEN_WIDTH + 2) = c2;
+			*(dst_row + SCREEN_WIDTH + 3) = c2;
 
 			// row 3
-			*(dst_row + row3    ) = s;
-			*(dst_row + row3 + 1) = s;
-			*(dst_row + row3 + 2) = s;
-			*(dst_row + row3 + 3) = s;
+			*(dst_row + row3    ) = c1;
+			*(dst_row + row3 + 1) = c1;
+			*(dst_row + row3 + 2) = c1;
+			*(dst_row + row3 + 3) = c1;
 
-			// // row 4
-			// *(dst_row + row4    ) = s;
-			// *(dst_row + row4 + 1) = s;
-			// *(dst_row + row4 + 2) = s;
-			// *(dst_row + row4 + 3) = s;
+			// row 4
+			*(dst_row + row4    ) = c2;
+			*(dst_row + row4 + 1) = c2;
+			*(dst_row + row4 + 2) = c2;
+			*(dst_row + row4 + 3) = c2;
 
 			src_row += 1;
 			dst_row += 4;
@@ -1924,7 +1959,8 @@ static void scaleNN_scanline(void* __restrict src, void* __restrict dst, uint32_
 			int col = w;
 			while(col--) {
 				while (dx < 0) {
-					*pdst16++ = *psrc16;
+					*pdst16 = *(pdst16 + dst_pitch) = *psrc16;
+					pdst16 += 1;
 					dx += w;
 				}
 
@@ -2036,7 +2072,9 @@ static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, ui
 				uint16_t s = *psrc16;
 				
 				while (dx < 0) {
-					*pdst16++ = d ? l1 : s;
+					*pdst16 = *(pdst16 + dst_pitch) = d ? l1 : s;
+					pdst16 += 1;
+					
 					dx += w;
 
 					l2 = l1;
@@ -2045,7 +2083,7 @@ static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, ui
 				}
 
 				dx -= renderer.dst_w;
-				psrc16++;
+				psrc16 += 1;
 			}
 		}
 

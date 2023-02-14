@@ -2,9 +2,6 @@
 
 static CoreOverrides fake08_overrides = {
 	.core_name = "fake08",
-	.option_overrides = (OptionOverride[]){
-		{NULL,NULL},
-	},
 	.button_mapping = (ButtonMapping[]){
 		{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 		{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
