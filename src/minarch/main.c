@@ -633,7 +633,7 @@ static struct Config {
 		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_LOAD_STATE]			= {"Load State",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_RESET_GAME]			= {"Reset Game",		-1, BTN_ID_NONE, 0},
-		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scale",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scaling",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_SCANLINES]		= {"Toggle Scanlines",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},

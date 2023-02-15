@@ -906,6 +906,8 @@ void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
 	snd.sample_rate_in  = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
 	
+	LOG_info("sample rate: %i (req) %i (rec)\n", snd.sample_rate_in, snd.sample_rate_out);
+	
 	SND_selectResampler();
 	SND_resizeBuffer();
 	
