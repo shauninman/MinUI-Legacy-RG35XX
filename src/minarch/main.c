@@ -197,7 +197,7 @@ static void Game_open(char* path) {
 }
 static void Game_close(void) {
 	if (game.data) free(game.data);
-	POW_setRumble(0); // just in case
+	VIB_setStrength(0); // just in case
 }
 
 static struct retro_disk_control_ext_callback disk_control_ext;
@@ -1222,7 +1222,7 @@ void Input_init(const struct retro_input_descriptor *vars) {
 
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
-	POW_setRumble(strength);
+	VIB_setStrength(strength);
 }
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// printf("environment_callback: %i\n", cmd); fflush(stdout);
@@ -2557,7 +2557,7 @@ void Core_load(void) {
 	if (a<=0) a = (double)av_info.geometry.base_width / av_info.geometry.base_height;
 	core.aspect_ratio = a;
 	
-	LOG_info("aspect_ratio: %f\n", a);
+	LOG_info("aspect_ratio: %f fps: %f\n", a, core.fps);
 }
 void Core_reset(void) {
 	core.reset();
@@ -3434,6 +3434,9 @@ static void Menu_loop(void) {
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	GFX_setVsync(VSYNC_STRICT);
 	
+	int rumble_strength = VIB_getStrength();
+	VIB_setStrength(0);
+	
 	fast_forward = 0;
 	POW_enableAutosleep();
 	PAD_reset();
@@ -3791,6 +3794,7 @@ static void Menu_loop(void) {
 
 		GFX_setVsync(prevent_tearing); // restore vsync value
 		setOverclock(overclock); // restore overclock value
+		if (rumble_strength) VIB_setStrength(rumble_strength);
 	}
 		
 	SDL_FreeSurface(backing);
@@ -3881,6 +3885,7 @@ int main(int argc , char* argv[]) {
 	getEmuName(rom_path, tag_name);
 	
 	screen = GFX_init(MODE_MENU);
+	VIB_init();
 	
 	MSG_init();
 	InitSettings();
@@ -3931,6 +3936,7 @@ int main(int argc , char* argv[]) {
 	SDL_FreeSurface(screen);
 	MSG_quit();
 	QuitSettings();
+	VIB_quit();
 	GFX_quit();
 	
 	return EXIT_SUCCESS;

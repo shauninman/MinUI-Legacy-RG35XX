@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
@@ -1005,6 +1006,58 @@ int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
 ///////////////////////////////
 
+
+
+static struct VIB_Context {
+	pthread_t pt;
+	int queued_strength;
+	int strength;
+} vib;
+static void* VIB_thread(void *arg) {
+	char buffer[4];
+#define DEFER_FRAMES 3
+	static int defer = 0;
+	while(1) {
+		SDL_Delay(17);
+		if (vib.queued_strength!=vib.strength) {
+			if (defer<DEFER_FRAMES && vib.queued_strength==0) { // minimize vacillation between 0 and some number (which this motor doesn't like)
+				defer += 1;
+				continue;
+			}
+			vib.strength = vib.queued_strength;
+			defer = 0;
+
+			int val = MAX(0, MIN((100 * (vib.strength+1))>>16, 100));
+			sprintf(buffer, "%i", val);
+
+			int fd = open("/sys/class/power_supply/battery/moto", O_WRONLY);
+			if (fd>0) {
+				write(fd, buffer, strlen(buffer));
+				close(fd);
+			}
+		}
+	}
+	return 0;
+}
+void VIB_init(void) {
+	vib.queued_strength = vib.strength = 0;
+	pthread_create(&vib.pt, NULL, &VIB_thread, NULL);
+}
+void VIB_quit(void) {
+	VIB_setStrength(0);
+	pthread_cancel(vib.pt);
+	pthread_join(vib.pt, NULL);
+}
+void VIB_setStrength(int strength) {
+	if (vib.queued_strength==strength) return;
+	vib.queued_strength = strength;
+}
+int VIB_getStrength(void) {
+	return vib.strength;
+}
+
+///////////////////////////////
+
 // TODO: separate settings/battery and power management?
 void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep) {
 	int dirty = _dirty ? *_dirty : 0;
@@ -1174,6 +1227,7 @@ int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
 int POW_getBattery(void) { // 5-100 in 25% fragments
+	// TODO: move to infrequently called thread
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
 	i -= 310; 	// ~0-100
 	
@@ -1184,7 +1238,4 @@ int POW_getBattery(void) { // 5-100 in 25% fragments
 	if (i>20)  return 40;
 	if (i>10)  return 20;
 	else      return  10;
-}
-void POW_setRumble(int strength) {
-	putInt("/sys/class/power_supply/battery/moto", strength);
 }

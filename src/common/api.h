@@ -198,6 +198,14 @@ int PAD_isPressed(int btn);
 int PAD_justReleased(int btn);
 int PAD_justRepeated(int btn);
 
+
+///////////////////////////////
+
+void VIB_init(void);
+void VIB_quit(void);
+void VIB_setStrength(int strength);
+ int VIB_getStrength(void);
+	
 ///////////////////////////////
 
 // TODO: rename PLAT_*?
@@ -212,7 +220,6 @@ void POW_enableAutosleep(void);
 int POW_preventAutosleep(void);
 int POW_isCharging(void);
 int POW_getBattery(void);
-void POW_setRumble(int strength); // 0-100
 
 #define CPU_SPEED_MENU			 504000 // 240000 was having latency issues
 #define CPU_SPEED_POWERSAVE 	1104000
