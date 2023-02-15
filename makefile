@@ -79,9 +79,10 @@ bundle:
 	cp ./cores/output/snes9x2005_plus_libretro.so ./build/SYSTEM/rg35xx/cores
 
 	# extras
+	cp ./cores/output/fake08_libretro.so ./build/EXTRAS/Emus/rg35xx/P8.pak
+	cp ./cores/output/mgba_libretro.so ./build/EXTRAS/Emus/rg35xx/MGBA.pak
 	cp ./cores/output/mednafen_vb_libretro.so ./build/EXTRAS/Emus/rg35xx/VB.pak
 	cp ./cores/output/pokemini_libretro.so ./build/EXTRAS/Emus/rg35xx/PKM.pak
-	cp ./cores/output/fake08_libretro.so ./build/EXTRAS/Emus/rg35xx/P8.pak
 	cp ./other/DinguxCommander/output/DinguxCommander ./build/EXTRAS/Tools/rg35xx/Files.pak
 	cp -R ./other/DinguxCommander/res ./build/EXTRAS/Tools/rg35xx/Files.pak/
 	

@@ -1,7 +1,7 @@
 # this logic was broken out from picoarch's all-in-one makefile
 
 CORES = fceumm gambatte gpsp pcsx_rearmed picodrive snes9x2005_plus
-CORES+= beetle-vb fake-08 mednafen_supafaust pokemini # extras
+CORES+= beetle-vb fake-08 mednafen_supafaust mgba pokemini # extras
 
 ###############################
 
