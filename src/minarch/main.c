@@ -122,6 +122,8 @@ static struct Core {
 	unsigned (*get_region)(void);
 	void *(*get_memory_data)(unsigned id);
 	size_t (*get_memory_size)(unsigned id);
+	
+	// retro_audio_buffer_status_callback_t audio_buffer_status;
 } core;
 
 ///////////////////////////////////////
@@ -1225,8 +1227,6 @@ static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uin
 	VIB_setStrength(strength);
 }
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
-	// printf("environment_callback: %i\n", cmd); fflush(stdout);
-	
 	// LOG_info("environment_callback: %i\n", cmd);
 	
 	switch(cmd) {
@@ -1342,7 +1342,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	// RETRO_ENVIRONMENT_GET_LANGUAGE 39
-	case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: { /* 52 */
+	case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: { /* 51 */
 		bool *out = (bool *)data;
 		if (out)
 			*out = true;
@@ -1393,38 +1393,35 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	// TODO: RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION 59
-	// TODO: I'm not sure what uses this...not gambatte, not snes9x, not pcsx
-	case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK: { /* 62 */
-		// puts("RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK");
-		// const struct retro_audio_buffer_status_callback *cb =
-		// 	(const struct retro_audio_buffer_status_callback *)data;
-		// if (cb) {
-		// 	puts("has audo_buffer_status callback");
-		// 	core.audio_buffer_status = cb->callback;
-		// } else {
-		// 	puts("missing audo_buffer_status callback");
-		// 	core.audio_buffer_status = NULL;
-		// }
-		// fflush(stdout);
-		break;
-	}
-	// TODO: not used by gambatte
-	case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY: { /* 63 */
-		// TODO: unused?
-		// puts("RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY");
-		//
-		// const unsigned *latency_ms = (const unsigned *)data;
-		// if (latency_ms) {
-		// 	unsigned frames = *latency_ms * core.fps / 1000;
-		// 	if (frames < 30)
-		// 		audio_buffer_size_override = frames;
-		// 		printf("audio_buffer_size_override = %i (unused?)\n", frames);
-		// 	else
-		// 		PA_WARN("Audio buffer change out of range (%d), ignored\n", frames);
-		// }
-		break;
-	}
-	
+	// TODO: used by mgba, (but only during frameskip?)
+	// case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK: { /* 62 */
+	// 	LOG_info("RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
+	// 	const struct retro_audio_buffer_status_callback *cb = (const struct retro_audio_buffer_status_callback *)data;
+	// 	if (cb) {
+	// 		LOG_info("has audo_buffer_status callback\n");
+	// 		core.audio_buffer_status = cb->callback;
+	// 	} else {
+	// 		LOG_info("no audo_buffer_status callback\n");
+	// 		core.audio_buffer_status = NULL;
+	// 	}
+	// 	break;
+	// }
+	// TODO: used by mgba, (but only during frameskip?)
+	// case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY: { /* 63 */
+	// 	LOG_info("RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
+	//
+	// 	const unsigned *latency_ms = (const unsigned *)data;
+	// 	if (latency_ms) {
+	// 		unsigned frames = *latency_ms * core.fps / 1000;
+	// 		if (frames < 30)
+	// 			// audio_buffer_size_override = frames;
+	// 			LOG_info("audio_buffer_size_override = %i (unused?)\n", frames);
+	// 		else
+	// 			LOG_info("Audio buffer change out of range (%d), ignored\n", frames);
+	// 	}
+	// 	break;
+	// }
+
 	// TODO: RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE 64
 	case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE: { /* 65 */
 		// const struct retro_system_content_info_override* info = (const struct retro_system_content_info_override* )data;
@@ -3917,6 +3914,7 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 		
+		// if (core.audio_buffer_status) core.audio_buffer_status(true, 100, false);
 		core.run();
 		limitFF();
 		

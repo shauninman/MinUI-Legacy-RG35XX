@@ -168,11 +168,23 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.vinfo.yres_virtual = VIRTUAL_HEIGHT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
-	ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo);
+	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
+	
+	// printf("bits_per_pixel: %i\n", gfx.vinfo.bits_per_pixel);
+	// printf("xres: %i\n", gfx.vinfo.xres);
+	// printf("yres: %i\n", gfx.vinfo.yres);
+	// printf("xres_virtual: %i\n", gfx.vinfo.xres_virtual);
+	// printf("yres_virtual: %i\n", gfx.vinfo.yres_virtual);
+	// printf("xoffset: %i\n", gfx.vinfo.xoffset);
+	// printf("yoffset: %i\n", gfx.vinfo.yoffset);
+	// printf("activate: %i\n", gfx.vinfo.activate);
+	// printf("vmode: %i\n", gfx.vinfo.vmode);
+	// printf("sync: %i\n", gfx.vinfo.sync);
+	// fflush(stdout);
 	
 	struct owlfb_sync_info sinfo;
 	sinfo.enabled = 1;
-	ioctl(gfx.fb0_fd, OWLFB_VSYNC_EVENT_EN, &sinfo);
+	if (ioctl(gfx.fb0_fd, OWLFB_VSYNC_EVENT_EN, &sinfo)) LOG_info("OWLFB_VSYNC_EVENT_EN failed %s\n", strerror(errno));
 	
 	gfx.page = 1; // start on the backbuffer
 	gfx.fb0_buffer = mmap(0, VIRTUAL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
@@ -229,6 +241,17 @@ void GFX_quit(void) {
 
 	GFX_clearAll();
 	munmap(gfx.fb0_buffer, VIRTUAL_SIZE);
+
+	// restore for other binaries
+	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
+	gfx.vinfo.xres = FIXED_WIDTH;
+	gfx.vinfo.yres = FIXED_HEIGHT;
+	gfx.vinfo.xres_virtual = FIXED_WIDTH;
+	gfx.vinfo.yres_virtual = FIXED_HEIGHT;
+	gfx.vinfo.xoffset = 0;
+	gfx.vinfo.yoffset = 0;
+	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
+
 	close(gfx.fb0_fd);
 	SDL_Quit();
 }
@@ -279,13 +302,13 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 void GFX_flip(SDL_Surface* screen) {
 	// point framebuffer at the first line of the backbuffer
 	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
-	ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo);
+	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
 	gfx.resized = 0;
 
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
+			if (ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
 		}
 	}
 	
@@ -299,7 +322,7 @@ void GFX_sync(void) {
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
+			if (ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
 		}
 	}
 	else {
