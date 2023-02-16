@@ -1029,19 +1029,16 @@ int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
 ///////////////////////////////
 
-
-
 static struct VIB_Context {
 	pthread_t pt;
 	int queued_strength;
 	int strength;
 } vib;
 static void* VIB_thread(void *arg) {
-	char buffer[4];
 #define DEFER_FRAMES 3
 	static int defer = 0;
 	while(1) {
-		SDL_Delay(4);
+		SDL_Delay(17);
 		if (vib.queued_strength!=vib.strength) {
 			if (defer<DEFER_FRAMES && vib.queued_strength==0) { // minimize vacillation between 0 and some number (which this motor doesn't like)
 				defer += 1;
@@ -1157,7 +1154,6 @@ static int can_poweroff = 1;
 void POW_disablePowerOff(void) {
 	can_poweroff = 0;
 }
-
 void POW_powerOff(void) {
 	if (can_poweroff) {
 		char* msg = exists(AUTO_RESUME_PATH) ? "Quicksave created,\npowering off" : "Powering off";
@@ -1174,7 +1170,6 @@ void POW_powerOff(void) {
 }
 
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
-
 #define CPU_SPEED_SET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
 #define CPU_SPEED_GET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
 static int previous_speed = CPU_SPEED_NORMAL;
@@ -1248,8 +1243,7 @@ int POW_preventAutosleep(void) {
 int POW_isCharging(void) {
 	return getInt("/sys/class/power_supply/battery/charger_online");
 }
-int POW_getBattery(void) { // 5-100 in 25% fragments
-	// TODO: move to infrequently called thread
+int POW_getBattery(void) { // 10-100 in 10-20% fragments
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
 	i -= 310; 	// ~0-100
 	

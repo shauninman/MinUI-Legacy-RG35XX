@@ -1204,6 +1204,7 @@ void Input_init(const struct retro_input_descriptor *vars) {
 	for (int i=0;default_button_mapping[i].name; i++) {
 		ButtonMapping* mapping = &default_button_mapping[i];
 		LOG_info("DEFAULT %s (%s): <%s>\n", core_button_names[mapping->retro], mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
+		mapping->name = (char*)core_button_names[mapping->retro];
 	}
 	
 	for (int i=0; config.controls[i].name; i++) {
