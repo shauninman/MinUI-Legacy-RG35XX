@@ -1323,15 +1323,18 @@ int main (int argc, char *argv[]) {
 				int selected_row = top->selected - top->start;
 				for (int i=top->start,j=0; i<top->end; i++,j++) {
 					Entry* entry = top->entries->items[i];
-					char* entry_name = entry->unique ? entry->unique : entry->name;
-					int max_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
-					if (i==top->start) max_width -= ow;
+					char* entry_name = entry->name;
+					char* entry_unique = entry->unique;
+					int available_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
+					if (i==top->start) available_width -= ow;
 					
 					SDL_Color text_color = COLOR_WHITE;
 					
+					trimSortingMeta(&entry_name);
+					
 					char display_name[256];
-					int text_width = GFX_truncateText(font.large, entry_name, display_name, max_width);
-					max_width = MIN(max_width, text_width);
+					int text_width = GFX_truncateText(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width);
+					int max_width = MIN(available_width, text_width);
 					if (j==selected_row) {
 						GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
@@ -1340,6 +1343,24 @@ int main (int argc, char *argv[]) {
 							SCALE1(PILL_SIZE)
 						});
 						text_color = COLOR_BLACK;
+					}
+					else if (entry->unique) {
+						trimSortingMeta(&entry_unique);
+						char unique_name[256];
+						GFX_truncateText(font.large, entry_unique, unique_name, available_width);
+						
+						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, unique_name, COLOR_DARK_TEXT);
+						SDL_BlitSurface(text, &(SDL_Rect){
+							0,
+							0,
+							max_width-SCALE1(BUTTON_PADDING*2),
+							text->h
+						}, screen, &(SDL_Rect){
+							SCALE1(PADDING+BUTTON_PADDING),
+							SCALE1(PADDING+(j*PILL_SIZE)+4)
+						});
+						
+						GFX_truncateText(font.large, entry_name, display_name, available_width);
 					}
 					SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
 					SDL_BlitSurface(text, &(SDL_Rect){
