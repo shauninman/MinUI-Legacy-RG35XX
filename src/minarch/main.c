@@ -27,6 +27,7 @@
 #include "overrides/fake-08.h"
 #include "overrides/gambatte.h"
 #include "overrides/gpsp.h"
+#include "overrides/mgba.h"
 #include "overrides/mednafen_vb.h"
 #include "overrides/mednafen_supafaust.h"
 #include "overrides/pcsx_rearmed.h"
@@ -41,6 +42,7 @@ static CoreOverrides* overrides[] = {
 	&gpsp_overrides,
 	&mednafen_supafaust_overrides,
 	&mednafen_vb_overrides,
+	&mgba_overrides,
 	&pcsx_rearmed_overrides,
 	&picodrive_overrides,
 	&pokemini_overrides,
