@@ -1041,7 +1041,7 @@ static void* VIB_thread(void *arg) {
 #define DEFER_FRAMES 3
 	static int defer = 0;
 	while(1) {
-		SDL_Delay(17);
+		SDL_Delay(4);
 		if (vib.queued_strength!=vib.strength) {
 			if (defer<DEFER_FRAMES && vib.queued_strength==0) { // minimize vacillation between 0 and some number (which this motor doesn't like)
 				defer += 1;
@@ -1050,12 +1050,11 @@ static void* VIB_thread(void *arg) {
 			vib.strength = vib.queued_strength;
 			defer = 0;
 
-			int val = MAX(0, MIN((100 * (vib.strength+1))>>16, 100));
-			sprintf(buffer, "%i", val);
-
+			int val = MAX(0, MIN((100 * vib.strength)>>16, 100));
+			// LOG_info("strength: %8i (%3i/100)\n", vib.strength, val);
 			int fd = open("/sys/class/power_supply/battery/moto", O_WRONLY);
 			if (fd>0) {
-				write(fd, buffer, strlen(buffer));
+				dprintf(fd, "%d", val);
 				close(fd);
 			}
 		}
