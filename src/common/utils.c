@@ -43,9 +43,12 @@ void getDisplayName(const char* in_name, char* out_name) {
 	tmp = strrchr(work_name, '/');
 	if (tmp) strcpy(out_name, tmp+1);
 	
-	// remove extension
-	tmp = strrchr(out_name, '.');
-	if (tmp && strlen(tmp)<=4) tmp[0] = '\0'; // 3 letter extension plus dot
+	// remove extension(s), eg. .p8.png
+	while ((tmp = strrchr(out_name, '.'))!=NULL) {
+		int len = strlen(tmp);
+		if (len>2 && len<=4) tmp[0] = '\0'; // 3 letter extension plus dot
+		else break;
+	}
 	
 	// remove trailing parens (round and square)
 	strcpy(work_name, out_name);
@@ -98,6 +101,21 @@ void trimTrailingNewlines(char* line) {
 		line[len-1] = '\0'; // trim newline
 		len -= 1;
 	}
+}
+void trimSortingMeta(char** str) { // eg. `001) `
+	// TODO: this code is suss
+	char* safe = *str;
+	while(isdigit(**str)) *str += 1; // ignore leading numbers
+
+	if (*str[0]==')') { // then match a closing parenthesis
+		*str += 1;
+	}
+	else { //  or bail, restoring the string to its original value
+		*str = safe;
+		return;
+	}
+	
+	while(isblank(**str)) *str += 1; // ignore leading space
 }
 
 ///////////////////////////////////////

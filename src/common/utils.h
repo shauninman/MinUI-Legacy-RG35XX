@@ -13,6 +13,7 @@ void getEmuName(const char* in_name, char* out_name);
 
 void normalizeNewline(char* line);
 void trimTrailingNewlines(char* line);
+void trimSortingMeta(char** str);
 
 int exists(char* path);
 void touch(char* path);
