@@ -4,7 +4,7 @@ static CoreOverrides pokemini_overrides = {
 	.core_name = "pokemini",
 	.option_overrides = (OptionOverride[]){
 		{"pokemini_video_scale", 	"6x",1},
-		{"pokemini_60hz_mode", 		"enabled",1},
+		{"pokemini_60hz_mode", 		"enabled",1}, // 75fps isn't practical here
 		{"pokemini_palette",		"Old"},
 		{"pokemini_piezofilter",	"disabled"},
 		{"pokemini_lowpass_filter",	"enabled"},

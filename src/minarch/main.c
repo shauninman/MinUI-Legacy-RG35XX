@@ -2316,20 +2316,6 @@ static void selectScaler_AR(int width, int height, int pitch) {
 		case 3: renderer.scaler = scale3x_n16; break;
 		case 2: renderer.scaler = scale2x_n16; break;
 		default: renderer.scaler = scale1x_n16; break;
-		// case 4:
-		// 	if (scale_y==2) renderer.scaler = scale4x2_c16;
-		// 	else renderer.scaler = scale4x_c16;
-		// 	break;
-		// case 3:
-		// 	if (scale_x==2) renderer.scaler = scale2x3_c16;
-		// 	else renderer.scaler = scale3x_c16;
-		// 	break;
-		// case 2:
-		// 	if (scale_x==1) renderer.scaler = scale1x2_c16;
-		// 	else if (scale_y==1) renderer.scaler = scale2x1_c16;
-		// 	else renderer.scaler = scale2x_c16;
-		// break;
-		// default: renderer.scaler = scale1x_n16; break;
 	}
 	
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
