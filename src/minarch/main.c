@@ -1638,7 +1638,7 @@ static void scale1x_scanline(void* __restrict src, void* __restrict dst, uint32_
 		
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t s = *(src_row + x);
-			*(dst_row + x) = Weight3_2(s, k);
+			*(dst_row + x) = Weight3_1(s, k);
 		}
 	}
 	
@@ -1699,6 +1699,26 @@ static void scale2x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			
 			*(dst_row + SCREEN_WIDTH    ) = c2;
 			*(dst_row + SCREEN_WIDTH + 1) = c2;
+			
+			src_row += 1;
+			dst_row += 2;
+		}
+	}
+}
+static void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	uint16_t k = 0x0000;
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 2;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t c1 = *src_row;
+			uint16_t c2 = Weight3_1( c1, k);
+			
+			*(dst_row     ) = c2;
+			*(dst_row + 1 ) = c2;
+			
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c1;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1804,13 +1824,42 @@ static void scale3x_scanline(void* __restrict src, void* __restrict dst, uint32_
 		for (unsigned x = 0; x < w; x++) {
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_2( c1, k);
+			
+			// row 1
+			*(dst_row                       ) = c2;
+			*(dst_row                    + 1) = c2;
+			*(dst_row                    + 2) = c2;
+
+			// row 2
+			*(dst_row + SCREEN_WIDTH * 1    ) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
+
+			// row 3
+			*(dst_row + SCREEN_WIDTH * 2    ) = c1;
+			*(dst_row + SCREEN_WIDTH * 2 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 2 + 2) = c1;
+
+			src_row += 1;
+			dst_row += 3;
+		}
+	}
+}
+static void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
+	uint16_t k = 0x0000;
+	for (unsigned y = 0; y < h; y++) {
+		uint16_t* restrict src_row = (void*)src + y * pitch;
+		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
+		for (unsigned x = 0; x < w; x++) {
+			uint16_t c1 = *src_row;
+			uint16_t c2 = Weight3_2( c1, k);
 			uint16_t c3 = Weight2_3( c1, k);
 			
 			// row 1
 			*(dst_row                       ) = c2;
 			*(dst_row                    + 1) = c1;
 			*(dst_row                    + 2) = c1;
-			
+
 			// row 2
 			*(dst_row + SCREEN_WIDTH * 1    ) = c2;
 			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
@@ -1904,6 +1953,7 @@ static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_
 		}
 	}
 }
+// TODO: NN versions of scanline need updating to use blended scanlines (or maybe not for performance?) 
 static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	int dy = -renderer.dst_h;
 	unsigned lines = h;
@@ -2217,7 +2267,7 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		if (show_scanlines) {
 			switch (scale) {
 				case 4: 	renderer.scaler = scale4x_scanline; break;
-				case 3: 	renderer.scaler = scale3x_scanline; break;
+				case 3: 	renderer.scaler = scale3x_grid; break;
 				case 2: 	renderer.scaler = scale2x_scanline; break;
 				default:	renderer.scaler = scale1x_scanline; break;
 			}
