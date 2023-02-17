@@ -16,17 +16,15 @@ rewrite/add repo url
 	BASE/README.txt
 	EXTRAS/README.txt
 
-
 minarch
-	make 2x1,2x3,4x2 _c16 scalers and hook up
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
 	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
 		and Shortcuts > Toggle Scanlines to Cycle Effect
-	eggs might make a few mixed neon scalers, eg. 2x1,2x3,4x2 so we're pushing fewer pixels
+		or don't because my cpu scalers are bad
 
 minui
-	restore MENU display version(s)
+	- 
 
 common
 	move battery check to thread?

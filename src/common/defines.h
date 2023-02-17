@@ -29,6 +29,7 @@
 
 #define SDCARD_PATH "/mnt/sdcard"
 #define ROMS_PATH SDCARD_PATH "/Roms"
+#define ROOT_SYSTEM_PATH SDCARD_PATH "/.system/"
 #define SYSTEM_PATH SDCARD_PATH "/.system/" PLATFORM
 #define RES_PATH SDCARD_PATH "/.system/res"
 #define FONT_PATH RES_PATH "/BPreplayBold-unhinted.otf"

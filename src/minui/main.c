@@ -1335,7 +1335,7 @@ int main (int argc, char *argv[]) {
 				if (!version) {
 					// TODO: load from a file
 					char release[256];
-					getFile("./version.txt", release, 256);
+					getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
 					
 					char *tmp,*commit;
 					commit = strrchr(release, '\n');
