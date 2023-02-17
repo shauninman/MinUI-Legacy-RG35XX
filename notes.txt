@@ -33,3 +33,7 @@ See also: FB_InitOSKeymap() in
 framebuffer to png
 	
 	adb pull /dev/fb0 && magick -size 640x3840 "RGB565:fb0" fb0.png && open fb0.png
+
+remove file from repo and history
+
+	git filter-repo --path file.ext --invert-paths --force

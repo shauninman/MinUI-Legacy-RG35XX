@@ -1,0 +1,78 @@
+-------------------------------
+
+Please see the README.txt in the zip file for installation and update instructions.
+
+- Initial beta release
+
+-------------------------------
+
+repo readme with images
+
+upload to github
+	decide on a repo name
+		union-minui?
+	
+rewrite/add repo url
+	BASE/README.txt
+	EXTRAS/README.txt
+
+
+minarch
+	make 2x1,2x3,4x2 _c16 scalers and hook up
+	some cores can only fast forward with prevent tearing off
+		can this be set as an override preference?
+	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
+		and Shortcuts > Toggle Scanlines to Cycle Effect
+	eggs might make a few mixed neon scalers, eg. 2x1,2x3,4x2 so we're pushing fewer pixels
+
+minui
+	restore MENU display version(s)
+
+common
+	move battery check to thread?
+
+checkout eggs tools
+	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
+
+cores
+	pcsx-rearmed
+		reset hangs the PlayStation emulator core
+		Tekken freezes PlayStation emulator core while fast-forwarding
+
+	
+Union-ize this?
+	Mini?
+	Smart & Model S?
+
+	
+makefile
+	add commits.txt and version.txt?
+
+make my own simple file browser? :sweat_smile:
+
+send neonloop a link to minarch source
+	
+sdl
+	-
+
+batmon
+	charging icons at least?
+		ramdisk.img/res/images/charger/battery_[0-5].png
+
+clock
+	-
+
+libmsettings
+	hdmi
+
+keymon
+	handle sleep/wake
+		minui/minarch would opt out of this
+		would be useful for Files.pak and third-party binaries
+	jack
+		instead of manually polling once a second use poll()?
+	hdmi
+		turn off screen when connected
+		fb changes... eek
+
+
