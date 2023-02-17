@@ -3029,6 +3029,7 @@ static int Menu_options(MenuList* list) {
 
 	int dirty = 1;
 	int show_options = 1;
+	int show_settings = 0;
 	int await_input = 0;
 	
 	int count;
@@ -3114,7 +3115,8 @@ static int Menu_options(MenuList* list) {
 			}
 		}
 		
-		if (PAD_justPressed(BTN_B)) {
+		// uint32_t now = SDL_GetTicks();
+		if (PAD_justPressed(BTN_B)) { // || PAD_tappedMenu(now)
 			show_options = 0;
 		}
 		else if (PAD_justPressed(BTN_A)) {
@@ -3169,13 +3171,13 @@ static int Menu_options(MenuList* list) {
 			}
 		}
 		
-		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+		POW_update(&dirty, &show_settings, Menu_beforeSleep, Menu_afterSleep);
 		
 		if (dirty) {
 			dirty = 0;
 			
 			GFX_clear(screen);
-			GFX_blitHardwareGroup(screen, 0);
+			GFX_blitHardwareGroup(screen, show_settings);
 			
 			char* desc = NULL;
 			SDL_Surface* text;
@@ -3437,7 +3439,6 @@ static void Menu_loop(void) {
 	fast_forward = 0;
 	POW_enableAutosleep();
 	PAD_reset();
-	
 	
 	// path and string things
 	char* tmp;
