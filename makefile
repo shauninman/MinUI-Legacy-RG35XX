@@ -91,6 +91,7 @@ readmes:
 	fmt -w 40 -s ./skeleton/EXTRAS/README.txt > ./build/EXTRAS/README.txt
 
 zip:
+	cd ./build/SYSTEM/rg35xx/paks/MinUI.pak && echo "$(RELEASE_NAME)\n$(BUILD_HASH)" > version.txt
 	cd ./build && find . -type f -name '.DS_Store' -delete
 	mkdir -p ./build/PAYLOAD
 	mv ./build/SYSTEM ./build/PAYLOAD/.system	

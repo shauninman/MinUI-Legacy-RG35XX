@@ -3059,8 +3059,6 @@ static int Menu_options(MenuList* list) {
 		}
 		
 		GFX_startFrame();
-		uint32_t frame_start = SDL_GetTicks();
-
 		PAD_poll();
 		
 		if (PAD_justRepeated(BTN_UP)) {
@@ -3511,9 +3509,12 @@ static void Menu_loop(void) {
 	int status = STATUS_CONT; // TODO: tmp?
 	int show_setting = 0;
 	int dirty = 1;
+	int ignore_menu = 0;
+	int menu_start = 0;
+	
 	while (show_menu) {
 		GFX_startFrame();
-		uint32_t frame_start = SDL_GetTicks();
+		uint32_t now = SDL_GetTicks();
 
 		PAD_poll();
 		
@@ -3568,7 +3569,8 @@ static void Menu_loop(void) {
 			// printf("bmp_path: %s (%i)\n", bmp_path, preview_exists);
 		}
 		
-		if (PAD_justPressed(BTN_B)) {
+		
+		if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
 			status = STATUS_CONT;
 			show_menu = 0;
 		}

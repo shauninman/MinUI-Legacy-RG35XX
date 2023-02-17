@@ -1180,133 +1180,146 @@ int main (int argc, char *argv[]) {
 
 	PAD_reset();
 	int dirty = 1;
+	int show_version = 0;
 	int show_setting = 0; // 1=brightness,2=volume
 	while (!quit) {
 		GFX_startFrame();
-		unsigned long frame_start = SDL_GetTicks();
+		unsigned long now = SDL_GetTicks();
 		
 		PAD_poll();
 			
 		int selected = top->selected;
 		int total = top->entries->count;
 		
-		if (total>0) {
-			if (PAD_justRepeated(BTN_UP)) {
-				if (selected==0 && !PAD_justPressed(BTN_UP)) {
-					// stop at top
-				}
-				else {
-					selected -= 1;
-					if (selected<0) {
-						selected = total-1;
-						int start = total - MAIN_ROW_COUNT;
-						top->start = (start<0) ? 0 : start;
-						top->end = total; 
-					}
-					else if (selected<top->start) {
-						top->start -= 1;
-						top->end -= 1;
-					}
-				}
+		if (show_version) {
+			if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
+				show_version = 0;
+				dirty = 1;
 			}
-			else if (PAD_justRepeated(BTN_DOWN)) {
-				if (selected==total-1 && !PAD_justPressed(BTN_DOWN)) {
-					// stop at bottom
+		}
+		else {
+			if (PAD_tappedMenu(now)) {
+				show_version = 1;
+				dirty = 1;
+			}
+			else if (total>0) {
+				if (PAD_justRepeated(BTN_UP)) {
+					if (selected==0 && !PAD_justPressed(BTN_UP)) {
+						// stop at top
+					}
+					else {
+						selected -= 1;
+						if (selected<0) {
+							selected = total-1;
+							int start = total - MAIN_ROW_COUNT;
+							top->start = (start<0) ? 0 : start;
+							top->end = total; 
+						}
+						else if (selected<top->start) {
+							top->start -= 1;
+							top->end -= 1;
+						}
+					}
 				}
-				else {
-					selected += 1;
-					if (selected>=total) {
+				else if (PAD_justRepeated(BTN_DOWN)) {
+					if (selected==total-1 && !PAD_justPressed(BTN_DOWN)) {
+						// stop at bottom
+					}
+					else {
+						selected += 1;
+						if (selected>=total) {
+							selected = 0;
+							top->start = 0;
+							top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
+						}
+						else if (selected>=top->end) {
+							top->start += 1;
+							top->end += 1;
+						}
+					}
+				}
+				if (PAD_justRepeated(BTN_LEFT)) {
+					selected -= MAIN_ROW_COUNT;
+					if (selected<0) {
 						selected = 0;
 						top->start = 0;
 						top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
 					}
+					else if (selected<top->start) {
+						top->start -= MAIN_ROW_COUNT;
+						if (top->start<0) top->start = 0;
+						top->end = top->start + MAIN_ROW_COUNT;
+					}
+				}
+				else if (PAD_justRepeated(BTN_RIGHT)) {
+					selected += MAIN_ROW_COUNT;
+					if (selected>=total) {
+						selected = total-1;
+						int start = total - MAIN_ROW_COUNT;
+						top->start = (start<0) ? 0 : start;
+						top->end = total;
+					}
 					else if (selected>=top->end) {
-						top->start += 1;
-						top->end += 1;
+						top->end += MAIN_ROW_COUNT;
+						if (top->end>total) top->end = total;
+						top->start = top->end - MAIN_ROW_COUNT;
 					}
 				}
 			}
-			if (PAD_justRepeated(BTN_LEFT)) {
-				selected -= MAIN_ROW_COUNT;
-				if (selected<0) {
-					selected = 0;
-					top->start = 0;
-					top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
-				}
-				else if (selected<top->start) {
-					top->start -= MAIN_ROW_COUNT;
-					if (top->start<0) top->start = 0;
-					top->end = top->start + MAIN_ROW_COUNT;
-				}
-			}
-			else if (PAD_justRepeated(BTN_RIGHT)) {
-				selected += MAIN_ROW_COUNT;
-				if (selected>=total) {
-					selected = total-1;
-					int start = total - MAIN_ROW_COUNT;
-					top->start = (start<0) ? 0 : start;
-					top->end = total;
-				}
-				else if (selected>=top->end) {
-					top->end += MAIN_ROW_COUNT;
-					if (top->end>total) top->end = total;
-					top->start = top->end - MAIN_ROW_COUNT;
-				}
-			}
-		}
 		
-		if (PAD_justRepeated(BTN_L1)) { // previous alpha
-			Entry* entry = top->entries->items[selected];
-			int i = entry->alpha-1;
-			if (i>=0) {
-				selected = top->alphas->items[i];
-				if (total>MAIN_ROW_COUNT) {
-					top->start = selected;
-					top->end = top->start + MAIN_ROW_COUNT;
-					if (top->end>total) top->end = total;
-					top->start = top->end - MAIN_ROW_COUNT;
+			if (PAD_justRepeated(BTN_L1)) { // previous alpha
+				Entry* entry = top->entries->items[selected];
+				int i = entry->alpha-1;
+				if (i>=0) {
+					selected = top->alphas->items[i];
+					if (total>MAIN_ROW_COUNT) {
+						top->start = selected;
+						top->end = top->start + MAIN_ROW_COUNT;
+						if (top->end>total) top->end = total;
+						top->start = top->end - MAIN_ROW_COUNT;
+					}
 				}
 			}
-		}
-		else if (PAD_justRepeated(BTN_R1)) { // next alpha
-			Entry* entry = top->entries->items[selected];
-			int i = entry->alpha+1;
-			if (i<top->alphas->count) {
-				selected = top->alphas->items[i];
-				if (total>MAIN_ROW_COUNT) {
-					top->start = selected;
-					top->end = top->start + MAIN_ROW_COUNT;
-					if (top->end>total) top->end = total;
-					top->start = top->end - MAIN_ROW_COUNT;
+			else if (PAD_justRepeated(BTN_R1)) { // next alpha
+				Entry* entry = top->entries->items[selected];
+				int i = entry->alpha+1;
+				if (i<top->alphas->count) {
+					selected = top->alphas->items[i];
+					if (total>MAIN_ROW_COUNT) {
+						top->start = selected;
+						top->end = top->start + MAIN_ROW_COUNT;
+						if (top->end>total) top->end = total;
+						top->start = top->end - MAIN_ROW_COUNT;
+					}
 				}
 			}
-		}
 	
-		if (selected!=top->selected) {
-			top->selected = selected;
-			dirty = 1;
-		}
+			if (selected!=top->selected) {
+				top->selected = selected;
+				dirty = 1;
+			}
 	
-		if (dirty && total>0) readyResume(top->entries->items[top->selected]);
+			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-		if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
-			should_resume = 1;
-			Entry_open(top->entries->items[top->selected]);
-			dirty = 1;
-		}
-		else if (total>0 && PAD_justPressed(BTN_A)) {
-			Entry_open(top->entries->items[top->selected]);
-			total = top->entries->count;
-			dirty = 1;
+			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+				should_resume = 1;
+				Entry_open(top->entries->items[top->selected]);
+				dirty = 1;
+			}
+			else if (total>0 && PAD_justPressed(BTN_A)) {
+				Entry_open(top->entries->items[top->selected]);
+				total = top->entries->count;
+				dirty = 1;
 
-			if (total>0) readyResume(top->entries->items[top->selected]);
-		}
-		else if (PAD_justPressed(BTN_B) && stack->count>1) {
-			closeDirectory();
-			total = top->entries->count;
-			dirty = 1;
-			// can_resume = 0;
-			if (total>0) readyResume(top->entries->items[top->selected]);
+				if (total>0) readyResume(top->entries->items[top->selected]);
+			}
+			else if (PAD_justPressed(BTN_B) && stack->count>1) {
+				closeDirectory();
+				total = top->entries->count;
+				dirty = 1;
+				// can_resume = 0;
+				if (total>0) readyResume(top->entries->items[top->selected]);
+			}
 		}
 		
 		POW_update(&dirty, &show_setting, NULL, NULL);
@@ -1317,39 +1330,110 @@ int main (int argc, char *argv[]) {
 			int ox;
 			int oy;
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
-		
-			// list
-			if (total>0) {
-				int selected_row = top->selected - top->start;
-				for (int i=top->start,j=0; i<top->end; i++,j++) {
-					Entry* entry = top->entries->items[i];
-					char* entry_name = entry->name;
-					char* entry_unique = entry->unique;
-					int available_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
-					if (i==top->start) available_width -= ow;
+			
+			if (show_version) {
+				if (!version) {
+					// TODO: load from a file
+					char release[256];
+					getFile("./version.txt", release, 256);
 					
-					SDL_Color text_color = COLOR_WHITE;
+					char *tmp,*commit;
+					commit = strrchr(release, '\n');
+					commit[0] = '\0';
+					commit = strrchr(release, '\n')+1;
+					tmp = strchr(release, '\n');
+					tmp[0] = '\0';
 					
-					trimSortingMeta(&entry_name);
+					char* model = "Anbernic RG35XX";
 					
-					char display_name[256];
-					int text_width = GFX_truncateText(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width);
-					int max_width = MIN(available_width, text_width);
-					if (j==selected_row) {
-						GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
-							SCALE1(PADDING),
-							SCALE1(PADDING+(j*PILL_SIZE)),
-							max_width,
-							SCALE1(PILL_SIZE)
-						});
-						text_color = COLOR_BLACK;
-					}
-					else if (entry->unique) {
-						trimSortingMeta(&entry_unique);
-						char unique_name[256];
-						GFX_truncateText(font.large, entry_unique, unique_name, available_width);
+					SDL_Surface* release_txt = TTF_RenderUTF8_Blended(font.large, "Release", COLOR_DARK_TEXT);
+					SDL_Surface* version_txt = TTF_RenderUTF8_Blended(font.large, release, COLOR_WHITE);
+					SDL_Surface* commit_txt = TTF_RenderUTF8_Blended(font.large, "Commit", COLOR_DARK_TEXT);
+					SDL_Surface* hash_txt = TTF_RenderUTF8_Blended(font.large, commit, COLOR_WHITE);
+					
+					SDL_Surface* model_txt = TTF_RenderUTF8_Blended(font.large, "Model", COLOR_DARK_TEXT);
+					SDL_Surface* type_txt = TTF_RenderUTF8_Blended(font.large, model, COLOR_WHITE);
+					
+					#define VERSION_LINE_HEIGHT 24
+					int x = release_txt->w + SCALE1(8);
+					int w = x + version_txt->w;
+					int h = SCALE1(VERSION_LINE_HEIGHT*4);
+					version = SDL_CreateRGBSurface(0,w,h,16,0,0,0,0);
+					
+					SDL_BlitSurface(release_txt, NULL, version, &(SDL_Rect){0, 0});
+					SDL_BlitSurface(version_txt, NULL, version, &(SDL_Rect){x,0});
+					SDL_BlitSurface(commit_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT)});
+					SDL_BlitSurface(hash_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT)});
+					
+					SDL_BlitSurface(model_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT*3)});
+					SDL_BlitSurface(type_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT*3)});
+					
+					SDL_FreeSurface(release_txt);
+					SDL_FreeSurface(version_txt);
+					SDL_FreeSurface(commit_txt);
+					SDL_FreeSurface(hash_txt);
+					SDL_FreeSurface(model_txt);
+					SDL_FreeSurface(type_txt);
+				}
+				SDL_BlitSurface(version, NULL, screen, &(SDL_Rect){(SCREEN_WIDTH-version->w)/2,(SCREEN_HEIGHT-version->h)/2});
+				
+				// buttons (duped and trimmed from below)
+				if (show_setting) {
+					if (show_setting==1) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
+					else GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
+				}
+				else {
+					GFX_blitButtonGroup((char*[]){ "POWER","SLEEP",  NULL }, screen, 0);
+				}
+				
+				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, screen, 1);
+			}
+			else {
+				// list
+				if (total>0) {
+					int selected_row = top->selected - top->start;
+					for (int i=top->start,j=0; i<top->end; i++,j++) {
+						Entry* entry = top->entries->items[i];
+						char* entry_name = entry->name;
+						char* entry_unique = entry->unique;
+						int available_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
+						if (i==top->start) available_width -= ow;
+					
+						SDL_Color text_color = COLOR_WHITE;
+					
+						trimSortingMeta(&entry_name);
+					
+						char display_name[256];
+						int text_width = GFX_truncateText(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width);
+						int max_width = MIN(available_width, text_width);
+						if (j==selected_row) {
+							GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
+								SCALE1(PADDING),
+								SCALE1(PADDING+(j*PILL_SIZE)),
+								max_width,
+								SCALE1(PILL_SIZE)
+							});
+							text_color = COLOR_BLACK;
+						}
+						else if (entry->unique) {
+							trimSortingMeta(&entry_unique);
+							char unique_name[256];
+							GFX_truncateText(font.large, entry_unique, unique_name, available_width);
 						
-						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, unique_name, COLOR_DARK_TEXT);
+							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, unique_name, COLOR_DARK_TEXT);
+							SDL_BlitSurface(text, &(SDL_Rect){
+								0,
+								0,
+								max_width-SCALE1(BUTTON_PADDING*2),
+								text->h
+							}, screen, &(SDL_Rect){
+								SCALE1(PADDING+BUTTON_PADDING),
+								SCALE1(PADDING+(j*PILL_SIZE)+4)
+							});
+						
+							GFX_truncateText(font.large, entry_name, display_name, available_width);
+						}
+						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
 						SDL_BlitSurface(text, &(SDL_Rect){
 							0,
 							0,
@@ -1359,49 +1443,37 @@ int main (int argc, char *argv[]) {
 							SCALE1(PADDING+BUTTON_PADDING),
 							SCALE1(PADDING+(j*PILL_SIZE)+4)
 						});
-						
-						GFX_truncateText(font.large, entry_name, display_name, available_width);
+						SDL_FreeSurface(text);
 					}
-					SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
-					SDL_BlitSurface(text, &(SDL_Rect){
-						0,
-						0,
-						max_width-SCALE1(BUTTON_PADDING*2),
-						text->h
-					}, screen, &(SDL_Rect){
-						SCALE1(PADDING+BUTTON_PADDING),
-						SCALE1(PADDING+(j*PILL_SIZE)+4)
-					});
-					SDL_FreeSurface(text);
-				}
-			}
-			else {
-				GFX_blitMessage("Empty folder", screen, NULL);
-			}
-			
-			// buttons
-			if (show_setting) {
-				if (show_setting==1) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
-				else GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
-			}
-			else if (can_resume) {
-				GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, screen, 0);
-			}
-			else {
-				GFX_blitButtonGroup((char*[]){ "POWER","SLEEP",  NULL }, screen, 0);
-			}
-			
-			if (total==0) {
-				if (stack->count>1) {
-					GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, screen, 1);
-				}
-			}
-			else {
-				if (stack->count>1) {
-					GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, screen, 1);
 				}
 				else {
-					GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, screen, 1);
+					GFX_blitMessage("Empty folder", screen, NULL);
+				}
+			
+				// buttons
+				if (show_setting) {
+					if (show_setting==1) GFX_blitButtonGroup((char*[]){ BRIGHTNESS_BUTTON_LABEL,"BRIGHTNESS",  NULL }, screen, 0);
+					else GFX_blitButtonGroup((char*[]){ "MENU","BRIGHTNESS",  NULL }, screen, 0);
+				}
+				else if (can_resume) {
+					GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, screen, 0);
+				}
+				else {
+					GFX_blitButtonGroup((char*[]){ "POWER","SLEEP",  NULL }, screen, 0);
+				}
+			
+				if (total==0) {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, screen, 1);
+					}
+				}
+				else {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, screen, 1);
+					}
+					else {
+						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, screen, 1);
+					}
 				}
 			}
 

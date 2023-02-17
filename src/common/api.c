@@ -1027,6 +1027,20 @@ int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
 int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
 int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
+int PAD_tappedMenu(uint32_t now) {
+	#define MENU_DELAY 250 // also in POW_update()
+	static uint32_t menu_start = 0;
+	static int ignore_menu = 0; 
+	if (PAD_justPressed(BTN_MENU)) {
+		ignore_menu = 0;
+		menu_start = now;
+	}
+	else if (PAD_isPressed(BTN_MENU) && (PAD_justPressed(BTN_PLUS) || PAD_justPressed(BTN_MINUS))) {
+		ignore_menu = 1;
+	}
+	return (!ignore_menu && PAD_justReleased(BTN_MENU) && now-menu_start<MENU_DELAY);
+}
+
 ///////////////////////////////
 
 static struct VIB_Context {
@@ -1084,7 +1098,8 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	
 	static uint32_t cancel_start = 0;
 	static uint32_t power_start = 0;
-
+	
+	static uint32_t menu_start = 0;
 	static uint32_t setting_start = 0;
 	static uint32_t charge_start = 0;
 	static int was_charging = -1;
@@ -1122,20 +1137,25 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 		POW_fauxSleep();
 		if (after_sleep) after_sleep();
 		
-		cancel_start = SDL_GetTicks();
+		cancel_start = now = SDL_GetTicks();
 		power_start = 0;
 		dirty = 1;
 	}
 	
 	int was_dirty = dirty; // dirty list (not including settings/battery)
 	
-	#define SETTING_DELAY 750
+	#define SETTING_DELAY 500
 	if (show_setting && now-setting_start>=SETTING_DELAY && !PAD_isPressed(BTN_MENU)) {
 		show_setting = 0;
 		dirty = 1;
 	}
 	
-	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || PAD_justPressed(BTN_MENU)) {
+	if (!show_setting && !PAD_isPressed(BTN_MENU)) {
+		menu_start = now; // this is weird, updates until pressed
+	}
+	
+	#define MENU_DELAY 250 // also in PAD_tappedMenu()
+	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY)) {
 		setting_start = now;
 		if (PAD_isPressed(BTN_MENU)) {
 			show_setting = 1;

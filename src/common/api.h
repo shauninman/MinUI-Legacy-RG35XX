@@ -198,6 +198,7 @@ int PAD_isPressed(int btn);
 int PAD_justReleased(int btn);
 int PAD_justRepeated(int btn);
 
+int PAD_tappedMenu(uint32_t now); // special case, returns 1 on release of BTN_MENU within 250ms and BTN_PLUS/BTN_MINUS haven't been pressed
 
 ///////////////////////////////
 
