@@ -2224,10 +2224,10 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		}
 		else {
 			switch (scale) {
-				case 4: 	renderer.scaler = scale4x_n16; break;
-				case 3: 	renderer.scaler = scale3x_n16; break;
-				case 2: 	renderer.scaler = scale2x_n16; break;
-				default:	renderer.scaler = scale1x_n16; break;
+				case 4: 	renderer.scaler = scale4x_c16; break;
+				case 3: 	renderer.scaler = scale3x_c16; break;
+				case 2: 	renderer.scaler = scale2x_c16; break;
+				default:	renderer.scaler = scale1x_c16; break;
 
 				// my lesser scalers :sweat_smile:
 				// case 4: 	renderer.scaler = scale4x; break;
@@ -2311,12 +2311,12 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	renderer.dst_p = target_pitch;
 	renderer.dst_offset = (dy * target_pitch) + (dx * FIXED_BPP);
 	switch (scale) {
-		case 6: renderer.scaler = scale6x_n16; break;
-		case 5: renderer.scaler = scale5x_n16; break;
-		case 4: renderer.scaler = scale4x_n16; break;
-		case 3: renderer.scaler = scale3x_n16; break;
-		case 2: renderer.scaler = scale2x_n16; break;
-		default: renderer.scaler = scale1x_n16; break;
+		case 6: renderer.scaler = scale6x_c16; break;
+		case 5: renderer.scaler = scale5x_c16; break;
+		case 4: renderer.scaler = scale4x_c16; break;
+		case 3: renderer.scaler = scale3x_c16; break;
+		case 2: renderer.scaler = scale2x_c16; break;
+		default: renderer.scaler = scale1x_c16; break;
 	}
 	
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
