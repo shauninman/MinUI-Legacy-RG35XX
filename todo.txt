@@ -21,18 +21,25 @@ minarch
 		can this be set as an override preference?
 	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
 		and Shortcuts > Toggle Scanlines to Cycle Effect
-		or don't because my cpu scalers are bad
+		or don't because my cpu scalers are bad (performance-wise)
+		or flesh them out just because :sweat_smile:
+	eggs implemented mixed scale neon scalers, hook those up
 
 minui
 	- 
 
 common
 	move battery check to thread?
+	add low-bat icon to owlfb overlay?
+		https://discord.com/channels/741895796315914271/1063158507366535249/1077626268645863495
 
 checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
 
 cores
+	vb
+		launching directly into native scaling has normal performance
+		but launching into aspect and switching to native tanks the framerate
 	pcsx-rearmed
 		reset hangs the PlayStation emulator core
 		Tekken freezes PlayStation emulator core while fast-forwarding
@@ -44,7 +51,7 @@ Union-ize this?
 
 	
 makefile
-	add commits.txt and version.txt?
+	add commits.txt?
 
 make my own simple file browser? :sweat_smile:
 
@@ -74,3 +81,7 @@ keymon
 		fb changes... eek
 
 
+todont
+	I thought I wanted the MENU button to act as a back button in OPTIONS submenus
+	but then why doesn't it act as a back button in the main menu?
+	it's a toggle, it toggles the menu in game and the version info in main menu
