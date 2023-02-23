@@ -6,15 +6,7 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
-repo readme with images
-
-upload to github
-	decide on a repo name
-		union-minui?
-	
-rewrite/add repo url
-	BASE/README.txt
-	EXTRAS/README.txt
+send neonloop a link to minarch source
 
 minarch
 	some cores can only fast forward with prevent tearing off
@@ -34,7 +26,8 @@ common
 		https://discord.com/channels/741895796315914271/1063158507366535249/1077626268645863495
 
 misc
-	say, show, blank, and confirm
+	port say, show, blank, and confirm
+	make my own simple file browser? :sweat_smile:
 
 checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
@@ -42,7 +35,8 @@ checkout eggs tools
 cores
 	vb
 		launching directly into native scaling has normal performance
-		but launching into aspect and switching to native tanks the framerate
+		but launching into aspect and switching to native tanks the
+		framerate
 	pcsx-rearmed
 		reset hangs the PlayStation emulator core
 		Tekken freezes PlayStation emulator core while fast-forwarding
@@ -54,11 +48,7 @@ Union-ize this?
 
 	
 makefile
-	add commits.txt?
-
-make my own simple file browser? :sweat_smile:
-
-send neonloop a link to minarch source
+	-
 	
 sdl
 	-

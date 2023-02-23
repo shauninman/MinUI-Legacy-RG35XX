@@ -1,6 +1,6 @@
 MinUI is a minimal launcher
 
-Source: TODO
+Source: https://github.com/shauninman/union-minui
 
 ----------------------------------------
 Features
