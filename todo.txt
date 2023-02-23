@@ -33,6 +33,9 @@ common
 	add low-bat icon to owlfb overlay?
 		https://discord.com/channels/741895796315914271/1063158507366535249/1077626268645863495
 
+misc
+	say, show, blank, and confirm
+
 checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
 
