@@ -7,12 +7,15 @@ TF2_PATH=/mnt/sdcard # TF1 should be linked to this path if TF2 is missing or do
 SYSTEM_PATH=${TF2_PATH}/.system/rg35xx
 FLAG_PATH=/misc/.minstalled
 
+echo "installing/updating"
+
 # old rootfs.img (alpha-only)
 if [ -f $SYSTEM_PATH/rootfs.img ]; then
 	rm $SYSTEM_PATH/rootfs.img
 fi
 
 if [ ! -f $FLAG_PATH ]; then
+	echo "backing up"
 	BAK_PATH=$TF1_PATH/bak
 	mkdir -p $BAK_PATH
 	cp /misc/modules/gpio_keys_polled.ko $BAK_PATH
@@ -23,16 +26,15 @@ fi
 
 was_updated() {
 	for FILE in /misc/* /misc/*/*; do
+		A_PATH=$FILE
 		A_NAME=$(busybox basename "$A_PATH")
+		B_PATH=$SYSTEM_PATH/dat/$A_NAME
 		
 		if [[ "$A_NAME" == "boot_logo.bmp.gz" ]]; then
 			# we don't care if the user has changed their boot logo
 			continue
 		fi
 		
-		A_PATH=$FILE
-		B_PATH=$SYSTEM_PATH/dat/$A_NAME
-	
 		if [ ! -f "$B_PATH" ]; then
 			continue
 		fi
