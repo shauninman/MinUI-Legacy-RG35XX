@@ -1,3 +1,3 @@
-stock uImage blob modified by BlackSeraph with under- and overclocked cpu speeds, increased buffers per framebuffer (up from 2 to 6), removed fb1, increased max framebuffer size to 1280x960
+stock uImage blob modified by BlackSeraph with under- and overclocked cpu speeds, reduced framebuffers to 1, increased buffers per framebuffer (up from 2 to 8)
 
 source: unavailable
