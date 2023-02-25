@@ -302,7 +302,7 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 void GFX_flip(SDL_Surface* screen) {
 	// point framebuffer at the first line of the backbuffer
 	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
-	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
+	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("%s failed %s\n", (gfx.resized ? "FBIOPUT_VSCREENINFO" : "FBIOPAN_DISPLAY"), strerror(errno));
 	gfx.resized = 0;
 
 	if (gfx.vsync!=VSYNC_OFF) {

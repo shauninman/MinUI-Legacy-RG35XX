@@ -62,7 +62,7 @@ if [ -f $UPDATE_PATH ]; then
 	rm -f $UPDATE_PATH
 	
 	# the updated system finishes the install/update
-	$SYSTEM_PATH/bin/install.sh
+	$SYSTEM_PATH/bin/install.sh # &> $SDCARD_PATH/install.txt
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2

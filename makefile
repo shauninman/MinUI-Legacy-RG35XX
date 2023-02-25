@@ -23,6 +23,8 @@ RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
 
 all: lib sys all-cores tools dtb bundle readmes zip report
 
+repack: bundle readmes zip report
+
 lib:
 	cd ./src/libmsettings && make
 
