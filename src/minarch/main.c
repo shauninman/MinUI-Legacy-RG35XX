@@ -28,6 +28,7 @@
 #include "overrides/gambatte.h"
 #include "overrides/gpsp.h"
 #include "overrides/mgba.h"
+#include "overrides/mednafen_pce_fast.h"
 #include "overrides/mednafen_vb.h"
 #include "overrides/mednafen_supafaust.h"
 #include "overrides/pcsx_rearmed.h"
@@ -40,6 +41,7 @@ static CoreOverrides* overrides[] = {
 	&fceumm_overrides,
 	&gambatte_overrides,
 	&gpsp_overrides,
+	&mednafen_pce_fast_overrides,
 	&mednafen_supafaust_overrides,
 	&mednafen_vb_overrides,
 	&mgba_overrides,

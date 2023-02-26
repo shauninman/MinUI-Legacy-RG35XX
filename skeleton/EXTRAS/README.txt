@@ -29,5 +29,6 @@ Bios files
 You'll need to BYOB for the emulator paks included in this zip file.
 
 MGBA: gba_bios.bin
-      sgb.bios
+ PCE: syscard3.pce
  PKM: bios.min
+ SGB: sgb.bios
