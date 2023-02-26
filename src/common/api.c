@@ -390,7 +390,7 @@ void GFX_flip(SDL_Surface* screen) {
 	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
 	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("%s failed %s\n", (gfx.resized ? "FBIOPUT_VSCREENINFO" : "FBIOPAN_DISPLAY"), strerror(errno));
 	gfx.resized = 0;
-	POW_flipOverlay(); // TODO: tmp?
+	POW_flipOverlay();
 
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
@@ -1270,7 +1270,7 @@ static void POW_updateBatteryStatus(void) {
 	else           pow.charge =  10;
 	
 	// LOG_info("battery charge: %i (%i) charging: %i\n", pow.charge, i, pow.is_charging);
-	pow.charge = POW_LOW_CHARGE;
+	// pow.charge = POW_LOW_CHARGE;
 }
 
 static void* POW_monitorBattery(void *arg) {
