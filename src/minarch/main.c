@@ -3479,7 +3479,8 @@ static void Menu_loop(void) {
 		downsample(backing->pixels,resized->pixels,backing->w,backing->h,backing->pitch,SCREEN_PITCH);
 		screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_PITCH);
 	}
-
+	
+	POW_warn(0);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	GFX_setVsync(VSYNC_STRICT);
 	
@@ -3852,6 +3853,7 @@ static void Menu_loop(void) {
 	SDL_FreeSurface(backing);
 	SDL_FreeSurface(resized);
 	POW_disableAutosleep();
+	POW_warn(1);
 }
 
 // TODO: move to POW_*?
@@ -3938,6 +3940,7 @@ int main(int argc , char* argv[]) {
 	
 	screen = GFX_init(MODE_MENU);
 	VIB_init();
+	POW_init();
 	
 	MSG_init();
 	InitSettings();
@@ -3964,6 +3967,7 @@ int main(int argc , char* argv[]) {
 	
 	State_resume();
 	
+	POW_warn(1);
 	POW_disableAutosleep();
 	sec_start = SDL_GetTicks();
 	while (!quit) {
@@ -3989,6 +3993,7 @@ int main(int argc , char* argv[]) {
 	SDL_FreeSurface(screen);
 	MSG_quit();
 	QuitSettings();
+	POW_quit();
 	VIB_quit();
 	GFX_quit();
 	

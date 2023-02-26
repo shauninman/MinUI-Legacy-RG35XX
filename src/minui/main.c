@@ -1167,6 +1167,7 @@ int main (int argc, char *argv[]) {
 	LOG_info("MinUI\n");
 	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
+	POW_init();
 	InitSettings();
 	PAD_reset();
 	
@@ -1487,6 +1488,7 @@ int main (int argc, char *argv[]) {
 	SDL_FreeSurface(screen);
 
 	Menu_quit();
+	POW_quit();
 	GFX_quit();
 	QuitSettings();
 }

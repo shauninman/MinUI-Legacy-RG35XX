@@ -12,6 +12,7 @@
 #include <SDL/SDL_image.h>
 #include <SDL/SDL_ttf.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include <msettings.h>
 #include "api.h"
@@ -85,6 +86,63 @@ struct owlfb_sync_info {
 	__u8 disp_id;
 	__u16 reserved2;
 };
+enum owlfb_overlay_type {
+	OWLFB_OVERLAY_VIDEO = 1,
+	OWLFB_OVERLAY_CURSOR,
+};
+enum owl_color_mode {
+	OWL_DSS_COLOR_RGB16	= 0,
+	OWL_DSS_COLOR_BGR16	= 1,
+	OWL_DSS_COLOR_ARGB32    = 4,
+	OWL_DSS_COLOR_ABGR32    = 5,
+	OWL_DSS_COLOR_RGBA32    = 6,
+	OWL_DSS_COLOR_BGRA32	= 7,
+	OWL_DSS_COLOR_NV21	= 8,
+	OWL_DSS_COLOR_NU21	= 9,
+	OWL_DSS_COLOR_YU12	= 10,
+	OWL_DSS_COLOR_ARGB16	= 12,
+	OWL_DSS_COLOR_ABGR16	= 13,
+	OWL_DSS_COLOR_RGBA16	= 14,
+	OWL_DSS_COLOR_BGRA16	= 15,
+	OWL_DSS_COLOR_RGB24U	= 16,
+	OWL_DSS_COLOR_RGB24P	= 17,
+	OWL_DSS_COLOR_RGBX32	= 18,
+	OWL_DSS_COLOR_NV12	= 19,
+	OWL_DSS_COLOR_XBGR32	= 20,
+	OWL_DSS_COLOR_XRGB32	= 21,
+};
+struct owlfb_overlay_args {
+	__u16 fb_id;
+	__u16 overlay_id;
+	__u16 overlay_type;
+	__u32 overlay_mem_base;
+	__u32 overlay_mem_size;
+	__u32 uintptr_overly_info;
+};
+struct owlfb_overlay_info {
+	__u32 mem_off;
+	__u32 mem_size;
+	__u32 screen_width;
+	enum owl_color_mode color_mode;
+	__u32 img_width;
+	__u32 img_height;
+	__u32 xoff;
+	__u32 yoff;
+	__u32 width;
+	__u32 height;
+	__u8 rotation;
+	__u32 pos_x;
+	__u32 pos_y;
+	__u32 out_width;
+	__u32 out_height;
+	__u8 lightness;
+	__u8 saturation;
+	__u8 contrast;
+	bool global_alpha_en;
+	__u8 global_alpha;
+	bool pre_mult_alpha_en;
+	__u8 zorder;
+};
 
 #define OWL_IOW(num, dtype) _IOW('O', num, dtype)
 #define OWL_IOR(num, dtype)	_IOR('O', num, dtype)
@@ -92,6 +150,12 @@ struct owlfb_sync_info {
 #define OWLFB_GET_DISPLAY_INFO		  OWL_IOW(74, struct owlfb_disp_device)
 #define OWLFB_SET_DISPLAY_INFO		  OWL_IOW(75, struct owlfb_disp_device)
 #define OWLFB_VSYNC_EVENT_EN	      OWL_IOW(67, struct owlfb_sync_info)
+#define OWLFB_OVERLAY_REQUEST		  OWL_IOR(41, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_RELEASE		  OWL_IOR(42, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_ENABLE		  OWL_IOR(43, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_DISABLE		  OWL_IOR(45, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_GETINFO		  OWL_IOW(46, struct owlfb_overlay_args)
+#define OWLFB_OVERLAY_SETINFO   	  OWL_IOW(47, struct owlfb_overlay_args)
 
 ///////////////////////////////
 
@@ -109,7 +173,9 @@ static struct GFX_Context {
 	int mode;
 	int vsync;
 
+	struct fb_fix_screeninfo finfo;
 	struct fb_var_screeninfo vinfo;
+	
 	void* fb0_buffer;
 
 	SDL_Surface* screen;
@@ -148,6 +214,24 @@ GFX_Fonts font;
 
 ///////////////////////////////
 
+static struct POW_Context {
+	int can_poweroff;
+	int previous_speed; // TODO: unused
+	int can_autosleep;
+	
+	pthread_t battery_pt;
+	int is_charging;
+	int charge;
+	int should_warn;
+
+	struct owlfb_overlay_args oargs;
+	struct owlfb_overlay_info oinfo;
+
+	SDL_Surface* overlay;
+} pow;
+
+///////////////////////////////
+
 static int _;
 SDL_Surface* GFX_init(int mode) {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -159,7 +243,8 @@ SDL_Surface* GFX_init(int mode) {
 	SDL_SetVideoMode(FIXED_WIDTH, FIXED_HEIGHT, FIXED_DEPTH, SDL_SWSURFACE);
 	
 	gfx.fb0_fd = open("/dev/fb0", O_RDWR);
-
+	
+	ioctl(gfx.fb0_fd, FBIOGET_FSCREENINFO, &gfx.finfo);
 	ioctl(gfx.fb0_fd, FBIOGET_VSCREENINFO, &gfx.vinfo);
 	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
 	gfx.vinfo.xres = FIXED_WIDTH;
@@ -187,7 +272,7 @@ SDL_Surface* GFX_init(int mode) {
 	if (ioctl(gfx.fb0_fd, OWLFB_VSYNC_EVENT_EN, &sinfo)) LOG_info("OWLFB_VSYNC_EVENT_EN failed %s\n", strerror(errno));
 	
 	gfx.page = 1; // start on the backbuffer
-	gfx.fb0_buffer = mmap(0, VIRTUAL_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
+	gfx.fb0_buffer = mmap(0, gfx.finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
 	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE); // clear both buffers
 	
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), FIXED_WIDTH,FIXED_HEIGHT, FIXED_DEPTH,FIXED_PITCH, 0,0,0,0);
@@ -299,11 +384,13 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 	
 	return gfx.screen;
 }
+static void POW_flipOverlay(void);
 void GFX_flip(SDL_Surface* screen) {
 	// point framebuffer at the first line of the backbuffer
 	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
 	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("%s failed %s\n", (gfx.resized ? "FBIOPUT_VSCREENINFO" : "FBIOPAN_DISPLAY"), strerror(errno));
 	gfx.resized = 0;
+	POW_flipOverlay(); // TODO: tmp?
 
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
@@ -312,6 +399,7 @@ void GFX_flip(SDL_Surface* screen) {
 		}
 	}
 	
+
 	// swap backbuffer
 	gfx.page += 1;
 	if (gfx.page>=PAGE_COUNT) gfx.page -= PAGE_COUNT;
@@ -467,18 +555,22 @@ void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitAsset(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r});
 }
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
+	// LOG_info("dst: %p\n", dst);
+	
+	if (!dst_rect) dst_rect = &(SDL_Rect){0,0,0,0};
+	
 	SDL_Rect rect = asset_rects[ASSET_BATTERY];
 	int x = dst_rect->x;
 	int y = dst_rect->y;
 	x += (SCALE1(PILL_SIZE) - (rect.w + SCREEN_SCALE)) / 2;
 	y += (SCALE1(PILL_SIZE) - rect.h) / 2;
 	
-	if (POW_isCharging()) {
+	if (pow.is_charging) {
 		GFX_blitAsset(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
 		GFX_blitAsset(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)});
 	}
 	else {
-		int percent = POW_getBattery();
+		int percent = pow.charge;
 		GFX_blitAsset(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
 		
 		rect = asset_rects[ASSET_BATTERY_FILL];
@@ -1091,7 +1183,129 @@ int VIB_getStrength(void) {
 
 ///////////////////////////////
 
-// TODO: separate settings/battery and power management?
+#define OVERLAY_WIDTH PILL_SIZE // unscaled
+#define OVERLAY_HEIGHT PILL_SIZE // unscaled
+#define OVERLAY_BPP 4
+#define OVERLAY_DEPTH 32
+#define OVERLAY_PITCH (OVERLAY_WIDTH * OVERLAY_BPP) // unscaled
+#define OVERLAY_RGBA_MASK 0x00ff0000,0x0000ff00,0x000000ff,0xff000000
+
+#define POW_LOW_CHARGE 10
+
+static void POW_initOverlay(void) {
+	// setup surface
+	pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
+	uint32_t size = pow.overlay->h * pow.overlay->pitch;
+	uint32_t offset = (gfx.finfo.smem_len - size)&(~4095);
+	pow.overlay->pixels = gfx.fb0_buffer + offset;
+	
+	// draw battery
+	SDL_SetAlpha(gfx.assets, 0,0);
+	GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
+	SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
+	GFX_blitBattery(pow.overlay, NULL);
+	
+	// SDL_Rect rect = asset_rects[ASSET_BATTERY];
+	// int ox = (SCALE1(PILL_SIZE) - (rect.w + SCREEN_SCALE)) / 2;
+	// int oy = (SCALE1(PILL_SIZE) - rect.h) / 2;
+	// GFX_blitAsset(ASSET_BATTERY_LOW, NULL, pow.overlay, &(SDL_Rect){ox,oy});
+	
+	// setup overlay
+	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	pow.oargs.fb_id = 0;
+	pow.oargs.overlay_id = 1;
+	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
+	
+	int x,y,w,h;
+	w = h = pow.overlay->w;
+	x = FIXED_WIDTH - SCALE1(PADDING) - w;
+	y = SCALE1(PADDING);
+	
+	pow.oinfo.mem_off = offset;
+	pow.oinfo.mem_size = size;
+	pow.oinfo.screen_width = VIRTUAL_WIDTH; // ???
+	pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
+	pow.oinfo.img_width = w;
+	pow.oinfo.img_height = h;
+	pow.oinfo.xoff = 0;
+	pow.oinfo.yoff = 0;
+	pow.oinfo.width = w;
+	pow.oinfo.height = h;
+	pow.oinfo.rotation = 0;
+	pow.oinfo.pos_x = x;	// position
+	pow.oinfo.pos_y = y;	//
+	pow.oinfo.out_width = w;	// scaled size
+	pow.oinfo.out_height = h;	//
+	pow.oinfo.global_alpha_en = 0;
+	pow.oinfo.global_alpha = 0;
+	pow.oinfo.pre_mult_alpha_en = 0;
+	pow.oinfo.zorder = 3;
+}
+static void POW_flipOverlay(void) {
+	if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fb0_fd, OWLFB_OVERLAY_SETINFO, &pow.oargs);
+}
+static void POW_quitOverlay(void) {
+	if (pow.overlay) SDL_FreeSurface(pow.overlay);
+	
+	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	pow.oargs.fb_id = 0;
+	pow.oargs.overlay_id = 1;
+	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	pow.oargs.uintptr_overly_info = 0;
+	ioctl(gfx.fb0_fd, OWLFB_OVERLAY_DISABLE, &pow.oargs);
+}
+
+static void POW_updateBatteryStatus(void) {
+	pow.is_charging = getInt("/sys/class/power_supply/battery/charger_online");
+	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
+	i -= 310; 	// ~0-100
+
+	// worry less about battery and more about the game you're playing
+	     if (i>80) pow.charge = 100;
+	else if (i>60) pow.charge =  80;
+	else if (i>40) pow.charge =  60;
+	else if (i>20) pow.charge =  40;
+	else if (i>10) pow.charge =  20;
+	else           pow.charge =  10;
+	
+	// LOG_info("battery charge: %i (%i) charging: %i\n", pow.charge, i, pow.is_charging);
+	pow.charge = POW_LOW_CHARGE;
+}
+
+static void* POW_monitorBattery(void *arg) {
+	while(1) {
+		// TODO: the frequency of checking should depend on whether 
+		// we're in game (less frequent) or menu (more frequent)
+		sleep(1);
+		POW_updateBatteryStatus();
+	}
+	return NULL;
+}
+
+void POW_init(void) {
+	pow.can_poweroff = 1;
+	pow.previous_speed = CPU_SPEED_NORMAL;
+	pow.can_autosleep = 1;
+	pow.should_warn = 0;
+	pow.charge = POW_LOW_CHARGE;
+	
+	POW_initOverlay();
+
+	POW_updateBatteryStatus();
+	pthread_create(&pow.battery_pt, NULL, &POW_monitorBattery, NULL);
+}
+void POW_quit(void) {
+	POW_quitOverlay();
+	
+	// cancel battery thread
+	pthread_cancel(pow.battery_pt);
+	pthread_join(pow.battery_pt, NULL);
+}
+void POW_warn(int enable) {
+	pow.should_warn = enable;
+}
+
 void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep) {
 	int dirty = _dirty ? *_dirty : 0;
 	int show_setting = _show_setting ? *_show_setting : 0;
@@ -1103,7 +1317,7 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	static uint32_t setting_start = 0;
 	static uint32_t charge_start = 0;
 	static int was_charging = -1;
-	if (was_charging==-1) was_charging = POW_isCharging();
+	if (was_charging==-1) was_charging = pow.is_charging;
 
 	uint32_t now = SDL_GetTicks();
 	if (cancel_start==0) cancel_start = now;
@@ -1113,7 +1327,7 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	
 	#define CHARGE_DELAY 1000
 	if (dirty || now-charge_start>=CHARGE_DELAY) {
-		int is_charging = POW_isCharging();
+		int is_charging = pow.is_charging;
 		if (was_charging!=is_charging) {
 			was_charging = is_charging;
 			dirty = 1;
@@ -1170,12 +1384,11 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	if (_show_setting) *_show_setting = show_setting;
 }
 
-static int can_poweroff = 1;
 void POW_disablePowerOff(void) {
-	can_poweroff = 0;
+	pow.can_poweroff = 0;
 }
 void POW_powerOff(void) {
-	if (can_poweroff) {
+	if (pow.can_poweroff) {
 		char* msg = exists(AUTO_RESUME_PATH) ? "Quicksave created,\npowering off" : "Powering off";
 		GFX_clear(gfx.screen);
 		GFX_blitMessage(msg, gfx.screen, NULL);
@@ -1192,7 +1405,6 @@ void POW_powerOff(void) {
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
 #define CPU_SPEED_SET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
 #define CPU_SPEED_GET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
-static int previous_speed = CPU_SPEED_NORMAL;
 
 void POW_setCPUSpeed(int speed) {
 	putInt(CPU_SPEED_SET_PATH, speed);
@@ -1202,19 +1414,21 @@ void POW_setCPUSpeed(int speed) {
 static void POW_enterSleep(void) {
 	SetRawVolume(0);
 	putInt(BACKLIGHT_PATH, FB_BLANK_POWERDOWN);
+	system("killall -STOP keymon.elf");
 	
 	// TODO: not sure this is necessary
-	// previous_speed = getInt(CPU_SPEED_GET_PATH);
+	// pow.previous_speed = getInt(CPU_SPEED_GET_PATH);
 	// POW_setCPUSpeed(CPU_SPEED_MENU);
-	
 	sync();
 }
 static void POW_exitSleep(void) {
+	system("killall -CONT keymon.elf");
+	
 	putInt(BACKLIGHT_PATH, FB_BLANK_UNBLANK);
 	SetVolume(GetVolume());
 	
 	// TODO: not sure this is necessary
-	// POW_setCPUSpeed(previous_speed);
+	// POW_setCPUSpeed(pow.previous_speed);
 	
 	sync();
 }
@@ -1233,8 +1447,8 @@ static void POW_waitForWake(void) {
 			}
 		}
 		SDL_Delay(200);
-		if (can_poweroff && SDL_GetTicks()-sleep_ticks>=120000) { // increased to two minutes
-			if (POW_isCharging()) sleep_ticks += 60000; // check again in a minute
+		if (pow.can_poweroff && SDL_GetTicks()-sleep_ticks>=120000) { // increased to two minutes
+			if (pow.is_charging) sleep_ticks += 60000; // check again in a minute
 			else POW_powerOff(); // TODO: not working...
 		}
 	}
@@ -1244,34 +1458,24 @@ void POW_fauxSleep(void) {
 	GFX_clear(gfx.screen);
 	PAD_reset();
 	POW_enterSleep();
-	system("killall -STOP keymon.elf");
 	POW_waitForWake();
-	system("killall -CONT keymon.elf");
 	POW_exitSleep();
 }
 
-static int can_autosleep = 1;
 void POW_disableAutosleep(void) {
-	can_autosleep = 0;
+	pow.can_autosleep = 0;
 }
 void POW_enableAutosleep(void) {
-	can_autosleep = 1;
+	pow.can_autosleep = 1;
 }
 int POW_preventAutosleep(void) {
-	return POW_isCharging() || !can_autosleep;
+	return pow.is_charging || !pow.can_autosleep;
 }
+
+// updated by POW_updateBatteryStatus()
 int POW_isCharging(void) {
-	return getInt("/sys/class/power_supply/battery/charger_online");
+	return pow.is_charging;
 }
 int POW_getBattery(void) { // 10-100 in 10-20% fragments
-	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
-	i -= 310; 	// ~0-100
-	
-	// worry less about battery and more about the game you're playing
-	if (i>80) return 100;
-	if (i>60) return  80;
-	if (i>40) return  60;
-	if (i>20)  return 40;
-	if (i>10)  return 20;
-	else      return  10;
+	return pow.charge;
 }

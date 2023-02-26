@@ -20,11 +20,6 @@ minarch
 minui
 	- 
 
-common
-	move battery check to thread?
-	add low-bat icon to owlfb overlay?
-		https://discord.com/channels/741895796315914271/1063158507366535249/1077626268645863495
-
 misc
 	port say, show, blank, and confirm
 	make my own simple file browser? :sweat_smile:
