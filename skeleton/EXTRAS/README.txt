@@ -3,6 +3,15 @@ MinUI is an extensible launcher
 Source: https://github.com/shauninman/union-minui
 
 ----------------------------------------
+Following Instructions 101
+
+	Please read every step of the 
+	relevant instructions before 
+	undertaking the first step. A 
+	little context goes a long way 
+	towards understanding.
+
+----------------------------------------
 Install
 
 Where you copy the files in this zip file will depend on if you are using one or two SD cards (using two SD cards is recommended). If using one SD card, copy to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy to the root of the SD card that goes in the TF2 slot.

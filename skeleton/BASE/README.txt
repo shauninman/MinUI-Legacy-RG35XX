@@ -28,6 +28,15 @@ Features
   (minarch + libretro cores)
 
 ----------------------------------------
+Following Instructions 101
+
+	Please read every step of the 
+	relevant instructions before 
+	undertaking the first step. A 
+	little context goes a long way 
+	towards understanding.
+
+----------------------------------------
 Install
 
 Step 1. Copy "dmenu.bin" to the root of the MISC partition of the SD card that goes in the TF1 slot. 
