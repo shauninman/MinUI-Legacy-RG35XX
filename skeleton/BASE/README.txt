@@ -30,11 +30,11 @@ Features
 ----------------------------------------
 Following Instructions 101
 
-	Please read every step of the 
-	relevant instructions before 
-	undertaking the first step. A 
-	little context goes a long way 
-	towards understanding.
+  Please read every step of the 
+  relevant instructions before 
+  undertaking the first step. A 
+  little context goes a long way 
+  towards understanding.
 
 ----------------------------------------
 Install
