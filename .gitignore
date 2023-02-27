@@ -1,6 +1,6 @@
 .DS_Store
 
-build/
+build
 cores/src
 cores/output
 private
@@ -11,3 +11,4 @@ src/boot/output
 *.so
 *.elf
 *.dtb
+*.zip
