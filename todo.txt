@@ -2,11 +2,10 @@
 
 Please see the README.txt in the zip file for installation and update instructions.
 
-- Initial beta release
+- extras: added SGB.pak for Super Game Boy
+- extras: added PCE.pak for PC-Engine/TurboGrafx-16
 
 -------------------------------
-
-send neonloop a link to minarch source
 
 minarch
 	some cores can only fast forward with prevent tearing off
@@ -41,7 +40,6 @@ Union-ize this?
 	Mini?
 	Smart & Model S?
 
-	
 makefile
 	-
 	
@@ -68,8 +66,3 @@ keymon
 		turn off screen when connected
 		fb changes... eek
 
-
-todont
-	I thought I wanted the MENU button to act as a back button in OPTIONS submenus
-	but then why doesn't it act as a back button in the main menu?
-	it's a toggle, it toggles the menu in game and the version info in main menu

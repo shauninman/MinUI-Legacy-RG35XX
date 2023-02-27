@@ -5,8 +5,9 @@ Source: https://github.com/shauninman/union-minui
 ----------------------------------------
 Features
 
-- No settings or configuration
 - Simple launcher, simple SD card
+- No settings or configuration
+- No boxart, themes, or distractions
 - Automatically hides extension 
   and region/version cruft in 
   display names
