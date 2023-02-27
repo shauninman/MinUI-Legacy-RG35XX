@@ -2162,8 +2162,6 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 	int scale_y = SCREEN_HEIGHT / height;
 	int scale = MIN(scale_x,scale_y);
 	
-	// TODO: carry this fix over to MiniUI/picoarch? or just port MinUI/minarch itself? :sweat_smile:
-	
 	// this is not an aspect ratio but rather the ratio between 
 	// the proposed aspect ratio and the target aspect ratio
 	double near_ratio = (double)width / height / core.aspect_ratio;
@@ -2319,7 +2317,9 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	// reduce scale if we don't have enough memory to accomodate it
 	// scaled width and height can't be greater than our fixed page width or height
 	// TODO: some resolutions are getting through here unadjusted? oh maybe because of aspect ratio adjustments below? revisit
-	while (src_w * scale * FIXED_BPP * src_h * scale > PAGE_SIZE || src_w * scale > PAGE_WIDTH || src_h * scale > PAGE_HEIGHT) scale -= 1; 
+	while (src_w * scale * FIXED_BPP * src_h * scale > PAGE_SIZE || src_w * scale > PAGE_WIDTH || src_h * scale > PAGE_HEIGHT) {
+		scale -= 1;
+	}
 	
 	int dst_w = src_w * scale;
 	int dst_h = src_h * scale;
@@ -2370,6 +2370,7 @@ static void selectScaler_AR(int width, int height, int pitch) {
 		default: renderer.scaler = scale1x_n16; break;
 	}
 	
+	// DEBUG HUD
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
 	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
 	
@@ -2413,36 +2414,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	if (bottom_width) SDL_FillRect(screen, &(SDL_Rect){0,screen->h-DIGIT_HEIGHT,bottom_width,DIGIT_HEIGHT}, RGB_BLACK);
 	
 	renderer.scaler((void*)data,screen->pixels+renderer.dst_offset,width,height,pitch,renderer.dst_p);
-	
-	if (0) {
-		static int frame = 0;
-		int w = 8;
-		int h = 16;
-		int fps = 60;
-		int x = frame * w;
-		
-		void *dst = screen->pixels;
-	
-		dst += (SCREEN_WIDTH - (w * fps)) / 2 * SCREEN_BPP;
-
-		void* _dst = dst;
-		memset(_dst, 0, (h * SCREEN_PITCH));
-		for (int y=0; y<h; y++) {
-			memset(_dst-SCREEN_BPP, 0xff, SCREEN_BPP);
-			memset(_dst+(w * fps * SCREEN_BPP), 0xff, SCREEN_BPP);
-			_dst += SCREEN_PITCH;
-		}
-
-		dst += (x * SCREEN_BPP);
-
-		for (int y=0; y<h; y++) {
-			memset(dst, 0xff, w * SCREEN_BPP);
-			dst += SCREEN_PITCH;
-		}
-
-		frame += 1;
-		if (frame>=fps) frame -= fps;
-	}
 	
 	if (show_debug) {
 		int x = 0;
