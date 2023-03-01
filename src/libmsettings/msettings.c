@@ -87,17 +87,17 @@ int GetBrightness(void) { // 0-10
 void SetBrightness(int value) {
 	int raw;
 	switch (value) {
-		case 0: raw=8; break;
-		case 1: raw=16; break;
-		case 2: raw=32; break;
-		case 3: raw=64; break;
-		case 4: raw=128; break;
-		case 5: raw=192; break;
-		case 6: raw=256; break;
-		case 7: raw=384; break;
-		case 8: raw=512; break;
-		case 9: raw=768; break;
-		case 10: raw=1024; break;
+		case 0: raw=16; break; 		//   0
+		case 1: raw=24; break; 		//   8
+		case 2: raw=40; break; 		//  16
+		case 3: raw=64; break; 		//  24
+		case 4: raw=128; break;		//	64
+		case 5: raw=192; break;		//  64
+		case 6: raw=256; break;		//  64
+		case 7: raw=384; break;		// 128
+		case 8: raw=512; break;		// 128
+		case 9: raw=768; break;		// 256
+		case 10: raw=1024; break;	// 256
 	}
 	SetRawBrightness(raw);
 	settings->brightness = value;
