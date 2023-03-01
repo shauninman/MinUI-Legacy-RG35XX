@@ -1191,7 +1191,8 @@ int VIB_getStrength(void) {
 #define OVERLAY_RGBA_MASK 0x00ff0000,0x0000ff00,0x000000ff,0xff000000
 
 #define POW_LOW_CHARGE 10
-
+#define OVERLAY_FB 0
+#define OVERLAY_ID 1
 static void POW_initOverlay(void) {
 	// setup surface
 	pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
@@ -1212,8 +1213,8 @@ static void POW_initOverlay(void) {
 	
 	// setup overlay
 	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	pow.oargs.fb_id = 0;
-	pow.oargs.overlay_id = 1;
+	pow.oargs.fb_id = OVERLAY_FB;
+	pow.oargs.overlay_id = OVERLAY_ID;
 	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
 	pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
 	
@@ -1249,8 +1250,8 @@ static void POW_quitOverlay(void) {
 	if (pow.overlay) SDL_FreeSurface(pow.overlay);
 	
 	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	pow.oargs.fb_id = 0;
-	pow.oargs.overlay_id = 1;
+	pow.oargs.fb_id = OVERLAY_FB;
+	pow.oargs.overlay_id = OVERLAY_ID;
 	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
 	pow.oargs.uintptr_overly_info = 0;
 	ioctl(gfx.fb0_fd, OWLFB_OVERLAY_DISABLE, &pow.oargs);
