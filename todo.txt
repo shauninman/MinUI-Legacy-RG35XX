@@ -2,12 +2,37 @@
 
 Please see the README.txt in the zip file for installation and update instructions.
 
-- extras: added SGB.pak for Super Game Boy
-- extras: added PCE.pak for PC-Engine/TurboGrafx-16
+*base*
+- fixed flicker at low end of screen brightness ramp
+- restored PlayStation interlace and enhanced resolutions options
+
+*extras*
+- added SGB.pak for Super Game Boy
+- added PCE.pak for TurboGrafx-16
 
 -------------------------------
 
+create a clean image to flash and install over
+	- advanced users seem to be confused about how simple it is to install :sweat_smile:
+
+hdmi
+	for now I could add to a user auto.sh
+		cat /sys/class/switch/hdmi/state
+		echo 1 > /sys/class/graphics/fb0/mirror_to_hdmi
+
 minarch
+
+	cores with different modes that report different inputs break with overrides
+		eg. GG or SMS with picodrive
+		kinda related SGB (with mgba) uses GBA button naming (and turbo)
+		is there a way to detect the mode in the env callback??
+		move overrides to a text file that lives in the pack?
+			that way I don't have to update minarch to support new cores?
+			also buttons should be bound RA_ID => MIN_ID not DISPLAY_NAME => MIN_ID
+
+	related to above
+		bindings for shortcuts should also use something less brittle than the display name
+		
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
 	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
