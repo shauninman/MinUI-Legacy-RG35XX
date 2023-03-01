@@ -34,4 +34,4 @@ You can [grab the latest version here](https://github.com/shauninman/union-minui
 
 ## Developers
 
-I am not soliciting contributions. Please feel free to fork or learn from any of my repos but I don't have time to manage a community or interest in being managed by someone else. Thanks!
+I am not soliciting contributions. Please feel free to fork or learn from any of my repos but I don't have time to manage a community or interest in being managed by someone else. Thanks for understanding.
