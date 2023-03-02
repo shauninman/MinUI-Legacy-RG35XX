@@ -118,12 +118,12 @@ A collection is just a text file containing an ordered list of full paths to rom
 ----------------------------------------
 Advanced
 
-MinUI can automatically run a user-authored shell script on boot. Just place a file named "auto.sh" to "/.userdata/".
+MinUI can automatically run a user-authored shell script on boot. Just place a file named "auto.sh" in "/.userdata/".
 
 ----------------------------------------
 Thanks
 
-To BlackSeraph, for sharing his modified uImage which provides overclocking (and underclocking) and increases the available framebuffer memory.
+To BlackSeraph, for introducing me to chroot and for sharing his modified uImage which provides overclocking (and underclocking) and increases the available framebuffer memory.
 
 To eggs, for his NEON scalers, years of top-notch example code, and patience in the face of my endless questions.
 
