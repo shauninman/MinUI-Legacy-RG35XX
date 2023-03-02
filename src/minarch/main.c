@@ -1205,12 +1205,16 @@ void Input_init(const struct retro_input_descriptor *vars) {
 		}
 	}
 	
+	puts("---------------------------------");
+
 	for (int i=0;default_button_mapping[i].name; i++) {
 		ButtonMapping* mapping = &default_button_mapping[i];
 		LOG_info("DEFAULT %s (%s): <%s>\n", core_button_names[mapping->retro], mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
 		mapping->name = (char*)core_button_names[mapping->retro];
 	}
 	
+	puts("---------------------------------");
+
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		mapping->default_ = mapping->local;
@@ -2306,9 +2310,12 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	int src_w = width;
 	int src_h = height;
 	
-	int scale_x = CEIL_DIV(FIXED_WIDTH, src_w);
-	int scale_y = CEIL_DIV(FIXED_HEIGHT,src_h);
+	int has_hdmi = GetHDMI();
+	int scale_x = CEIL_DIV(has_hdmi ? HDMI_WIDTH : SCREEN_WIDTH, src_w);
+	int scale_y = CEIL_DIV(has_hdmi ? HDMI_HEIGHT: SCREEN_HEIGHT,src_h);
 	int scale = MAX(scale_x, scale_y);
+	
+	// TODO: this "logic" is a disaster
 	
 	// if (scale>6) scale = 6;
 	// else
@@ -2328,20 +2335,47 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	
 	char scaler_name[8];
 #define FOUR_THREE 4.0f / 3
+#define SIXTEEN_NINE 16.0 / 9
+	
+	double target_ratio =  has_hdmi ? SIXTEEN_NINE : FOUR_THREE;
+	
 	if (screen_scaling==1) {
-		sprintf(scaler_name, "AR_%iX", scale);
-		if (core.aspect_ratio==FOUR_THREE) {
-			// LOG_info("already 4:3\n");
-		}
-		else if (core.aspect_ratio<FOUR_THREE) {
-			// LOG_info("pillarbox\n");
-			target_w = CEIL_DIV(src_h, 3) * 4 * scale;
-			target_h = src_h * scale;
+		sprintf(scaler_name, "AR_%iX%s", scale, has_hdmi?"W":"R");
+		if (core.aspect_ratio==target_ratio) {
+			// LOG("already correct ratio\n");
 		}
 		else {
-			// LOG_info("letterbox\n");
-			target_w = src_w * scale;
-			target_h = CEIL_DIV(src_w, 4) * 3 * scale;
+			// TODO: is this ignoring the core's desired aspect ratio?
+			
+			int ratio_left  = target_ratio==SIXTEEN_NINE ? 16 : 4;
+			int ratio_right = target_ratio==SIXTEEN_NINE ? 9 : 3;
+			
+			// TODO: why do these use CEIL_DIV?
+			if (core.aspect_ratio<target_ratio) {
+				// LOG_info("pillarbox\n");
+				target_w = CEIL_DIV(src_h, ratio_right) * ratio_left * scale;
+				target_h = src_h * scale;
+			}
+			else if (core.aspect_ratio>target_ratio) {
+				// LOG_info("letterbox\n");
+				target_w = src_w * scale;
+				target_h = CEIL_DIV(src_w, ratio_left) * ratio_right * scale;
+			}
+			
+			// TODO: 
+			if (target_w > PAGE_WIDTH) {
+				target_h = CEIL_DIV(PAGE_WIDTH, ratio_left) * ratio_right;
+				target_w = PAGE_WIDTH;
+				
+				if (dst_h > target_h) {
+					scale -= 1;
+					dst_w = src_w * scale;
+					dst_h = src_h * scale;
+				}
+				sprintf(scaler_name, "AR_%iXD", scale);
+
+				LOG_warn("target: %ix%i (%i) page: %ix%i (%i) \n", target_w,target_h, target_w*target_h*FIXED_BPP, PAGE_WIDTH,PAGE_HEIGHT,PAGE_SIZE);
+			}
 		}
 	}
 	else {
@@ -2350,10 +2384,13 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	
 	if (target_w%2) target_w += 1;
 	if (target_h%2) target_h += 1;
-	
 
 	int dx = (target_w - dst_w) / 2;
 	int dy = (target_h - dst_h) / 2;
+	
+	// TODO: this masks a larger problem above
+	if (dx<0) dx = 0;
+	if (dy<0) dy = 0;
 	
 	int target_pitch = target_w * FIXED_BPP;
 	
@@ -2361,6 +2398,9 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	renderer.dst_h = target_h;
 	renderer.dst_p = target_pitch;
 	renderer.dst_offset = (dy * target_pitch) + (dx * FIXED_BPP);
+	
+	if (has_hdmi) LOG_warn("dst offset: %i,%i (%i)\n", dx,dy, renderer.dst_offset);
+	
 	switch (scale) {
 		case 6: renderer.scaler = scale6x_n16; break;
 		case 5: renderer.scaler = scale5x_n16; break;

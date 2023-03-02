@@ -5,7 +5,7 @@ static CoreOverrides fceumm_overrides = {
 	.option_overrides = (OptionOverride[]){
 		{"fceumm_sndquality",	"High"},
 		{"fceumm_sndvolume",	"10"},
-		{"fceumm_turbo_enable", "Player 1"}, // stupidly defaults to None
+		{"fceumm_turbo_enable", "Player 1"}, // stupidly defaults to None despite binding turbo buttons by default
 		{"fceumm_show_adv_system_options","disabled",1}, // doesn't do anything
 		{"fceumm_show_adv_sound_options","disabled", 1}, // doesn't do anything
 		{NULL,NULL},

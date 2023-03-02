@@ -247,8 +247,8 @@ SDL_Surface* GFX_init(int mode) {
 	ioctl(gfx.fb0_fd, FBIOGET_FSCREENINFO, &gfx.finfo);
 	ioctl(gfx.fb0_fd, FBIOGET_VSCREENINFO, &gfx.vinfo);
 	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = FIXED_WIDTH;
-	gfx.vinfo.yres = FIXED_HEIGHT;
+	gfx.vinfo.xres = SCREEN_WIDTH;
+	gfx.vinfo.yres = SCREEN_HEIGHT;
 	gfx.vinfo.xres_virtual = VIRTUAL_WIDTH;
 	gfx.vinfo.yres_virtual = VIRTUAL_HEIGHT;
 	gfx.vinfo.xoffset = 0;
@@ -275,7 +275,7 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.fb0_buffer = mmap(0, gfx.finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
 	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE); // clear both buffers
 	
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), FIXED_WIDTH,FIXED_HEIGHT, FIXED_DEPTH,FIXED_PITCH, 0,0,0,0);
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), SCREEN_WIDTH,SCREEN_HEIGHT, FIXED_DEPTH,SCREEN_PITCH, 0,0,0,0);
 	
 	//////////////////////////////
 	
@@ -329,10 +329,10 @@ void GFX_quit(void) {
 
 	// restore for other binaries
 	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = FIXED_WIDTH;
-	gfx.vinfo.yres = FIXED_HEIGHT;
-	gfx.vinfo.xres_virtual = FIXED_WIDTH;
-	gfx.vinfo.yres_virtual = FIXED_HEIGHT;
+	gfx.vinfo.xres = SCREEN_WIDTH;
+	gfx.vinfo.yres = SCREEN_HEIGHT;
+	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
+	gfx.vinfo.yres_virtual = SCREEN_HEIGHT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
 	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
@@ -373,6 +373,7 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 	if (gfx.screen) SDL_FreeSurface(gfx.screen);
 	
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), w,h, FIXED_DEPTH,pitch, 0,0,0,0);
+	LOG_info("fb offset: %i end: %i all: %i\n", gfx.screen->pixels - gfx.fb0_buffer, gfx.screen->pixels - gfx.fb0_buffer + PAGE_SIZE, gfx.finfo.smem_len);
 	memset(gfx.screen->pixels, 0, PAGE_SIZE);
 	
 	gfx.vinfo.xres = w;
@@ -1205,12 +1206,7 @@ static void POW_initOverlay(void) {
 	GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
 	SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
 	GFX_blitBattery(pow.overlay, NULL);
-	
-	// SDL_Rect rect = asset_rects[ASSET_BATTERY];
-	// int ox = (SCALE1(PILL_SIZE) - (rect.w + SCREEN_SCALE)) / 2;
-	// int oy = (SCALE1(PILL_SIZE) - rect.h) / 2;
-	// GFX_blitAsset(ASSET_BATTERY_LOW, NULL, pow.overlay, &(SDL_Rect){ox,oy});
-	
+		
 	// setup overlay
 	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
 	pow.oargs.fb_id = OVERLAY_FB;
@@ -1220,7 +1216,7 @@ static void POW_initOverlay(void) {
 	
 	int x,y,w,h;
 	w = h = pow.overlay->w;
-	x = FIXED_WIDTH - SCALE1(PADDING) - w;
+	x = SCREEN_WIDTH - SCALE1(PADDING) - w;
 	y = SCALE1(PADDING);
 	
 	pow.oinfo.mem_off = offset;
@@ -1370,7 +1366,7 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	}
 	
 	#define MENU_DELAY 250 // also in PAD_tappedMenu()
-	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY)) {
+	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY && !GetHDMI())) {
 		setting_start = now;
 		if (PAD_isPressed(BTN_MENU)) {
 			show_setting = 1;

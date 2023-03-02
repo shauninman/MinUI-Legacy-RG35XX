@@ -3,6 +3,7 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 *base*
+- initial hdmi support
 - fixed input mapping for cores with different input modes
 - fixed late loading of configs (was preventing boot logos for certain systems)
 - fixed flicker at low end of screen brightness ramp

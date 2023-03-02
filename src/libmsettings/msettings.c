@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <linux/fb.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <dlfcn.h>
@@ -12,29 +13,37 @@
 
 ///////////////////////////////////////
 
+#define SETTINGS_VERSION 2
 typedef struct Settings {
 	int version; // future proofing
 	int brightness;
 	int headphones;
 	int speaker;
-	int unused[3]; // for future use
-	int jack; // NOTE: doesn't really need to be persisted but still needs to be shared
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack; 
+	int hdmi;
 } Settings;
 static Settings DefaultSettings = {
-	.version = 1,
+	.version = SETTINGS_VERSION,
 	.brightness = 2,
 	.headphones = 4,
 	.speaker = 8,
 	.jack = 0,
+	.hdmi = 0,
 };
 static Settings* settings;
 
 #define SHM_KEY "/SharedSettings"
-// static char SettingsPath[256];
 static char* SettingsPath = "/mnt/sdcard/.userdata/rg35xx/msettings.bin";
 static int shm_fd = -1;
 static int is_host = 0;
 static int shm_size = sizeof(Settings);
+
+#define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
+#define BRIGHTNESS_PATH "/sys/class/backlight/backlight.2/brightness"
+#define VOLUME_PATH "/sys/class/volume/value"
+#define MIRROR_PATH "/sys/class/graphics/fb0/mirror_to_hdmi"
 
 void InitSettings(void) {
 	// sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
@@ -46,7 +55,7 @@ void InitSettings(void) {
 		settings = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	}
 	else { // host
-		puts("Settings host");
+		puts("Settings host"); // keymon
 		is_host = 1;
 		// we created it so set initial size and populate
 		ftruncate(shm_fd, shm_size);
@@ -55,18 +64,22 @@ void InitSettings(void) {
 		int fd = open(SettingsPath, O_RDONLY);
 		if (fd>=0) {
 			read(fd, settings, shm_size);
-			// TODO: use settings->version for future proofing
+			// TODO: use settings->version for future proofing?
 			close(fd);
 		}
 		else {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
+		
+		// these shouldn't be persisted
+		// settings->jack = 0;
+		// settings->hdmi = 0;
 	}
 	printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
-
+	
 	SetVolume(GetVolume());
-	SetBrightness(GetBrightness());
+	SetBrightness(GetBrightness()); // also sets HDMI
 }
 void QuitSettings(void) {
 	munmap(settings, shm_size);
@@ -117,26 +130,60 @@ void SetVolume(int value) {
 }
 
 void SetRawBrightness(int val) { // 0 - 1024
-	int fd = open("/sys/class/backlight/backlight.2/brightness", O_WRONLY);
+	// printf("SetRawBrightness(%i)\n", val); fflush(stdout);
+	int fd = open(BRIGHTNESS_PATH, O_WRONLY);
 	if (fd>=0) {
 		dprintf(fd,"%d",val);
 		close(fd);
 	}
+	
+	// this prevents exiting/launching from turning the screen back on
+	SetHDMI(GetHDMI()); // TODO: isn't working
 }
 void SetRawVolume(int val) { // 0 - 40
-	int fd = open("/sys/class/volume/value", O_WRONLY);
+	int fd = open(VOLUME_PATH, O_WRONLY);
 	if (fd>=0) {
 		dprintf(fd,"%d",val);
 		close(fd);
 	}
 }
 
+// monitored and set by thread in keymon
 int GetJack(void) {
-	// return /sys/class/switch/h2w/state==1`
-	// access("/dev/dsp1", F_OK)==0
 	return settings->jack;
 }
-void SetJack(int value) { // monitored and set by thread in keymon
+void SetJack(int value) {
+	// printf("SetJack(%i)\n", value); fflush(stdout);
+	
 	settings->jack = value;
 	SetVolume(GetVolume());
+	
+	// TODO: tmp, testing hdmi without an hdmi output
+	// int fd = open(BACKLIGHT_PATH, O_WRONLY);
+	// if (fd>=0) {
+	// 	dprintf(fd,"%d",value ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK);
+	// 	close(fd);
+	// }
+}
+
+int GetHDMI(void) {	
+	// TODO: tmp, testing hdmi without an hdmi output
+	// return settings->jack;
+	return settings->hdmi;
+}
+void SetHDMI(int value) {
+	// printf("SetHDMI(%i)\n", value); fflush(stdout);
+
+	settings->hdmi = value;
+	int fd = open(MIRROR_PATH, O_WRONLY);
+	if (fd>=0) {
+		dprintf(fd,"%d",value);
+		close(fd);
+	}
+	
+	fd = open(BACKLIGHT_PATH, O_WRONLY);
+	if (fd>=0) {
+		dprintf(fd,"%d",value ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK);
+		close(fd);
+	}
 }

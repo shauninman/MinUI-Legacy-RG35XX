@@ -26,36 +26,56 @@
 #define INPUT_COUNT 2
 static int inputs[INPUT_COUNT];
 static struct input_event ev;
+
 static int jack_fd;
-static pthread_t jack_pt;
+static pthread_t ports_pt;
 
 #define JACK_STATE_PATH "/sys/class/switch/h2w/state"
-#define HDMI_STATE_PATH "/sys/class/switch/hdmi/state" // TODO:
+#define HDMI_STATE_PATH "/sys/class/switch/hdmi/state"
 
-static void* watchJack(void *arg) {
-	uint32_t has_headphones;
-	uint32_t had_headphones;
+int getInt(char* path) {
+	int i = 0;
+	FILE *file = fopen(path, "r");
+	if (file!=NULL) {
+		fscanf(file, "%i", &i);
+		fclose(file);
+	}
+	return i;
+}
+
+// TODO: test HDMI connect/disconnect
+// TODO: still resetting between launches
+static void* watchPorts(void *arg) {
+	int has_headphones,had_headphones;
+	int has_hdmi,had_hdmi;
 	
-	FILE *file = fopen(JACK_STATE_PATH, "r");
-	fscanf(file, "%i", &has_headphones);
-	had_headphones = has_headphones;
+	has_headphones = had_headphones = getInt(JACK_STATE_PATH);
+	has_hdmi = had_hdmi = getInt(HDMI_STATE_PATH);
 	SetJack(has_headphones);
+	SetHDMI(has_hdmi);
 	
 	while(1) {
 		sleep(1);
-		rewind(file);
-		fscanf(file, "%i", &has_headphones);
+		
+		has_headphones = getInt(JACK_STATE_PATH);
 		if (had_headphones!=has_headphones) {
 			had_headphones = has_headphones;
 			SetJack(has_headphones);
 		}
+		
+		has_hdmi = getInt(HDMI_STATE_PATH);
+		if (had_hdmi!=has_hdmi) {
+			had_hdmi = has_hdmi;
+			SetHDMI(has_hdmi);
+		}
 	}
+	
 	return 0;
 }
 
 int main (int argc, char *argv[]) {
 	InitSettings();
-	pthread_create(&jack_pt, NULL, &watchJack, NULL);
+	pthread_create(&ports_pt, NULL, &watchPorts, NULL);
 	
 	char path[32];
 	for (int i=0; i<INPUT_COUNT; i++) {
