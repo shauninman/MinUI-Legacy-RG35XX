@@ -4,7 +4,7 @@
 typedef struct OptionOverride {
 	char* key;
 	char* value;
-	int lock; // prevents changing this value
+	int lock; // prevents showing/changing this value
 } OptionOverride;
 
 typedef struct ButtonMapping { 
@@ -13,6 +13,7 @@ typedef struct ButtonMapping {
 	int local; // TODO: dislike this name...
 	int mod;
 	int default_;
+	int ignore;
 } ButtonMapping;
 
 typedef struct CoreOverrides {

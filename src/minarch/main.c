@@ -1215,9 +1215,9 @@ void Input_init(const struct retro_input_descriptor *vars) {
 		ButtonMapping* mapping = &config.controls[i];
 		mapping->default_ = mapping->local;
 
-		// null mappings that aren't available in this core
+		// ignore mappings that aren't available in this core
 		if (core_mapped && !present[mapping->retro]) {
-			mapping->name = NULL;
+			mapping->ignore = 1;
 			continue;
 		}
 		LOG_info("%s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
@@ -2887,9 +2887,12 @@ static int OptionControls_openMenu(MenuList* list, int i) {
 	if (OptionControls_menu.items==NULL) {
 		// TODO: where do I free this?
 		OptionControls_menu.items = calloc(RETRO_BUTTON_COUNT+1, sizeof(MenuItem));
+		int k = 0;
 		for (int j=0; config.controls[j].name; j++) {
 			ButtonMapping* button = &config.controls[j];
-			MenuItem* item = &OptionControls_menu.items[j];
+			if (button->ignore) continue;
+			
+			MenuItem* item = &OptionControls_menu.items[k++];
 			item->id = j;
 			item->name = button->name;
 			item->desc = NULL;
@@ -2899,9 +2902,12 @@ static int OptionControls_openMenu(MenuList* list, int i) {
 	}
 	else {
 		// update values
+		int k = 0;
 		for (int j=0; config.controls[j].name; j++) {
 			ButtonMapping* button = &config.controls[j];
-			MenuItem* item = &OptionControls_menu.items[j];
+			if (button->ignore) continue;
+			
+			MenuItem* item = &OptionControls_menu.items[k++];
 			item->value = button->local + 1;
 		}
 	}
