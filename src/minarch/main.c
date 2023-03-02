@@ -3919,21 +3919,22 @@ int main(int argc , char* argv[]) {
 	InitSettings();
 	
 	Core_open(core_path, tag_name);
+	Game_open(rom_path);
+
+	// restore configs
+	Config_read();
+	setOverclock(overclock);
+	GFX_setVsync(prevent_tearing);
+	
 	Core_init();
 	
 	// TODO: find a better place to do this
 	// mixing static and loaded data is messy
 	options_menu.items[1].desc = (char*)core.version;
 	
-	Game_open(rom_path);
 	Core_load();
 	Input_init(NULL);
-	
-	// restore configs
-	Config_read();
-	setOverclock(overclock);
-	GFX_setVsync(prevent_tearing);
-	
+		
 	SND_init(core.sample_rate, core.fps);
 	
 	Menu_init();
