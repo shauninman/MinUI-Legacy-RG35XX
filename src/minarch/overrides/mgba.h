@@ -2,6 +2,10 @@
 
 static CoreOverrides mgba_overrides = {
 	.core_name = "mgba",
+	.option_overrides = (OptionOverride[]){
+		{"mgba_skip_bios",	"ON"},
+		{NULL,NULL},
+	},
 	.button_mapping = (ButtonMapping[]){
 		{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 		{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
