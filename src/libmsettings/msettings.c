@@ -138,7 +138,7 @@ void SetRawBrightness(int val) { // 0 - 1024
 	}
 	
 	// this prevents exiting/launching from turning the screen back on
-	SetHDMI(GetHDMI()); // TODO: isn't working
+	// SetHDMI(GetHDMI()); // TODO: isn't working
 }
 void SetRawVolume(int val) { // 0 - 40
 	int fd = open(VOLUME_PATH, O_WRONLY);
@@ -169,6 +169,7 @@ void SetJack(int value) {
 int GetHDMI(void) {	
 	// TODO: tmp, testing hdmi without an hdmi output
 	// return settings->jack;
+	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
 	return settings->hdmi;
 }
 void SetHDMI(int value) {

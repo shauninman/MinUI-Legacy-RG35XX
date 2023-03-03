@@ -32,6 +32,7 @@ static pthread_t ports_pt;
 
 #define JACK_STATE_PATH "/sys/class/switch/h2w/state"
 #define HDMI_STATE_PATH "/sys/class/switch/hdmi/state"
+#define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
 
 int getInt(char* path) {
 	int i = 0;
@@ -68,6 +69,11 @@ static void* watchPorts(void *arg) {
 			had_hdmi = has_hdmi;
 			SetHDMI(has_hdmi);
 		}
+		else if (has_hdmi && !getInt(BACKLIGHT_PATH)) {
+			SetHDMI(has_hdmi);
+		}
+		
+		
 	}
 	
 	return 0;
