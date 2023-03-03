@@ -24,12 +24,11 @@ create a clean image to flash and install over
 add most recent uImage/kernel changes
 
 hdmi
-	for now I could add to a user auto.sh
-		cat /sys/class/switch/hdmi/state
-		echo 1 > /sys/class/graphics/fb0/mirror_to_hdmi
-		if connected to hdmi switch to aspect (if native)
-		and resize to address stretching 640x480 to 1280x720
 	ignore brightness shortcut when on hdmi
+	figure out how to handle renderng the menus
+	856x480 will get round circles but it's still blurry...
+		it would be better if we could just go the full 1280x720 and change SCREEN_SCALE to 3...
+	audio
 
 minarch
 	figure out how to handle different button mappings for cores with different modes

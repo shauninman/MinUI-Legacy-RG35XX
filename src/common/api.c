@@ -31,17 +31,17 @@ void LOG_note(int level, const char* fmt, ...) {
 	switch(level) {
 #ifdef DEBUG
 	case LOG_DEBUG:
-		printf("DEBUG: %s", buf);
+		printf("[DEBUG] %s", buf);
 		break;
 #endif
 	case LOG_INFO:
-		printf("INFO: %s", buf);
+		printf("[INFO] %s", buf);
 		break;
 	case LOG_WARN:
-		fprintf(stderr, "WARN: %s", buf);
+		fprintf(stderr, "[WARN] %s", buf);
 		break;
 	case LOG_ERROR:
-		fprintf(stderr, "ERROR: %s", buf);
+		fprintf(stderr, "[ERROR] %s", buf);
 		break;
 	default:
 		break;
@@ -247,8 +247,8 @@ SDL_Surface* GFX_init(int mode) {
 	ioctl(gfx.fb0_fd, FBIOGET_FSCREENINFO, &gfx.finfo);
 	ioctl(gfx.fb0_fd, FBIOGET_VSCREENINFO, &gfx.vinfo);
 	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = SCREEN_WIDTH;
-	gfx.vinfo.yres = SCREEN_HEIGHT;
+	gfx.vinfo.xres = FIXED_WIDTH;
+	gfx.vinfo.yres = FIXED_HEIGHT;
 	gfx.vinfo.xres_virtual = VIRTUAL_WIDTH;
 	gfx.vinfo.yres_virtual = VIRTUAL_HEIGHT;
 	gfx.vinfo.xoffset = 0;
@@ -275,7 +275,7 @@ SDL_Surface* GFX_init(int mode) {
 	gfx.fb0_buffer = mmap(0, gfx.finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
 	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE); // clear both buffers
 	
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), SCREEN_WIDTH,SCREEN_HEIGHT, FIXED_DEPTH,SCREEN_PITCH, 0,0,0,0);
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), FIXED_WIDTH,FIXED_HEIGHT, FIXED_DEPTH,FIXED_PITCH, 0,0,0,0);
 	
 	//////////////////////////////
 	
@@ -329,10 +329,10 @@ void GFX_quit(void) {
 
 	// restore for other binaries
 	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = SCREEN_WIDTH;
-	gfx.vinfo.yres = SCREEN_HEIGHT;
-	gfx.vinfo.xres_virtual = SCREEN_WIDTH;
-	gfx.vinfo.yres_virtual = SCREEN_HEIGHT;
+	gfx.vinfo.xres = FIXED_WIDTH;
+	gfx.vinfo.yres = FIXED_HEIGHT;
+	gfx.vinfo.xres_virtual = FIXED_WIDTH;
+	gfx.vinfo.yres_virtual = FIXED_HEIGHT;
 	gfx.vinfo.xoffset = 0;
 	gfx.vinfo.yoffset = 0;
 	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
@@ -373,7 +373,6 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 	if (gfx.screen) SDL_FreeSurface(gfx.screen);
 	
 	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), w,h, FIXED_DEPTH,pitch, 0,0,0,0);
-	LOG_info("fb offset: %i end: %i all: %i\n", gfx.screen->pixels - gfx.fb0_buffer, gfx.screen->pixels - gfx.fb0_buffer + PAGE_SIZE, gfx.finfo.smem_len);
 	memset(gfx.screen->pixels, 0, PAGE_SIZE);
 	
 	gfx.vinfo.xres = w;
@@ -641,7 +640,7 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	SDL_FreeSurface(text);
 }
 void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
-	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT};
+	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,dst->w,dst->h};
 	
 	SDL_Surface* text;
 #define TEXT_BOX_MAX_ROWS 16
@@ -696,7 +695,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 	
 	if (show_setting) {
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + 4);
-		ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
+		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
 		GFX_blitPill(gfx.mode==MODE_MAIN ? ASSET_DARK_GRAY_PILL : ASSET_BLACK_PILL, dst, &(SDL_Rect){
 			ox,
@@ -742,7 +741,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 	}
 	else {
 		ow = SCALE1(PILL_SIZE);
-		ox = SCREEN_WIDTH - SCALE1(PADDING) - ow;
+		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
 		GFX_blitPill(gfx.mode==MODE_MAIN ? ASSET_DARK_GRAY_PILL : ASSET_BLACK_PILL, dst, &(SDL_Rect){
 			ox,
@@ -770,8 +769,8 @@ int GFX_blitButtonGroup(char** pairs, SDL_Surface* dst, int align_right) {
 	int w = 0; // individual button dimension
 	int h = 0; // hints index
 	ow = 0; // full pill width
-	ox = align_right ? SCREEN_WIDTH - SCALE1(PADDING) : SCALE1(PADDING);
-	oy = SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE);
+	ox = align_right ? dst->w - SCALE1(PADDING) : SCALE1(PADDING);
+	oy = dst->h - SCALE1(PADDING + PILL_SIZE);
 	
 	for (int i=0; i<2; i++) {
 		if (!pairs[i*2]) break;
@@ -840,7 +839,7 @@ void GFX_sizeText(TTF_Font* font, char* str, int leading, int* w, int* h) {
 	*w = mw;
 }
 void GFX_blitText(TTF_Font* font, char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect) {
-	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,SCREEN_WIDTH,SCREEN_HEIGHT};
+	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,dst->w,dst->h};
 	
 	char* lines[MAX_TEXT_LINES];
 	int count = 0;

@@ -1500,7 +1500,7 @@ enum {
 #define DIGIT_SPACE DIGIT_COUNT
 static void MSG_init(void) {
 	// TODO: scale
-	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT,SCREEN_DEPTH, 0,0,0,0);
+	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT,FIXED_DEPTH, 0,0,0,0);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
@@ -1610,9 +1610,9 @@ static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	// eg. gb has a 160 pixel wide image but 
 	// gambatte uses a 256 pixel wide buffer
 	// (only matters when using memcpy) 
-	int src_pitch = w * SCREEN_BPP; 
-	int src_stride = pitch / SCREEN_BPP;
-	int dst_stride = dst_pitch / SCREEN_BPP;
+	int src_pitch = w * FIXED_BPP; 
+	int src_stride = pitch / FIXED_BPP;
+	int dst_stride = dst_pitch / FIXED_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t* restrict src_row = (uint16_t*)src;
@@ -1629,9 +1629,9 @@ static void scale1x_scanline(void* __restrict src, void* __restrict dst, uint32_
 	// eg. gb has a 160 pixel wide image but 
 	// gambatte uses a 256 pixel wide buffer
 	// (only matters when using memcpy) 
-	int src_pitch = w * SCREEN_BPP; 
-	int src_stride = 2 * pitch / SCREEN_BPP;
-	int dst_stride = 2 * dst_pitch / SCREEN_BPP;
+	int src_pitch = w * FIXED_BPP; 
+	int src_stride = 2 * pitch / FIXED_BPP;
+	int dst_stride = 2 * dst_pitch / FIXED_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t k = 0x0000;
@@ -1661,8 +1661,8 @@ static void scale2x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 1 ) = s;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = s;
-			*(dst_row + SCREEN_WIDTH + 1) = s;
+			*(dst_row + PAGE_WIDTH    ) = s;
+			*(dst_row + PAGE_WIDTH + 1) = s;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1683,8 +1683,8 @@ static void scale2x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row                       ) = r;
 			*(dst_row + 1                   ) = b;
 			
-			*(dst_row + SCREEN_WIDTH * 1    ) = g;
-			*(dst_row + SCREEN_WIDTH * 1 + 1) = k;
+			*(dst_row + PAGE_WIDTH * 1    ) = g;
+			*(dst_row + PAGE_WIDTH * 1 + 1) = k;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1703,8 +1703,8 @@ static void scale2x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row     ) = c1;
 			*(dst_row + 1 ) = c1;
 			
-			*(dst_row + SCREEN_WIDTH    ) = c2;
-			*(dst_row + SCREEN_WIDTH + 1) = c2;
+			*(dst_row + PAGE_WIDTH    ) = c2;
+			*(dst_row + PAGE_WIDTH + 1) = c2;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1723,8 +1723,8 @@ static void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 			*(dst_row     ) = c2;
 			*(dst_row + 1 ) = c2;
 			
-			*(dst_row + SCREEN_WIDTH    ) = c2;
-			*(dst_row + SCREEN_WIDTH + 1) = c1;
+			*(dst_row + PAGE_WIDTH    ) = c2;
+			*(dst_row + PAGE_WIDTH + 1) = c1;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1732,7 +1732,7 @@ static void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 	}
 }
 static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = SCREEN_WIDTH * 2;
+	int row3 = PAGE_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1745,9 +1745,9 @@ static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 2) = s;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = s;
-			*(dst_row + SCREEN_WIDTH + 1) = s;
-			*(dst_row + SCREEN_WIDTH + 2) = s;
+			*(dst_row + PAGE_WIDTH    ) = s;
+			*(dst_row + PAGE_WIDTH + 1) = s;
+			*(dst_row + PAGE_WIDTH + 2) = s;
 
 			// row 3
 			*(dst_row + row3    ) = s;
@@ -1761,7 +1761,7 @@ static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 }
 static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t k = 0x0000;
-	int row3 = SCREEN_WIDTH * 2;
+	int row3 = PAGE_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1777,9 +1777,9 @@ static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row + 2) = k;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = r;
-			*(dst_row + SCREEN_WIDTH + 1) = g;
-			*(dst_row + SCREEN_WIDTH + 2) = b;
+			*(dst_row + PAGE_WIDTH    ) = r;
+			*(dst_row + PAGE_WIDTH + 1) = g;
+			*(dst_row + PAGE_WIDTH + 2) = b;
 
 			// row 3
 			*(dst_row + row3    ) = r;
@@ -1793,7 +1793,7 @@ static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 }
 static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t g = 0xffff;
-	int row3 = SCREEN_WIDTH * 2;
+	int row3 = PAGE_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1808,9 +1808,9 @@ static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row + 2) = a;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = b;
-			*(dst_row + SCREEN_WIDTH + 1) = a;
-			*(dst_row + SCREEN_WIDTH + 2) = a;
+			*(dst_row + PAGE_WIDTH    ) = b;
+			*(dst_row + PAGE_WIDTH + 1) = a;
+			*(dst_row + PAGE_WIDTH + 2) = a;
 
 			// row 3
 			*(dst_row + row3    ) = c;
@@ -1837,14 +1837,14 @@ static void scale3x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row                    + 2) = c2;
 
 			// row 2
-			*(dst_row + SCREEN_WIDTH * 1    ) = c1;
-			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
-			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
+			*(dst_row + PAGE_WIDTH * 1    ) = c1;
+			*(dst_row + PAGE_WIDTH * 1 + 1) = c1;
+			*(dst_row + PAGE_WIDTH * 1 + 2) = c1;
 
 			// row 3
-			*(dst_row + SCREEN_WIDTH * 2    ) = c1;
-			*(dst_row + SCREEN_WIDTH * 2 + 1) = c1;
-			*(dst_row + SCREEN_WIDTH * 2 + 2) = c1;
+			*(dst_row + PAGE_WIDTH * 2    ) = c1;
+			*(dst_row + PAGE_WIDTH * 2 + 1) = c1;
+			*(dst_row + PAGE_WIDTH * 2 + 2) = c1;
 
 			src_row += 1;
 			dst_row += 3;
@@ -1867,14 +1867,14 @@ static void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 			*(dst_row                    + 2) = c1;
 
 			// row 2
-			*(dst_row + SCREEN_WIDTH * 1    ) = c2;
-			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
-			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
+			*(dst_row + PAGE_WIDTH * 1    ) = c2;
+			*(dst_row + PAGE_WIDTH * 1 + 1) = c1;
+			*(dst_row + PAGE_WIDTH * 1 + 2) = c1;
 
 			// row 3
-			*(dst_row + SCREEN_WIDTH * 2    ) = c3;
-			*(dst_row + SCREEN_WIDTH * 2 + 1) = c2;
-			*(dst_row + SCREEN_WIDTH * 2 + 2) = c2;
+			*(dst_row + PAGE_WIDTH * 2    ) = c3;
+			*(dst_row + PAGE_WIDTH * 2 + 1) = c2;
+			*(dst_row + PAGE_WIDTH * 2 + 2) = c2;
 
 			src_row += 1;
 			dst_row += 3;
@@ -1882,8 +1882,8 @@ static void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 	}
 }
 static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = SCREEN_WIDTH * 2;
-	int row4 = SCREEN_WIDTH * 3;
+	int row3 = PAGE_WIDTH * 2;
+	int row4 = PAGE_WIDTH * 3;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 4;
@@ -1897,10 +1897,10 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 3) = s;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = s;
-			*(dst_row + SCREEN_WIDTH + 1) = s;
-			*(dst_row + SCREEN_WIDTH + 2) = s;
-			*(dst_row + SCREEN_WIDTH + 3) = s;
+			*(dst_row + PAGE_WIDTH    ) = s;
+			*(dst_row + PAGE_WIDTH + 1) = s;
+			*(dst_row + PAGE_WIDTH + 2) = s;
+			*(dst_row + PAGE_WIDTH + 3) = s;
 
 			// row 3
 			*(dst_row + row3    ) = s;
@@ -1920,8 +1920,8 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	}
 }
 static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = SCREEN_WIDTH * 2;
-	int row4 = SCREEN_WIDTH * 3;
+	int row3 = PAGE_WIDTH * 2;
+	int row4 = PAGE_WIDTH * 3;
 	uint16_t k = 0x0000;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
@@ -1937,10 +1937,10 @@ static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row + 3) = c1;
 			
 			// row 2
-			*(dst_row + SCREEN_WIDTH    ) = c2;
-			*(dst_row + SCREEN_WIDTH + 1) = c2;
-			*(dst_row + SCREEN_WIDTH + 2) = c2;
-			*(dst_row + SCREEN_WIDTH + 3) = c2;
+			*(dst_row + PAGE_WIDTH    ) = c2;
+			*(dst_row + PAGE_WIDTH + 1) = c2;
+			*(dst_row + PAGE_WIDTH + 2) = c2;
+			*(dst_row + PAGE_WIDTH + 3) = c2;
 
 			// row 3
 			*(dst_row + row3    ) = c1;
@@ -1964,7 +1964,7 @@ static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	int dy = -renderer.dst_h;
 	unsigned lines = h;
 	bool copy = false;
-	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
+	size_t cpy_w = renderer.dst_w * FIXED_BPP;
 
 	while (lines) {
 		int dx = -renderer.dst_w;
@@ -2041,7 +2041,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 	unsigned lines = h;
 	bool copy = false;
 
-	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
+	size_t cpy_w = renderer.dst_w * FIXED_BPP;
 	
 	int safe = w - 1; // don't look behind when there's nothing to see
 	uint16_t l1,l2;
@@ -2053,8 +2053,8 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 		
 		if (copy) {
 			copy = false;
-			memcpy(dst, dst - SCREEN_PITCH, cpy_w);
-			dst += SCREEN_PITCH;
+			memcpy(dst, dst - FIXED_PITCH, cpy_w);
+			dst += FIXED_PITCH;
 			dy += h;
 		} else if (dy < 0) {
 			int col = w;
@@ -2085,7 +2085,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 				psrc16++;
 			}
 
-			dst += SCREEN_PITCH;
+			dst += FIXED_PITCH;
 			dy += h;
 		}
 
@@ -2157,13 +2157,18 @@ static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, ui
 
 static SDL_Surface* scaler_surface;
 static void selectScaler_PAR(int width, int height, int pitch) {
+	int has_hdmi = GetHDMI();
+	int device_width = has_hdmi ? HDMI_WIDTH : SCREEN_WIDTH;
+	int device_height = has_hdmi ? HDMI_HEIGHT : SCREEN_HEIGHT;
+	int device_pitch = has_hdmi ? HDMI_PITCH : SCREEN_PITCH;
+
 	renderer.scaler = scaleNull;
-	renderer.dst_p = SCREEN_PITCH;
+	renderer.dst_p = device_pitch;
 
 	int use_nearest = 0;
 	
-	int scale_x = SCREEN_WIDTH / width;
-	int scale_y = SCREEN_HEIGHT / height;
+	int scale_x = device_width / width;
+	int scale_y = device_height / height;
 	int scale = MIN(scale_x,scale_y);
 	
 	// this is not an aspect ratio but rather the ratio between 
@@ -2194,11 +2199,11 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 				renderer.dst_w -= renderer.dst_w % 2;
 			}
 			
-			if (renderer.dst_w>SCREEN_WIDTH) {
-				renderer.dst_w = SCREEN_WIDTH;
+			if (renderer.dst_w>device_width) {
+				renderer.dst_w = device_width;
 				renderer.dst_h = renderer.dst_w / core.aspect_ratio;
 				renderer.dst_h -= renderer.dst_w % 2;
-				if (renderer.dst_h>SCREEN_HEIGHT) renderer.dst_h = SCREEN_HEIGHT;
+				if (renderer.dst_h>device_height) renderer.dst_h = device_height;
 			}
 		}
 		else if (scale_x>scale_y) {
@@ -2216,11 +2221,11 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 				renderer.dst_h -= renderer.dst_w % 2;
 			}
 		
-			if (renderer.dst_h>SCREEN_HEIGHT) {
-				renderer.dst_h = SCREEN_HEIGHT;
+			if (renderer.dst_h>device_height) {
+				renderer.dst_h = device_height;
 				renderer.dst_w = renderer.dst_h * core.aspect_ratio;
 				renderer.dst_w -= renderer.dst_w % 2;
-				if (renderer.dst_w>SCREEN_WIDTH) renderer.dst_w = SCREEN_WIDTH;
+				if (renderer.dst_w>device_width) renderer.dst_w = device_width;
 			}
 		}
 		else {
@@ -2245,11 +2250,11 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 				}
 			}
 		
-			if (renderer.dst_w>SCREEN_WIDTH) {
-				renderer.dst_w = SCREEN_WIDTH;
+			if (renderer.dst_w>device_width) {
+				renderer.dst_w = device_width;
 			}
-			if (renderer.dst_h>SCREEN_HEIGHT) {
-				renderer.dst_h = SCREEN_HEIGHT;
+			if (renderer.dst_h>device_height) {
+				renderer.dst_h = device_height;
 			}
 		}
 	}
@@ -2259,9 +2264,9 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		renderer.dst_h = height * scale;
 	}
 	
-	int ox = (SCREEN_WIDTH - renderer.dst_w) / 2;
-	int oy = (SCREEN_HEIGHT - renderer.dst_h) / 2;
-	renderer.dst_offset = (oy * SCREEN_PITCH) + (ox * SCREEN_BPP);
+	int ox = (device_width - renderer.dst_w) / 2;
+	int oy = (device_height - renderer.dst_h) / 2;
+	renderer.dst_offset = (oy * device_pitch) + (ox * FIXED_BPP);
 
 	if (use_nearest) 
 		if (show_scanlines) renderer.scaler = optimize_text ? scaleNN_text_scanline : scaleNN_scanline;
@@ -2270,6 +2275,8 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		sprintf(scaler_name, "%iX", scale);
 		if (show_scanlines) {
 			switch (scale) {
+				case 6: 	renderer.scaler = scaleNN_scanline; break;
+				case 5: 	renderer.scaler = scaleNN_scanline; break;
 				case 4: 	renderer.scaler = scale4x_scanline; break;
 				case 3: 	renderer.scaler = scale3x_grid; break;
 				case 2: 	renderer.scaler = scale2x_scanline; break;
@@ -2278,6 +2285,8 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		}
 		else {
 			switch (scale) {
+				case 6: 	renderer.scaler = scale6x_n16; break;
+				case 5: 	renderer.scaler = scale5x_n16; break;
 				case 4: 	renderer.scaler = scale4x_n16; break;
 				case 3: 	renderer.scaler = scale3x_n16; break;
 				case 2: 	renderer.scaler = scale2x_n16; break;
@@ -2302,7 +2311,7 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 	if (scaler_surface) SDL_FreeSurface(scaler_surface);
 	scaler_surface = TTF_RenderUTF8_Blended(font.tiny, scaler_name, COLOR_WHITE);
 	
-	screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT, SCREEN_PITCH);
+	screen = GFX_resize(device_width,device_height, device_pitch);
 }
 static void selectScaler_AR(int width, int height, int pitch) {
 	renderer.scaler = scaleNull;
@@ -2339,13 +2348,18 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	
 	double target_ratio =  has_hdmi ? SIXTEEN_NINE : FOUR_THREE;
 	
+	// TODO: sotn moon is busted 512x240 ends up 2x but targeting 864x480
+	
 	if (screen_scaling==1) {
 		sprintf(scaler_name, "AR_%iX%s", scale, has_hdmi?"W":"R");
 		if (core.aspect_ratio==target_ratio) {
-			// LOG("already correct ratio\n");
+			LOG_info("already correct ratio\n");
 		}
 		else {
 			// TODO: is this ignoring the core's desired aspect ratio?
+			// see snes or SotN
+			// I think it's acting more like PAR
+			sprintf(scaler_name, "AR_%iX%sR", scale, has_hdmi?"W":"R");
 			
 			int ratio_left  = target_ratio==SIXTEEN_NINE ? 16 : 4;
 			int ratio_right = target_ratio==SIXTEEN_NINE ? 9 : 3;
@@ -2364,15 +2378,26 @@ static void selectScaler_AR(int width, int height, int pitch) {
 			
 			// TODO: 
 			if (target_w > PAGE_WIDTH) {
-				target_h = CEIL_DIV(PAGE_WIDTH, ratio_left) * ratio_right;
 				target_w = PAGE_WIDTH;
+				target_h = CEIL_DIV(PAGE_WIDTH, ratio_left) * ratio_right;
 				
 				if (dst_h > target_h) {
 					scale -= 1;
 					dst_w = src_w * scale;
 					dst_h = src_h * scale;
+					
+					// adjust again... (copy/pasted with modifications from above)
+					if (core.aspect_ratio<target_ratio) {
+						target_w = CEIL_DIV(dst_h, ratio_right) * ratio_left;
+						target_h = src_h * scale;
+					}
+					else if (core.aspect_ratio>target_ratio) {
+						target_w = src_w * scale;
+						target_h = CEIL_DIV(dst_w, ratio_left) * ratio_right;
+					}
+					sprintf(scaler_name, "AR_%iXU", scale);
 				}
-				sprintf(scaler_name, "AR_%iXD", scale);
+				else sprintf(scaler_name, "AR_%iXD", scale);
 
 				LOG_warn("target: %ix%i (%i) page: %ix%i (%i) \n", target_w,target_h, target_w*target_h*FIXED_BPP, PAGE_WIDTH,PAGE_HEIGHT,PAGE_SIZE);
 			}
@@ -2435,6 +2460,14 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	// eg. PS@10 60/240
 	
 	if (!data) return;
+
+	// force resize when hdmi status changes
+	static int had_hdmi = -1;
+	int has_hdmi = GetHDMI();
+	if (had_hdmi!=has_hdmi) {
+		renderer.src_w = 0;
+		had_hdmi = has_hdmi;
+	}
 
 	fps_ticks += 1;
 	
@@ -2680,7 +2713,7 @@ typedef struct __attribute__((__packed__)) uint24_t {
 	uint8_t a,b,c;
 } uint24_t;
 static SDL_Surface* Menu_thumbnail(SDL_Surface* src_img) {
-	SDL_Surface* dst_img = SDL_CreateRGBSurface(0,SCREEN_WIDTH/2, SCREEN_HEIGHT/2,src_img->format->BitsPerPixel,src_img->format->Rmask,src_img->format->Gmask,src_img->format->Bmask,src_img->format->Amask);
+	SDL_Surface* dst_img = SDL_CreateRGBSurface(0,FIXED_WIDTH/2, FIXED_HEIGHT/2,src_img->format->BitsPerPixel,src_img->format->Rmask,src_img->format->Gmask,src_img->format->Bmask,src_img->format->Amask);
 
 	uint8_t* src_px = src_img->pixels;
 	uint8_t* dst_px = dst_img->pixels;
@@ -2713,7 +2746,7 @@ static SDL_Surface* Menu_thumbnail(SDL_Surface* src_img) {
 }
 
 void Menu_init(void) {
-	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_DEPTH, 0, 0, 0, 0);
+	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, HDMI_WIDTH, HDMI_HEIGHT, FIXED_DEPTH, 0, 0, 0, 0);
 	SDL_SetAlpha(menu.overlay, SDL_SRCALPHA, 0x80);
 	SDL_FillRect(menu.overlay, NULL, 0);
 }
@@ -3263,17 +3296,17 @@ static int Menu_options(MenuList* list) {
 						if (w>mw) mw = w;
 					}
 					// cache the result
-					list->max_width = mw = MIN(mw, SCREEN_WIDTH - SCALE1(PADDING *2));
+					list->max_width = mw = MIN(mw, screen->w - SCALE1(PADDING *2));
 				}
 				
-				int ox = (SCREEN_WIDTH - mw) / 2;
+				int ox = (screen->w - mw) / 2;
 				int oy = SCALE1(PADDING + PILL_SIZE);
 				int selected_row = selected - start;
 				for (int i=start,j=0; i<end; i++,j++) {
 					MenuItem* item = &items[i];
 					SDL_Color text_color = COLOR_WHITE;
 
-					// int ox = (SCREEN_WIDTH - w) / 2; // if we're centering these (but I don't think we should after seeing it)
+					// int ox = (screen->w - w) / 2; // if we're centering these (but I don't think we should after seeing it)
 					if (j==selected_row) {
 						// move out of conditional if centering
 						int w = 0;
@@ -3300,7 +3333,7 @@ static int Menu_options(MenuList* list) {
 			}
 			else if (type==MENU_FIXED) {
 				// NOTE: no need to calculate max width
-				int mw = SCREEN_WIDTH - SCALE1(PADDING*2);
+				int mw = screen->w - SCALE1(PADDING*2);
 				int lw,rw;
 				lw = rw = mw / 2;
 				int ox,oy;
@@ -3384,10 +3417,10 @@ static int Menu_options(MenuList* list) {
 					}
 					fflush(stdout);
 					// cache the result
-					list->max_width = mw = MIN(mw, SCREEN_WIDTH - SCALE1(PADDING *2));
+					list->max_width = mw = MIN(mw, screen->w - SCALE1(PADDING *2));
 				}
 				
-				int ox = (SCREEN_WIDTH - mw) / 2;
+				int ox = (screen->w - mw) / 2;
 				int oy = SCALE1(PADDING + PILL_SIZE);
 				int selected_row = selected - start;
 				for (int i=start,j=0; i<end; i++,j++) {
@@ -3441,10 +3474,10 @@ static int Menu_options(MenuList* list) {
 			if (count>MAX_VISIBLE_OPTIONS) {
 				#define SCROLL_WIDTH 24
 				#define SCROLL_HEIGHT 4
-				int ox = (SCREEN_WIDTH - SCALE1(SCROLL_WIDTH))/2;
+				int ox = (screen->w - SCALE1(SCROLL_WIDTH))/2;
 				int oy = SCALE1((PILL_SIZE - SCROLL_HEIGHT) / 2);
 				if (start>0) GFX_blitAsset(ASSET_SCROLL_UP,   NULL, screen, &(SDL_Rect){ox, SCALE1(PADDING) + oy});
-				if (end<count) GFX_blitAsset(ASSET_SCROLL_DOWN, NULL, screen, &(SDL_Rect){ox, SCREEN_HEIGHT - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + oy});
+				if (end<count) GFX_blitAsset(ASSET_SCROLL_DOWN, NULL, screen, &(SDL_Rect){ox, screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + oy});
 			}
 			
 			if (!desc && list->desc) desc = list->desc;
@@ -3453,8 +3486,8 @@ static int Menu_options(MenuList* list) {
 				int w,h;
 				GFX_sizeText(font.tiny, desc, SCALE1(12), &w,&h);
 				GFX_blitText(font.tiny, desc, SCALE1(12), COLOR_WHITE, screen, &(SDL_Rect){
-					(SCREEN_WIDTH - w) / 2,
-					SCREEN_HEIGHT - SCALE1(PADDING) - h,
+					(screen->w - w) / 2,
+					screen->h - SCALE1(PADDING) - h,
 					w,h
 				});
 			}
@@ -3491,13 +3524,37 @@ static void downsample(void* __restrict src, void* __restrict dst, uint32_t w, u
 
 static void Menu_loop(void) {
 	// current screen is on the previous buffer
+	
+	// TODO: can we use renderer.src_w/h to reverse the stretch regardless of HDMI status?
+	// because we need an undeformed copy for save state screenshots
 	SDL_Surface* backing = GFX_getBufferCopy();
-	SDL_Surface* resized = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_DEPTH,0,0,0,0);
-	if (backing->w==SCREEN_WIDTH && backing->h==SCREEN_HEIGHT) SDL_BlitSurface(backing, NULL, resized, NULL);
+	SDL_Surface* resized = SDL_CreateRGBSurface(SDL_SWSURFACE, FIXED_WIDTH,FIXED_HEIGHT,FIXED_DEPTH,0,0,0,0);
+	
+	if (backing->w==FIXED_WIDTH && backing->h==FIXED_HEIGHT) {
+		SDL_BlitSurface(backing, NULL, resized, NULL);
+	}
 	else {
-		downsample(backing->pixels,resized->pixels,backing->w,backing->h,backing->pitch,SCREEN_PITCH);
+		downsample(backing->pixels,resized->pixels,backing->w,backing->h,backing->pitch,resized->pitch);
+	}
+	
+	// TODO: move this to right before if (dirty) {} like in minui.elf
+	// TODO: could move to a GFX_autosize(&dirty) -> has_hdmi
+	int has_hdmi = GetHDMI();
+	
+	int target_w = has_hdmi ? HDMI_MENU_WIDTH : FIXED_WIDTH; // 640 * 480 / 720 rounded up to nearest 8
+	int target_h = FIXED_HEIGHT;
+	int target_p = target_w * FIXED_BPP;
+	
+	LOG_info("hdmi: %i %ix%i (%i)\n", has_hdmi,target_w,target_h,target_p);
+
+	if (has_hdmi && (screen->w!=target_w || screen->h!=target_h)) {
+		screen = GFX_resize(target_w,target_h,target_p);
+	}
+	else if (screen->w!=SCREEN_WIDTH || screen->h!=SCREEN_HEIGHT) {
 		screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_PITCH);
 	}
+	
+	// TODO: attempt to draw menu in center of screen when in hdmi
 	
 	POW_warn(0);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
@@ -3711,12 +3768,13 @@ static void Menu_loop(void) {
 		POW_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
 		
 		if (dirty) {
+			SDL_FillRect(screen, NULL, 0);
 			SDL_BlitSurface(resized, NULL, screen, NULL);
 			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
 
 			int ox, oy;
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
-			int max_width = SCREEN_WIDTH - SCALE1(PADDING * 2) - ow;
+			int max_width = screen->w - SCALE1(PADDING * 2) - ow;
 			
 			char display_name[256];
 			int text_width = GFX_truncateText(font.large, rom_name, display_name, max_width);
@@ -3760,12 +3818,12 @@ static void Menu_loop(void) {
 						GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
 							SCALE1(oy + PADDING),
-							SCREEN_WIDTH - SCALE1(PADDING * 2),
+							screen->w - SCALE1(PADDING * 2),
 							SCALE1(PILL_SIZE)
 						});
 						text = TTF_RenderUTF8_Blended(font.large, disc_name, COLOR_WHITE);
 						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-							SCREEN_WIDTH - SCALE1(PADDING + BUTTON_PADDING) - text->w,
+							screen->w - SCALE1(PADDING + BUTTON_PADDING) - text->w,
 							SCALE1(oy + PADDING + 4)
 						});
 						SDL_FreeSurface(text);
@@ -3808,8 +3866,8 @@ static void Menu_loop(void) {
 				// unscaled
 				ox = 146;
 				oy = 54;
-				int hw = SCREEN_WIDTH / 2;
-				int hh = SCREEN_HEIGHT / 2;
+				int hw = FIXED_WIDTH / 2;
+				int hh = FIXED_HEIGHT / 2;
 				
 				// preview window
 				// GFX_blitWindow(screen, Screen.menu.preview.x, Screen.menu.preview.y, Screen.menu.preview.width, Screen.menu.preview.height, 1);
@@ -3857,7 +3915,10 @@ static void Menu_loop(void) {
 
 	GFX_clearAll();
 	if (!quit) {
-		if (backing->w!=SCREEN_WIDTH || backing->h!=SCREEN_HEIGHT) {
+		if (GetHDMI() && screen_scaling==SCALE_NATIVE) {
+			screen = GFX_resize(HDMI_WIDTH,HDMI_HEIGHT, HDMI_PITCH);
+		}
+		else if (backing->w!=FIXED_WIDTH || backing->h!=FIXED_HEIGHT) {
 			screen = GFX_resize(renderer.dst_w,renderer.dst_h, renderer.dst_p);
 		}
 		

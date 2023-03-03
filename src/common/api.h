@@ -31,6 +31,7 @@ void LOG_note(int level, const char* fmt, ...);
 #define HDMI_HEIGHT 720
 #define HDMI_PITCH HDMI_WIDTH * FIXED_BPP
 #define HDMI_SIZE HDMI_HEIGHT * HDMI_PITCH
+#define HDMI_MENU_WIDTH 856 // FIXED_WIDTH * FIXED_HEIGHT / HDMI_HEIGHT rounded up to nearest 8
 
 #define PAGE_COUNT 2
 #define PAGE_SCALE 2

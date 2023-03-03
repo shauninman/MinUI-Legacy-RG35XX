@@ -1325,8 +1325,21 @@ int main (int argc, char *argv[]) {
 		
 		POW_update(&dirty, &show_setting, NULL, NULL);
 		
+		static int had_hdmi = -1;
+		int has_hdmi = GetHDMI();
+		if (had_hdmi!=has_hdmi) dirty = 1;
+		
 		if (dirty) {
-			GFX_clear(screen);
+			if (had_hdmi!=has_hdmi) {
+				if (has_hdmi) {
+					screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
+				}
+				else {
+					screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
+				}
+				had_hdmi = has_hdmi;
+			}
+			else GFX_clear(screen); // resizing clears the screen
 			
 			int ox;
 			int oy;
@@ -1388,7 +1401,7 @@ int main (int argc, char *argv[]) {
 					SDL_FreeSurface(key_txt);
 					SDL_FreeSurface(val_txt);
 				}
-				SDL_BlitSurface(version, NULL, screen, &(SDL_Rect){(SCREEN_WIDTH-version->w)/2,(SCREEN_HEIGHT-version->h)/2});
+				SDL_BlitSurface(version, NULL, screen, &(SDL_Rect){(screen->w-version->w)/2,(screen->h-version->h)/2});
 				
 				// buttons (duped and trimmed from below)
 				if (show_setting) {
@@ -1409,7 +1422,7 @@ int main (int argc, char *argv[]) {
 						Entry* entry = top->entries->items[i];
 						char* entry_name = entry->name;
 						char* entry_unique = entry->unique;
-						int available_width = SCREEN_WIDTH - SCALE1(PADDING * 2);
+						int available_width = screen->w - SCALE1(PADDING * 2);
 						if (i==top->start) available_width -= ow;
 					
 						SDL_Color text_color = COLOR_WHITE;
