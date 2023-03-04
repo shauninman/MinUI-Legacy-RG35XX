@@ -383,7 +383,7 @@ static void Game_open(char* path) {
 }
 static void Game_close(void) {
 	if (game.data) free(game.data);
-	if (game.tmp_path) remove(game.tmp_path);
+	if (game.tmp_path[0]) remove(game.tmp_path);
 	game.is_open = 0;
 	VIB_setStrength(0); // just in case
 }
@@ -2817,7 +2817,7 @@ void Core_init(void) {
 void Core_load(void) {
 	// LOG_info("Core_load\n");
 	struct retro_game_info game_info;
-	game_info.path = game.path;
+	game_info.path = game.tmp_path[0]?game.tmp_path:game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
 	
