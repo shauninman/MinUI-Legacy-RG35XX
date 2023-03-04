@@ -18,6 +18,11 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
+add additional info to installation readme
+	TF1 should have stock installed (Garlic will work too)
+		it will have 4 partitions, 2 hidden Linux partitions plus MISC and ROMS
+	TF2 should be formatted FAT32
+
 create a clean image to flash and install over
 	advanced users seem to be confused about how simple it is to install :sweat_smile:
 
@@ -31,6 +36,7 @@ hdmi
 	audio
 
 minarch
+	zip support
 	figure out how to handle different button mappings for cores with different modes
 		eg. GG or SMS with picodrive
 	move overrides to a text file that lives in the pak?
@@ -50,6 +56,7 @@ minui
 misc
 	port say, show, blank, and confirm
 	make my own simple file browser? :sweat_smile:
+	port Random Game.pak + daemon
 
 checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
