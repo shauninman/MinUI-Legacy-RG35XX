@@ -1792,9 +1792,9 @@ static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	// eg. gb has a 160 pixel wide image but 
 	// gambatte uses a 256 pixel wide buffer
 	// (only matters when using memcpy) 
-	int src_pitch = w * FIXED_BPP; 
-	int src_stride = pitch / FIXED_BPP;
-	int dst_stride = dst_pitch / FIXED_BPP;
+	int src_pitch = w * SCREEN_BPP; 
+	int src_stride = pitch / SCREEN_BPP;
+	int dst_stride = dst_pitch / SCREEN_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t* restrict src_row = (uint16_t*)src;
@@ -1811,9 +1811,9 @@ static void scale1x_scanline(void* __restrict src, void* __restrict dst, uint32_
 	// eg. gb has a 160 pixel wide image but 
 	// gambatte uses a 256 pixel wide buffer
 	// (only matters when using memcpy) 
-	int src_pitch = w * FIXED_BPP; 
-	int src_stride = 2 * pitch / FIXED_BPP;
-	int dst_stride = 2 * dst_pitch / FIXED_BPP;
+	int src_pitch = w * SCREEN_BPP; 
+	int src_stride = 2 * pitch / SCREEN_BPP;
+	int dst_stride = 2 * dst_pitch / SCREEN_BPP;
 	int cpy_pitch = MIN(src_pitch, dst_pitch);
 	
 	uint16_t k = 0x0000;
@@ -1843,8 +1843,8 @@ static void scale2x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 1 ) = s;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = s;
-			*(dst_row + PAGE_WIDTH + 1) = s;
+			*(dst_row + SCREEN_WIDTH    ) = s;
+			*(dst_row + SCREEN_WIDTH + 1) = s;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1865,8 +1865,8 @@ static void scale2x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row                       ) = r;
 			*(dst_row + 1                   ) = b;
 			
-			*(dst_row + PAGE_WIDTH * 1    ) = g;
-			*(dst_row + PAGE_WIDTH * 1 + 1) = k;
+			*(dst_row + SCREEN_WIDTH * 1    ) = g;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = k;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1885,8 +1885,8 @@ static void scale2x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row     ) = c1;
 			*(dst_row + 1 ) = c1;
 			
-			*(dst_row + PAGE_WIDTH    ) = c2;
-			*(dst_row + PAGE_WIDTH + 1) = c2;
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c2;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1905,8 +1905,8 @@ static void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 			*(dst_row     ) = c2;
 			*(dst_row + 1 ) = c2;
 			
-			*(dst_row + PAGE_WIDTH    ) = c2;
-			*(dst_row + PAGE_WIDTH + 1) = c1;
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c1;
 			
 			src_row += 1;
 			dst_row += 2;
@@ -1914,7 +1914,7 @@ static void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 	}
 }
 static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = PAGE_WIDTH * 2;
+	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1927,9 +1927,9 @@ static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 2) = s;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = s;
-			*(dst_row + PAGE_WIDTH + 1) = s;
-			*(dst_row + PAGE_WIDTH + 2) = s;
+			*(dst_row + SCREEN_WIDTH    ) = s;
+			*(dst_row + SCREEN_WIDTH + 1) = s;
+			*(dst_row + SCREEN_WIDTH + 2) = s;
 
 			// row 3
 			*(dst_row + row3    ) = s;
@@ -1943,7 +1943,7 @@ static void scale3x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 }
 static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t k = 0x0000;
-	int row3 = PAGE_WIDTH * 2;
+	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1959,9 +1959,9 @@ static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row + 2) = k;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = r;
-			*(dst_row + PAGE_WIDTH + 1) = g;
-			*(dst_row + PAGE_WIDTH + 2) = b;
+			*(dst_row + SCREEN_WIDTH    ) = r;
+			*(dst_row + SCREEN_WIDTH + 1) = g;
+			*(dst_row + SCREEN_WIDTH + 2) = b;
 
 			// row 3
 			*(dst_row + row3    ) = r;
@@ -1975,7 +1975,7 @@ static void scale3x_lcd(void* __restrict src, void* __restrict dst, uint32_t w, 
 }
 static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
 	uint16_t g = 0xffff;
-	int row3 = PAGE_WIDTH * 2;
+	int row3 = SCREEN_WIDTH * 2;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 3;
@@ -1990,9 +1990,9 @@ static void scale3x_dmg(void* __restrict src, void* __restrict dst, uint32_t w, 
 			*(dst_row + 2) = a;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = b;
-			*(dst_row + PAGE_WIDTH + 1) = a;
-			*(dst_row + PAGE_WIDTH + 2) = a;
+			*(dst_row + SCREEN_WIDTH    ) = b;
+			*(dst_row + SCREEN_WIDTH + 1) = a;
+			*(dst_row + SCREEN_WIDTH + 2) = a;
 
 			// row 3
 			*(dst_row + row3    ) = c;
@@ -2019,14 +2019,14 @@ static void scale3x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row                    + 2) = c2;
 
 			// row 2
-			*(dst_row + PAGE_WIDTH * 1    ) = c1;
-			*(dst_row + PAGE_WIDTH * 1 + 1) = c1;
-			*(dst_row + PAGE_WIDTH * 1 + 2) = c1;
+			*(dst_row + SCREEN_WIDTH * 1    ) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
 
 			// row 3
-			*(dst_row + PAGE_WIDTH * 2    ) = c1;
-			*(dst_row + PAGE_WIDTH * 2 + 1) = c1;
-			*(dst_row + PAGE_WIDTH * 2 + 2) = c1;
+			*(dst_row + SCREEN_WIDTH * 2    ) = c1;
+			*(dst_row + SCREEN_WIDTH * 2 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 2 + 2) = c1;
 
 			src_row += 1;
 			dst_row += 3;
@@ -2049,14 +2049,14 @@ static void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 			*(dst_row                    + 2) = c1;
 
 			// row 2
-			*(dst_row + PAGE_WIDTH * 1    ) = c2;
-			*(dst_row + PAGE_WIDTH * 1 + 1) = c1;
-			*(dst_row + PAGE_WIDTH * 1 + 2) = c1;
+			*(dst_row + SCREEN_WIDTH * 1    ) = c2;
+			*(dst_row + SCREEN_WIDTH * 1 + 1) = c1;
+			*(dst_row + SCREEN_WIDTH * 1 + 2) = c1;
 
 			// row 3
-			*(dst_row + PAGE_WIDTH * 2    ) = c3;
-			*(dst_row + PAGE_WIDTH * 2 + 1) = c2;
-			*(dst_row + PAGE_WIDTH * 2 + 2) = c2;
+			*(dst_row + SCREEN_WIDTH * 2    ) = c3;
+			*(dst_row + SCREEN_WIDTH * 2 + 1) = c2;
+			*(dst_row + SCREEN_WIDTH * 2 + 2) = c2;
 
 			src_row += 1;
 			dst_row += 3;
@@ -2064,8 +2064,8 @@ static void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t w,
 	}
 }
 static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = PAGE_WIDTH * 2;
-	int row4 = PAGE_WIDTH * 3;
+	int row3 = SCREEN_WIDTH * 2;
+	int row4 = SCREEN_WIDTH * 3;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
 		uint16_t* restrict dst_row = (void*)dst + y * dst_pitch * 4;
@@ -2079,10 +2079,10 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 			*(dst_row + 3) = s;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = s;
-			*(dst_row + PAGE_WIDTH + 1) = s;
-			*(dst_row + PAGE_WIDTH + 2) = s;
-			*(dst_row + PAGE_WIDTH + 3) = s;
+			*(dst_row + SCREEN_WIDTH    ) = s;
+			*(dst_row + SCREEN_WIDTH + 1) = s;
+			*(dst_row + SCREEN_WIDTH + 2) = s;
+			*(dst_row + SCREEN_WIDTH + 3) = s;
 
 			// row 3
 			*(dst_row + row3    ) = s;
@@ -2102,8 +2102,8 @@ static void scale4x(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	}
 }
 static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
-	int row3 = PAGE_WIDTH * 2;
-	int row4 = PAGE_WIDTH * 3;
+	int row3 = SCREEN_WIDTH * 2;
+	int row4 = SCREEN_WIDTH * 3;
 	uint16_t k = 0x0000;
 	for (unsigned y = 0; y < h; y++) {
 		uint16_t* restrict src_row = (void*)src + y * pitch;
@@ -2119,10 +2119,10 @@ static void scale4x_scanline(void* __restrict src, void* __restrict dst, uint32_
 			*(dst_row + 3) = c1;
 			
 			// row 2
-			*(dst_row + PAGE_WIDTH    ) = c2;
-			*(dst_row + PAGE_WIDTH + 1) = c2;
-			*(dst_row + PAGE_WIDTH + 2) = c2;
-			*(dst_row + PAGE_WIDTH + 3) = c2;
+			*(dst_row + SCREEN_WIDTH    ) = c2;
+			*(dst_row + SCREEN_WIDTH + 1) = c2;
+			*(dst_row + SCREEN_WIDTH + 2) = c2;
+			*(dst_row + SCREEN_WIDTH + 3) = c2;
 
 			// row 3
 			*(dst_row + row3    ) = c1;
@@ -2146,7 +2146,7 @@ static void scaleNN(void* __restrict src, void* __restrict dst, uint32_t w, uint
 	int dy = -renderer.dst_h;
 	unsigned lines = h;
 	bool copy = false;
-	size_t cpy_w = renderer.dst_w * FIXED_BPP;
+	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
 
 	while (lines) {
 		int dx = -renderer.dst_w;
@@ -2223,7 +2223,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 	unsigned lines = h;
 	bool copy = false;
 
-	size_t cpy_w = renderer.dst_w * FIXED_BPP;
+	size_t cpy_w = renderer.dst_w * SCREEN_BPP;
 	
 	int safe = w - 1; // don't look behind when there's nothing to see
 	uint16_t l1,l2;
@@ -2235,8 +2235,8 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 		
 		if (copy) {
 			copy = false;
-			memcpy(dst, dst - FIXED_PITCH, cpy_w);
-			dst += FIXED_PITCH;
+			memcpy(dst, dst - SCREEN_PITCH, cpy_w);
+			dst += SCREEN_PITCH;
 			dy += h;
 		} else if (dy < 0) {
 			int col = w;
@@ -2267,7 +2267,7 @@ static void scaleNN_text(void* __restrict src, void* __restrict dst, uint32_t w,
 				psrc16++;
 			}
 
-			dst += FIXED_PITCH;
+			dst += SCREEN_PITCH;
 			dy += h;
 		}
 
