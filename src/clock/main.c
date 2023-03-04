@@ -232,13 +232,11 @@ int main(int argc , char* argv[]) {
 		
 		POW_update(&dirty, &show_setting, NULL,NULL);
 		
+		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			dirty = 0;
-			
 			validate();
-		
-			// render
-			GFX_clear(screen);
+
+			if (!resized) GFX_clear(screen); // resizing clears the screen
 			
 			GFX_blitHardwareGroup(screen, show_setting);
 			
@@ -250,8 +248,11 @@ int main(int argc , char* argv[]) {
 
 			GFX_blitButtonGroup((char*[]){ "B","CANCEL", "A","SET", NULL }, screen, 1);
 		
+			// 376 or 446
+			int ox = (screen->w - (show_24hour?376:446)) / 2;
+			
 			// datetime
-			int x = show_24hour ? 130 : 90;
+			int x = ox;
 			int y = 185;
 		
 			x = blitNumber(year_selected, x,y);
@@ -289,7 +290,7 @@ int main(int argc , char* argv[]) {
 			}
 		
 			// cursor
-			x = show_24hour ? 130 : 90;
+			x = ox;
 			y = 222;
 			if (select_cursor!=CURSOR_YEAR) {
 				x += 100; // YYYY/
@@ -298,6 +299,7 @@ int main(int argc , char* argv[]) {
 			blitBar(x,y, (select_cursor==CURSOR_YEAR ? 80 : (select_cursor==CURSOR_AMPM ? ampm_w : 40)));
 		
 			GFX_flip(screen);
+			dirty = 0;
 		}
 		else GFX_sync();
 	}
