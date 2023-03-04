@@ -2995,12 +2995,15 @@ static int Menu_message(char* message) {
 		if (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_B)) break;
 		
 		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+		
+		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			dirty = 0;
+			if (!resized) GFX_clear(screen); // resizing clears the screen
 			GFX_clear(screen);
 			GFX_blitMessage(message, screen, NULL);
 			GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
 			GFX_flip(screen);
+			dirty = 0;
 		}
 		else GFX_sync();
 	}
@@ -3458,8 +3461,9 @@ static int Menu_options(MenuList* list) {
 		
 		POW_update(&dirty, &show_settings, Menu_beforeSleep, Menu_afterSleep);
 		
+		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			dirty = 0;
+			if (!resized) GFX_clear(screen); // resizing clears the screen
 			
 			GFX_clear(screen);
 			GFX_blitHardwareGroup(screen, show_settings);
@@ -3676,6 +3680,7 @@ static int Menu_options(MenuList* list) {
 			}
 			
 			GFX_flip(screen);
+			dirty = 0;
 		}
 		else GFX_sync();
 	}
@@ -3711,13 +3716,13 @@ static void Menu_loop(void) {
 	// TODO: can we use renderer.src_w/h to reverse the stretch regardless of HDMI status?
 	// because we need an undeformed copy for save state screenshots
 	SDL_Surface* backing = GFX_getBufferCopy();
-	SDL_Surface* resized = SDL_CreateRGBSurface(SDL_SWSURFACE, FIXED_WIDTH,FIXED_HEIGHT,FIXED_DEPTH,0,0,0,0);
+	SDL_Surface* snapshot = SDL_CreateRGBSurface(SDL_SWSURFACE, FIXED_WIDTH,FIXED_HEIGHT,FIXED_DEPTH,0,0,0,0);
 	
 	if (backing->w==FIXED_WIDTH && backing->h==FIXED_HEIGHT) {
-		SDL_BlitSurface(backing, NULL, resized, NULL);
+		SDL_BlitSurface(backing, NULL, snapshot, NULL);
 	}
 	else {
-		downsample(backing->pixels,resized->pixels,backing->w,backing->h,backing->pitch,resized->pitch);
+		downsample(backing->pixels,snapshot->pixels,backing->w,backing->h,backing->pitch,snapshot->pitch);
 	}
 	
 	// TODO: move this to right before if (dirty) {} like in minui.elf
@@ -3903,7 +3908,7 @@ static void Menu_loop(void) {
 					state_slot = menu.slot;
 					State_write();
 					status = STATUS_SAVE;
-					SDL_Surface* preview = Menu_thumbnail(resized);
+					SDL_Surface* preview = Menu_thumbnail(snapshot);
 					SDL_RWops* out = SDL_RWFromFile(bmp_path, "wb");
 					if (total_discs) {
 						char* disc_path = disc_paths[disc];
@@ -3950,9 +3955,11 @@ static void Menu_loop(void) {
 
 		POW_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
 		
+		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			SDL_FillRect(screen, NULL, 0);
-			SDL_BlitSurface(resized, NULL, screen, NULL);
+			if (!resized) GFX_clear(screen); // resizing clears the screen
+			
+			SDL_BlitSurface(snapshot, NULL, screen, NULL);
 			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
 
 			int ox, oy;
@@ -4114,7 +4121,7 @@ static void Menu_loop(void) {
 	}
 		
 	SDL_FreeSurface(backing);
-	SDL_FreeSurface(resized);
+	SDL_FreeSurface(snapshot);
 	POW_disableAutosleep();
 	POW_warn(1);
 }
@@ -4212,8 +4219,6 @@ int main(int argc , char* argv[]) {
 	Game_open(rom_path);
 	if (!game.is_open) goto finish;
 	
-	LOG_info("no way\n");
-
 	// restore configs
 	Config_read();
 	setOverclock(overclock);

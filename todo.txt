@@ -29,14 +29,17 @@ create a clean image to flash and install over
 add most recent uImage/kernel changes
 
 hdmi
+	minarch menus don't update when connected to hdmi
+		need to figureout how to create a 4:3 thumb from a distorted framebuffer
+		should be able to reconstruct it with screen->w|h and renderer.(src|dst)_(w|h)
+			just need to downsample to a cropped region of the source
+	does clock need GFX_autosize?
 	ignore brightness shortcut when on hdmi
-	figure out how to handle renderng the menus
-	856x480 will get round circles but it's still blurry...
-		it would be better if we could just go the full 1280x720 and change SCREEN_SCALE to 3...
+		still getting through somehow...
 	audio
 
 minarch
-	zip support
+	can I support changing discs in multi-disc pbps?
 	figure out how to handle different button mappings for cores with different modes
 		eg. GG or SMS with picodrive
 	move overrides to a text file that lives in the pak?

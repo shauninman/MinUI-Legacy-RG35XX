@@ -384,6 +384,18 @@ SDL_Surface* GFX_resize(int w, int h, int pitch) {
 	
 	return gfx.screen;
 }
+int GFX_autosize(SDL_Surface** screen, int* dirty) {
+	static int had_hdmi = -1;
+	int has_hdmi = GetHDMI();
+	if (had_hdmi==has_hdmi) return 0;
+	
+	*dirty = 1;
+	if (has_hdmi) 	*screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
+	else 			*screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
+	had_hdmi = has_hdmi;
+
+	return 1;
+}
 static void POW_flipOverlay(void);
 void GFX_flip(SDL_Surface* screen) {
 	// point framebuffer at the first line of the backbuffer

@@ -98,6 +98,7 @@ enum {
 
 SDL_Surface* GFX_init(int mode);
 SDL_Surface* GFX_resize(int width, int height, int pitch);
+int GFX_autosize(SDL_Surface** screen, int* dirty);
 void GFX_setMode(int mode);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);

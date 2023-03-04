@@ -1325,21 +1325,9 @@ int main (int argc, char *argv[]) {
 		
 		POW_update(&dirty, &show_setting, NULL, NULL);
 		
-		static int had_hdmi = -1;
-		int has_hdmi = GetHDMI();
-		if (had_hdmi!=has_hdmi) dirty = 1;
-		
+		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			if (had_hdmi!=has_hdmi) {
-				if (has_hdmi) {
-					screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
-				}
-				else {
-					screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
-				}
-				had_hdmi = has_hdmi;
-			}
-			else GFX_clear(screen); // resizing clears the screen
+			if (!resized) GFX_clear(screen); // resizing clears the screen
 			
 			int ox;
 			int oy;
