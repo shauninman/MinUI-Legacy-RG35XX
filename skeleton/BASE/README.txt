@@ -40,6 +40,8 @@ Following Instructions 101
 ----------------------------------------
 Install
 
+Step 0. MinUI is meant to be installed over a working stock TF1. Anbernic's stock TF1 image can be downloaded here: https://drive.google.com/drive/folders/1HfGCxkratM_zYiYfGWCrHZ1AynO3hIwU If you are using two SD cards, the second one should be formatted FAT32.
+
 Step 1. Copy "dmenu.bin" to the root of the MISC partition of the SD card that goes in the TF1 slot. 
 
 Step 2. Where you copy "MinUI.zip" will depend on if you are using one or two SD cards (using two SD cards is recommended). If using one SD card, copy "MinUI.zip" to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy "MinUI.zip" to the root of the SD card that goes in the TF2 slot. 
