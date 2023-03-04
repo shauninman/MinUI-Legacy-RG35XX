@@ -1,49 +1,39 @@
 -------------------------------
 
+<img src="github/minui-main.png" width=320 /> <img src="github/minui-menu-gbc.png" width=320 />
+
 Please see the README.txt in the zip file for installation and update instructions.
 
-*base*
-- added support for zipped roms
-- fixed input mapping for cores with different input modes
-- fixed late loading of configs (was preventing boot logos for certain systems)
-- fixed flicker at low end of screen brightness ramp
-- restored PlayStation interlace and enhanced resolutions options
+**Base**
+- 
 
-*extras*
-- added GG.pak for Game Gear
-- added SMS.pak for Master System
-- restored Game Boy Player rumble support in MGBA.pak (some games had rumble hardware on the cartridge, others depended on the Game Cube's and require this toggle to access it)
-- added SGB.pak for Super Game Boy
-- added PCE.pak for TurboGrafx-16
+**Extras**
+- 
 
 -------------------------------
 
-add additional info to installation readme
-	TF1 should have stock installed (Garlic will work too)
-		it will have 4 partitions, 2 hidden Linux partitions plus MISC and ROMS
-	TF2 should be formatted FAT32
-
 create a clean image to flash and install over
 	advanced users seem to be confused about how simple it is to install :sweat_smile:
+	this might be complicated by the gpio revs on newer devices
 
 add most recent uImage/kernel changes
+	wait till things settle
 
 hdmi
-	minarch menus don't update when connected to hdmi
-		need to figureout how to create a 4:3 thumb from a distorted framebuffer
+	minarch menu
+		need to figure out how to create a 4:3 thumb from a distorted framebuffer
 		should be able to reconstruct it with screen->w|h and renderer.(src|dst)_(w|h)
 			just need to downsample to a cropped region of the source
-	does clock need GFX_autosize?
 	ignore brightness shortcut when on hdmi
 		still getting through somehow...
 	audio
 
 minarch
+	move overrides to a text file that lives in the pak?
+		that way I don't have to update minarch to support new cores?
 	can I support changing discs in multi-disc pbps?
 	figure out how to handle different button mappings for cores with different modes
 		eg. GG or SMS with picodrive
-	move overrides to a text file that lives in the pak?
-		that way I don't have to update minarch to support new cores?
 	
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
@@ -57,9 +47,9 @@ minui
 	- 
 
 misc
+	port Random Game.pak + daemon
 	port say, show, blank, and confirm
 	make my own simple file browser? :sweat_smile:
-	port Random Game.pak + daemon
 
 checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
@@ -69,9 +59,11 @@ cores
 		launching directly into native scaling has normal performance
 		but launching into aspect and switching to native tanks the
 		framerate
+		conversely aspect runs terrible on hdmi (~45fps) but native runs fine
 	pcsx-rearmed
 		reset hangs the PlayStation emulator core
 		Tekken freezes PlayStation emulator core while fast-forwarding
+			actually, ff may be an issue for this core across the board
 
 	
 Union-ize this?
