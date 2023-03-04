@@ -138,6 +138,7 @@ static struct Game {
 	char m3u_path[MAX_PATH];
 	void* data;
 	size_t size;
+	int is_open;
 } game;
 static void Game_open(char* path) {
 	memset(&game, 0, sizeof(game));
@@ -197,12 +198,12 @@ static void Game_open(char* path) {
 		strcpy(game.m3u_path, m3u_path);
 		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
 	}
-	else {
-		game.m3u_path[0] = '\0';
-	}
+	
+	game.is_open = 1;
 }
 static void Game_close(void) {
 	if (game.data) free(game.data);
+	game.is_open = 0;
 	VIB_setStrength(0); // just in case
 }
 
@@ -4027,6 +4028,9 @@ int main(int argc , char* argv[]) {
 	
 	Core_open(core_path, tag_name);
 	Game_open(rom_path);
+	if (!game.is_open) goto finish;
+	
+	LOG_info("no way\n");
 
 	// restore configs
 	Config_read();
@@ -4065,9 +4069,11 @@ int main(int argc , char* argv[]) {
 	
 	Menu_quit();
 	
+finish:
+
 	Game_close();
 	Core_unload();
-
+	
 	Core_quit();
 	Core_close();
 	
