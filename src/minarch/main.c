@@ -220,6 +220,7 @@ static struct Game {
 	int is_open;
 } game;
 static void Game_open(char* path) {
+	LOG_info("Game_open\n");
 	memset(&game, 0, sizeof(game));
 	
 	strcpy((char*)game.path, path);
@@ -729,6 +730,9 @@ enum {
 };
 
 static struct Config {
+	// TODO: these would be loaded cfg files
+	// char* plat_overrides; // overrides.cfg based on platform limitations
+	// char* user_overrides; // minarch.cfg or game.cfg based on user preference
 	OptionList frontend;
 	OptionList core;
 	ButtonMapping* controls;
@@ -843,6 +847,8 @@ static void Config_getValue(char* cfg, const char* key, char* out_value) {
 	tmp = strchr(out_value, '\n');
 	if (!tmp) tmp = strchr(out_value, '\r');
 	if (tmp) *tmp = '\0';
+	
+	// LOG_info("%s = %s\n", key, out_value);
 }
 
 static void setOverclock(int i) {
@@ -876,6 +882,7 @@ static void Config_getPath(char* filename, int override) {
 	else sprintf(filename, "%s/minarch.cfg", core.config_dir);
 }
 static void Config_readOptions(char* cfg) {
+	LOG_info("Config_readOptions\n");
 	char key[256];
 	char value[256];
 	for (int i=0; config.frontend.options[i].key; i++) {
@@ -894,6 +901,7 @@ static void Config_readOptions(char* cfg) {
 	}
 }
 static void Config_readControls(char* cfg) {
+	LOG_info("Config_readControls\n");
 	char key[256];
 	char value[256];
 	for (int i=0; config.controls[i].name; i++) {
@@ -936,6 +944,7 @@ static void Config_readControls(char* cfg) {
 	}
 }
 static char* Config_load(void) {
+	LOG_info("Config_load\n");
 	char path[MAX_PATH];
 	config.loaded = CONFIG_NONE;
 
@@ -1047,8 +1056,11 @@ static void Option_setValue(Option* item, const char* value) {
 
 // the following 3 functions always touch config.core, the rest can operate on arbitrary OptionLists
 static void OptionList_init(const struct retro_core_option_definition *defs) {
+	LOG_info("OptionList_init\n");
 	int count;
 	for (count=0; defs[count].key; count++);
+	
+	LOG_info("count: %i\n", count);
 	
 	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
 	
@@ -1069,7 +1081,9 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 			len = strlen(def->desc) + 1;
 			item->name = calloc(len, sizeof(char));
 			strcpy(item->name, def->desc);
-		
+			
+			// LOG_info("\tkey: %s name: %s", item->key, item->name);
+			
 			if (def->info) {
 				len = strlen(def->info) + 1;
 				item->desc = calloc(len, sizeof(char));
@@ -1122,6 +1136,8 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 				}
 			}
 			
+			// LOG_info("\tdefault: %s\n", default_value);
+			
 			item->value = Option_getValueIndex(item, default_value);
 			item->default_value = item->value;
 			
@@ -1140,6 +1156,7 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 	// fflush(stdout);
 }
 static void OptionList_vars(const struct retro_variable *vars) {
+	LOG_info("OptionList_vars\n");
 	int count;
 	for (count=0; vars[count].key; count++);
 	
@@ -1375,6 +1392,8 @@ static int16_t input_state_callback(unsigned port, unsigned device, unsigned ind
 void Input_init(const struct retro_input_descriptor *vars) {
 	static int input_initialized = 0;
 	if (input_initialized) return;
+
+	LOG_info("Input_init\n");
 	
 	config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
 	
@@ -1475,7 +1494,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
-		// LOG_info("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
+		puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 		Input_init((const struct retro_input_descriptor *)data);
 		return false;
 	} break;
@@ -1492,10 +1511,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 	// TODO: this is called whether using variables or options
 	case RETRO_ENVIRONMENT_GET_VARIABLE: { /* 15 */
-		// puts("RETRO_ENVIRONMENT_GET_VARIABLE");
+		puts("RETRO_ENVIRONMENT_GET_VARIABLE");
 		struct retro_variable *var = (struct retro_variable *)data;
 		if (var && var->key) {
 			var->value = OptionList_getOptionValue(&config.core, var->key);
+			// printf("%s = %s\n", var->key, var->value);
 		}
 		break;
 	}
@@ -1503,7 +1523,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: this is called if RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION sets out to 0
 	// TODO: not used by anything yet
 	case RETRO_ENVIRONMENT_SET_VARIABLES: { /* 16 */
-		// puts("RETRO_ENVIRONMENT_SET_VARIABLES");
+		puts("RETRO_ENVIRONMENT_SET_VARIABLES");
 		const struct retro_variable *vars = (const struct retro_variable *)data;
 		if (vars) {
 			OptionList_reset();
@@ -1555,13 +1575,14 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: { /* 52 */
+		puts("RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION");
 		unsigned *out = (unsigned *)data;
 		if (out)
 			*out = 1;
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS: { /* 53 */
-		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
+		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
 			OptionList_reset();
 			OptionList_init((const struct retro_core_option_definition *)data); 
@@ -1569,7 +1590,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: { /* 54 */
-		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
+		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
 		const struct retro_core_options_intl *options = (const struct retro_core_options_intl *)data;
 		if (options && options->us) {
 			OptionList_reset();
@@ -1577,16 +1598,15 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		}
 		break;
 	}
-	// case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: { /* 55 */
-	// 	// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
-	// 	const struct retro_core_option_display *display = (const struct retro_core_option_display *)data;
+	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: { /* 55 */
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY");
+		// const struct retro_core_option_display *display = (const struct retro_core_option_display *)data;
 	// 	if (display) OptionList_setOptionVisibility(&config.core, display->key, display->visible);
-	// 	break;
-	// }
+		break;
+	}
 	case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: { /* 57 */
 		unsigned *out =	(unsigned *)data;
-		if (out)
-			*out = 1;
+		if (out) *out = 1;
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: { /* 58 */
@@ -1637,10 +1657,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK 69
 	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
 	case RETRO_ENVIRONMENT_SET_VARIABLE: {
-		// puts("RETRO_ENVIRONMENT_SET_VARIABLE");
+		puts("RETRO_ENVIRONMENT_SET_VARIABLE");
 		
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
+			// printf("%s = %s\n", var->key, var->value);
 			OptionList_setOptionValue(&config.core, var->key, var->value);
 			break;
 		}
@@ -1674,7 +1695,6 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		LOG_debug("Unsupported environment cmd: %u\n", cmd);
 		return false;
 	}
-
 	return true;
 }
 
@@ -2765,7 +2785,7 @@ void Core_getName(char* in_name, char* out_name) {
 	tmp[0] = '\0';
 }
 void Core_open(const char* core_path, const char* tag_name) {
-	// LOG_info("Core_open\n");
+	LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
 	
 	if (!core.handle) LOG_error("%s\n", dlerror());
@@ -2836,12 +2856,12 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_input_state_callback(input_state_callback);
 }
 void Core_init(void) {
-	// LOG_info("Core_init\n");
+	LOG_info("Core_init\n");
 	core.init();
 	core.initialized = 1;
 }
 void Core_load(void) {
-	// LOG_info("Core_load\n");
+	LOG_info("Core_load\n");
 	struct retro_game_info game_info;
 	game_info.path = game.tmp_path[0]?game.tmp_path:game.path;
 	game_info.data = game.data;
@@ -4253,7 +4273,7 @@ int main(int argc , char* argv[]) {
 	
 	// restore options
 	char* cfg = Config_load();
-	Config_readOptions(cfg);
+	Config_readOptions(cfg); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
 	GFX_setVsync(prevent_tearing);
 	
@@ -4261,11 +4281,13 @@ int main(int argc , char* argv[]) {
 	
 	// TODO: find a better place to do this
 	// mixing static and loaded data is messy
+	// why not move to Core_init()?
+	// ah, because it's defined before options_menu...
 	options_menu.items[1].desc = (char*)core.version;
 	
 	Core_load();
-	// restore controls (after the core has reported its defaults)
-	Config_readControls(cfg);
+	Config_readOptions(cfg); // but others load and report options later (eg. nes)
+	Config_readControls(cfg); // restore controls (after the core has reported its defaults)
 	free(cfg);
 	Input_init(NULL);
 		
@@ -4281,7 +4303,6 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 		
-		// if (core.audio_buffer_status) core.audio_buffer_status(true, 100, false);
 		core.run();
 		limitFF();
 		

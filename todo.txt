@@ -6,9 +6,10 @@ Please see the README.txt in the zip file for installation and update instructio
 
 **Base**
 - added press A to see entire (or at least more of) truncated option description
+- fixed controls being overwritten by core defaults
 
 **Extras**
-- 
+- disabled TurboGrafx-16 option Alternate Turbo Toggle (device doesn't have the buttons used for it, L3/R3)
 
 -------------------------------
 
@@ -18,6 +19,10 @@ Emulator and Controls options aren't being restored in some cases
 		Is it because I'm renaming the controls?
 			no it's because Config_read() moved before we receive the cores input mapping
 			need to split into two
+		picoarch calls load_config twice! 
+			once manually and 
+			a second time in the environment callback
+				for each RETRO_ENVIRONMENT_SET_CORE_OPTIONS*
 
 create a clean image to flash and install over
 	advanced users seem to be confused about how simple it is to install :sweat_smile:
