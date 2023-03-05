@@ -551,7 +551,8 @@ static void State_resume(void) {
 typedef struct Option {
 	char* key;
 	char* name; // desc
-	char* desc; // info
+	char* desc; // info, truncated
+	char* full; // info
 	char* var;
 	int default_value;
 	int value;
@@ -1066,9 +1067,15 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 				len = strlen(def->info) + 1;
 				item->desc = calloc(len, sizeof(char));
 				strncpy(item->desc, def->info, len);
-				item->desc[len-1] = '\0';
 
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number! (this is more about chars per line than pixel width so it's not going to be relative to the screen size, only the scale)
+				item->full = calloc(len, sizeof(char));
+				strncpy(item->full, item->desc, len);
+				// item->desc[len-1] = '\0';
+				
+				// these magic numbers are more about chars per line than pixel width 
+				// so it's not going to be relative to the screen size, only the scale
+				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
+				GFX_wrapText(font.medium, item->full, SCALE1(260), 7); // TODO: magic number!
 			}
 		
 			for (count=0; def->values[count].value; count++);
@@ -1216,6 +1223,7 @@ static void OptionList_reset(void) {
 		}
 		else {
 			if (item->desc) free(item->desc);
+			if (item->full) free(item->full);
 			for (int j=0; j<item->count; j++) {
 				char* value = item->values[j];
 				char* label = item->labels[j];
@@ -1784,7 +1792,6 @@ static uint32_t sec_start = 0;
 #define Weight2_3(A, B)  (((((cR(A) << 1) + (cR(B) * 3)) / 5) & 0x1f) << 11 | ((((cG(A) << 1) + (cG(B) * 3)) / 5) & 0x3f) << 5 | ((((cB(A) << 1) + (cB(B) * 3)) / 5) & 0x1f))
 #define Weight3_2(A, B)  (((((cR(B) << 1) + (cR(A) * 3)) / 5) & 0x1f) << 11 | ((((cG(B) << 1) + (cG(A) * 3)) / 5) & 0x3f) << 5 | ((((cB(B) << 1) + (cB(A) * 3)) / 5) & 0x1f))
 #define Weight1_1_1_1(A, B, C, D)  ((((cR(A) + cR(B) + cR(C) + cR(D)) >> 2) & 0x1f) << 11 | (((cG(A) + cG(B) + cG(C) + cG(D)) >> 2) & 0x3f) << 5 | (((cB(A) + cB(B) + cB(C) + cB(D)) >> 2) & 0x1f))
-
 
 static void scaleNull(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {}
 static void scale1x(void* __restrict src, void* __restrict dst, uint32_t w, uint32_t h, uint32_t pitch, uint32_t dst_pitch) {
@@ -2994,10 +3001,7 @@ typedef struct MenuList {
 	MenuList_callback_t on_change;
 } MenuList;
 
-static void Menu_detail(MenuItem* item) {
-	// TODO: name
-}
-static int Menu_message(char* message) {
+static int Menu_message(char* message, char** pairs) {
 	GFX_setMode(MODE_MAIN);
 	int dirty = 1;
 	while (1) {
@@ -3012,8 +3016,8 @@ static int Menu_message(char* message) {
 		if (dirty) {
 			if (!resized) GFX_clear(screen); // resizing clears the screen
 			GFX_clear(screen);
-			GFX_blitMessage(message, screen, NULL);
-			GFX_blitButtonGroup((char*[]){ "A","OKAY", NULL }, screen, 1);
+			GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){0,SCALE1(PADDING),screen->w,screen->h-SCALE1(PILL_SIZE+PADDING)});
+			GFX_blitButtonGroup(pairs, screen, 1);
 			GFX_flip(screen);
 			dirty = 0;
 		}
@@ -3078,8 +3082,15 @@ static int OptionEmulator_optionChanged(MenuList* list, int i) {
 	);
 	OptionList_setOptionRawValue(&config.core, item->key, item->value);
 }
+static int OptionEmulator_optionDetail(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	Option* option = OptionList_getOption(&config.core, item->key);
+	if (option->full) return Menu_message(option->full, (char*[]){ "B","BACK", NULL });
+	else return MENU_CALLBACK_NOP;
+}
 static MenuList OptionEmulator_menu = {
 	.type = MENU_FIXED,
+	.on_confirm = OptionEmulator_optionDetail, // TODO: this needs pagination to be truly useful
 	.on_change = OptionEmulator_optionChanged,
 	.items = NULL,
 };
@@ -3112,7 +3123,7 @@ static int OptionEmulator_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionEmulator_menu);
 	}
 	else {
-		Menu_message("This core doesn't have any options.");
+		Menu_message("This core doesn't have any options.", (char*[]){ "B","BACK", NULL });
 	}
 	
 	return MENU_CALLBACK_NOP;
@@ -3286,7 +3297,7 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 			break;
 		}
 	}
-	Menu_message(message);
+	Menu_message(message, (char*[]){ "A","OKAY", NULL });
 	OptionSaveChanges_updateDesc();
 	return MENU_CALLBACK_EXIT;
 }
@@ -3979,7 +3990,7 @@ static void Menu_loop(void) {
 			int max_width = screen->w - SCALE1(PADDING * 2) - ow;
 			
 			char display_name[256];
-			int text_width = GFX_truncateText(font.large, rom_name, display_name, max_width);
+			int text_width = GFX_truncateText(font.large, rom_name, display_name, max_width, SCALE1(BUTTON_PADDING*2));
 			max_width = MIN(max_width, text_width);
 
 			SDL_Surface* text;
@@ -4087,10 +4098,10 @@ static void Menu_loop(void) {
 					SDL_Rect preview_rect = {SCALE2(ox,oy),hw,hh};
 					SDL_FillRect(screen, &preview_rect, 0);
 					if (save_exists) { // has save but no preview
-						GFX_blitMessage("No Preview", screen, &preview_rect);
+						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
 					}
 					else { // no save
-						GFX_blitMessage("Empty Slot", screen, &preview_rect);
+						GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
 					}
 				}
 				
@@ -4226,6 +4237,8 @@ int main(int argc , char* argv[]) {
 	
 	MSG_init();
 	InitSettings();
+	
+	// Overrides_init();
 	
 	Core_open(core_path, tag_name);
 	Game_open(rom_path);

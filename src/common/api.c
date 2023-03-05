@@ -438,23 +438,23 @@ SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
 	SDL_BlitSurface(gfx.screen, NULL, copy, NULL);
 	return copy;
 }
-int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width) {
+int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
 	int text_width;
 	strcpy(out_name, in_name);
 	TTF_SizeUTF8(font, out_name, &text_width, NULL);
-	text_width += SCALE1(12*2);
+	text_width += padding;
 	
 	while (text_width>max_width) {
 		int len = strlen(out_name);
 		strcpy(&out_name[len-4], "...\0");
 		TTF_SizeUTF8(font, out_name, &text_width, NULL);
-		text_width += SCALE1(12*2);
+		text_width += padding;
 	}
 	
 	return text_width;
 }
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
-	// TODO: this is kinda buggy mess
+	// TODO: this is "kinda" a buggy mess...but possibly fixed now!
 	
 	if (!str) return 0;
 	
@@ -465,7 +465,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 	
 	TTF_SizeUTF8(font, line, &line_width, NULL);
 	if (line_width<=max_width) {
-		line_width = GFX_truncateText(font,line,buffer,max_width);
+		line_width = GFX_truncateText(font,line,buffer,max_width,0);
 		strcpy(line,buffer);
 		return line_width;
 	}
@@ -478,8 +478,12 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 		tmp = strchr(tmp, ' ');
 		if (!tmp) {
 			if (prev) {
-				prev[0] = '\n';
-				line = prev + 1;
+				TTF_SizeUTF8(font, line, &line_width, NULL);
+				if (line_width>=max_width) {
+					if (line_width>max_line_width) max_line_width = line_width;
+					prev[0] = '\n';
+					line = prev + 1;
+				}
 			}
 			break;
 		}
@@ -504,7 +508,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 		i += 1;
 	}
 	
-	line_width = GFX_truncateText(font,line,buffer,max_width);
+	line_width = GFX_truncateText(font,line,buffer,max_width,0);
 	strcpy(line,buffer);
 	
 	if (line_width>max_line_width) max_line_width = line_width;
@@ -651,7 +655,7 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
 	SDL_FreeSurface(text);
 }
-void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
+void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	if (dst_rect==NULL) dst_rect = &(SDL_Rect){0,0,dst->w,dst->h};
 	
 	SDL_Surface* text;
@@ -686,7 +690,7 @@ void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
 		
 		
 		if (len) {
-			text = TTF_RenderUTF8_Blended(font.large, line, COLOR_WHITE);
+			text = TTF_RenderUTF8_Blended(font, line, COLOR_WHITE);
 			int x = dst_rect->x;
 			x += (dst_rect->w - text->w) / 2;
 			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x,y});
@@ -1399,7 +1403,7 @@ void POW_powerOff(void) {
 	if (pow.can_poweroff) {
 		char* msg = exists(AUTO_RESUME_PATH) ? "Quicksave created,\npowering off" : "Powering off";
 		GFX_clear(gfx.screen);
-		GFX_blitMessage(msg, gfx.screen, NULL);
+		GFX_blitMessage(font.large, msg, gfx.screen, NULL);
 		GFX_flip(gfx.screen);
 		sleep(2);
 		

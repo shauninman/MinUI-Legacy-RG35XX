@@ -117,7 +117,7 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 SDL_Surface* GFX_getBufferCopy(void); // must be freed by caller
-int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width); // returns final width (including pill padding)
+int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 
 // NOTE: all dimensions should be pre-scaled
@@ -127,7 +127,7 @@ void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
-void GFX_blitMessage(char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
+void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 int GFX_blitButtonGroup(char** hints, SDL_Surface* dst, int align_right);

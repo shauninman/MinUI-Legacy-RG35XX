@@ -1418,7 +1418,7 @@ int main (int argc, char *argv[]) {
 						trimSortingMeta(&entry_name);
 					
 						char display_name[256];
-						int text_width = GFX_truncateText(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width);
+						int text_width = GFX_truncateText(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING*2));
 						int max_width = MIN(available_width, text_width);
 						if (j==selected_row) {
 							GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
@@ -1432,7 +1432,7 @@ int main (int argc, char *argv[]) {
 						else if (entry->unique) {
 							trimSortingMeta(&entry_unique);
 							char unique_name[256];
-							GFX_truncateText(font.large, entry_unique, unique_name, available_width);
+							GFX_truncateText(font.large, entry_unique, unique_name, available_width, SCALE1(BUTTON_PADDING*2));
 						
 							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, unique_name, COLOR_DARK_TEXT);
 							SDL_BlitSurface(text, &(SDL_Rect){
@@ -1445,7 +1445,7 @@ int main (int argc, char *argv[]) {
 								SCALE1(PADDING+(j*PILL_SIZE)+4)
 							});
 						
-							GFX_truncateText(font.large, entry_name, display_name, available_width);
+							GFX_truncateText(font.large, entry_name, display_name, available_width, SCALE1(BUTTON_PADDING*2));
 						}
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
 						SDL_BlitSurface(text, &(SDL_Rect){
@@ -1461,7 +1461,7 @@ int main (int argc, char *argv[]) {
 					}
 				}
 				else {
-					GFX_blitMessage("Empty folder", screen, NULL);
+					GFX_blitMessage(font.large, "Empty folder", screen, NULL);
 				}
 			
 				// buttons

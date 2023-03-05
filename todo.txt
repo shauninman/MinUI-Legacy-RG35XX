@@ -5,7 +5,7 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
-- 
+- added press A to see entire (or at least more of) truncated option description
 
 **Extras**
 - 
@@ -14,7 +14,7 @@ Please see the README.txt in the zip file for installation and update instructio
 
 create a clean image to flash and install over
 	advanced users seem to be confused about how simple it is to install :sweat_smile:
-	this might be complicated by the gpio revs on newer devices
+	this might be difficult with the gpio revs on newer devices
 
 add most recent uImage/kernel changes
 	wait till things settle
@@ -29,11 +29,21 @@ hdmi
 	audio
 
 minarch
+	pressing A on an option shows the whole description?
+		gambatte's descriptions are so long this will require scrolling
+		which I have the design for but...
+		also my current wrapText implementation always puts the last word on a new line :sob:
+		it's not important enough for all this :joy:
 	move overrides to a text file that lives in the pak?
 		that way I don't have to update minarch to support new cores?
+		that requires allocations...
+		wait, we could just use the existing cfg format
+			except extend that to include `-` prefix to lock/hide an option?
+	
 	can I support changing discs in multi-disc pbps?
 	figure out how to handle different button mappings for cores with different modes
 		eg. GG or SMS with picodrive
+	also different defaults
 	
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
@@ -55,6 +65,8 @@ checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
 
 cores
+	pce
+		disable Alternate Turbo Hotkey (we don't have L3/R3)
 	vb
 		launching directly into native scaling has normal performance
 		but launching into aspect and switching to native tanks the
