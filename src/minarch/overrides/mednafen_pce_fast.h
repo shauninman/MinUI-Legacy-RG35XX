@@ -2,6 +2,10 @@
 
 static CoreOverrides mednafen_pce_fast_overrides = {
 	.core_name = "mednafen_pce_fast",
+	.option_overrides = (OptionOverride[]){
+		{"pce_fast_turbo_toggle_hotkey", "disabled", 1}, // we don't have L3/R3
+		{NULL,NULL},
+	},
 	.button_mapping = (ButtonMapping[]){
 		{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 		{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
