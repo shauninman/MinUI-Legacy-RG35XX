@@ -875,20 +875,7 @@ static void Config_getPath(char* filename, int override) {
 	if (override) sprintf(filename, "%s/%s.cfg", core.config_dir, game.name);
 	else sprintf(filename, "%s/minarch.cfg", core.config_dir);
 }
-static void Config_read(void) {
-	char path[MAX_PATH];
-	config.loaded = CONFIG_NONE;
-
-	int override = 0;
-	Config_getPath(path, CONFIG_WRITE_GAME);
-	if (exists(path)) override = 1; 
-	if (!override) Config_getPath(path, CONFIG_WRITE_ALL);
-	
-	char* cfg = allocFile(path);
-	if (!cfg) return;
-	
-	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
-	
+static void Config_readOptions(char* cfg) {
 	char key[256];
 	char value[256];
 	for (int i=0; config.frontend.options[i].key; i++) {
@@ -905,7 +892,10 @@ static void Config_read(void) {
 		// TODO: handle not finding the expected value
 		OptionList_setOptionValue(&config.core, option->key, value);
 	}
-	
+}
+static void Config_readControls(char* cfg) {
+	char key[256];
+	char value[256];
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		sprintf(key, "bind %s", mapping->name);
@@ -944,8 +934,22 @@ static void Config_read(void) {
 		mapping->local = id;
 		mapping->mod = mod;
 	}
+}
+static char* Config_load(void) {
+	char path[MAX_PATH];
+	config.loaded = CONFIG_NONE;
+
+	int override = 0;
+	Config_getPath(path, CONFIG_WRITE_GAME);
+	if (exists(path)) override = 1; 
+	if (!override) Config_getPath(path, CONFIG_WRITE_ALL);
 	
-	free(cfg);
+	char* cfg = allocFile(path);
+	if (!cfg) return NULL;
+	
+	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
+	
+	return cfg;
 }
 static void Config_write(int override) {
 	char path[MAX_PATH];
@@ -1019,7 +1023,10 @@ static void Config_restore(void) {
 		mapping->mod = 0;
 	}
 	
-	Config_read();
+	char* cfg = Config_load();
+	Config_readOptions(cfg);
+	Config_readControls(cfg);
+	free(cfg);
 	
 	renderer.src_w = 0;
 }
@@ -4244,8 +4251,9 @@ int main(int argc , char* argv[]) {
 	Game_open(rom_path);
 	if (!game.is_open) goto finish;
 	
-	// restore configs
-	Config_read();
+	// restore options
+	char* cfg = Config_load();
+	Config_readOptions(cfg);
 	setOverclock(overclock);
 	GFX_setVsync(prevent_tearing);
 	
@@ -4256,6 +4264,9 @@ int main(int argc , char* argv[]) {
 	options_menu.items[1].desc = (char*)core.version;
 	
 	Core_load();
+	// restore controls (after the core has reported its defaults)
+	Config_readControls(cfg);
+	free(cfg);
 	Input_init(NULL);
 		
 	SND_init(core.sample_rate, core.fps);
