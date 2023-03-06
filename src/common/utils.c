@@ -87,6 +87,11 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 		tmp[0] = '\0';
 	}
 }
+void getEmuPath(char* emu_name, char* pak_path) {
+	sprintf(pak_path, "%s/Emus/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, emu_name);
+	if (exists(pak_path)) return;
+	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, emu_name);
+}
 
 void normalizeNewline(char* line) {
 	int len = strlen(line);

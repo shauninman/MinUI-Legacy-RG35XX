@@ -13,20 +13,44 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
-Emulator and Controls options aren't being restored in some cases
-	eg. NES (both), GB (controls)
-		nes value case is different between what is written to the cfg and what is displayed could that be it?
-		Is it because I'm renaming the controls?
-			no it's because Config_read() moved before we receive the cores input mapping
-			need to split into two
-		picoarch calls load_config twice! 
-			once manually and 
-			a second time in the environment callback
-				for each RETRO_ENVIRONMENT_SET_CORE_OPTIONS*
+minarch
+	move overrides to a text cfg file that lives in the pak
+		that way I don't have to update minarch to support new cores
+		this will solve the following two (three?) items too
+		will need to make getEmuPath() a util function
+		this will also solve the union platform overrides problem
+	figure out how to handle different button mappings for cores with different modes
+		eg. GG or SMS with picodrive
+	also different defaults
+	some cores can only fast forward with prevent tearing off
+		can this be set as an override preference?
+		
+		
 
-create a clean image to flash and install over
-	advanced users seem to be confused about how simple it is to install :sweat_smile:
-	this might be difficult with the gpio revs on newer devices
+
+
+		mid-rewrite
+		GG, SMS, and PKM (at least) all crash on launch
+		add default.cfg to all extra paks
+		revisit default.cfg of all paks that share a core to ensure they have the best defaults for their specific purpose
+			eg. MGBA vs SGB, GB vs GBC, MD vs GG vs SMS
+		finally delete the overrides folder
+		delete CoreOverrides and move OptionOverride and ButtonMapping structs into main.c
+		
+		
+		
+	
+	hide Restore defaults if currently using defaults?
+	
+	can I support changing discs in multi-disc pbps?
+	
+	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
+		and Shortcuts > Toggle Scanlines to Cycle Effect
+		or don't because my cpu scalers are bad (performance-wise)
+		or flesh them out just because :sweat_smile:
+	eggs implemented mixed scale neon scalers, hook those up
+		I should probably rewrite the entire render pipeline now that I better understand
+		the requirements for resolution independence...
 
 add most recent uImage/kernel changes
 	wait till things settle
@@ -40,28 +64,11 @@ hdmi
 		still getting through somehow...
 	audio
 
-minarch
-	move overrides to a text cfg file that lives in the pak
-		that way I don't have to update minarch to support new cores
-		this will solve the following two (three?) items too
-		will need to make getEmuPath() a util function
-		this will also solve the union platform overrides problem
-	figure out how to handle different button mappings for cores with different modes
-		eg. GG or SMS with picodrive
-	also different defaults
-	some cores can only fast forward with prevent tearing off
-		can this be set as an override preference?
-	
-	
-	can I support changing discs in multi-disc pbps?
-	
-	change Frontend > Scanlines/Grid to Screen Effect (None, Scanlines, Grid, LCD)
-		and Shortcuts > Toggle Scanlines to Cycle Effect
-		or don't because my cpu scalers are bad (performance-wise)
-		or flesh them out just because :sweat_smile:
-	eggs implemented mixed scale neon scalers, hook those up
-		I should probably rewrite the entire render pipeline now that I better understand
-		the requirements for resolution independence...
+
+create a clean image to flash and install over
+	advanced users seem to be confused about how simple it is to install :sweat_smile:
+	this might be difficult with the gpio revs on newer devices
+
 
 minui
 	- 

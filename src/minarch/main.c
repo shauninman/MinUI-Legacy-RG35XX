@@ -20,38 +20,7 @@
 #include "utils.h"
 #include "api.h"
 #include "scaler_neon.h"
-
-///////////////////////////////////////
-
 #include "overrides.h"
-#include "overrides/fceumm.h"
-#include "overrides/fake-08.h"
-#include "overrides/gambatte.h"
-#include "overrides/gpsp.h"
-#include "overrides/mgba.h"
-#include "overrides/mednafen_pce_fast.h"
-#include "overrides/mednafen_vb.h"
-#include "overrides/mednafen_supafaust.h"
-#include "overrides/pcsx_rearmed.h"
-#include "overrides/picodrive.h"
-#include "overrides/pokemini.h"
-#include "overrides/snes9x2005_plus.h"
-
-static CoreOverrides* overrides[] = {
-	&fake08_overrides,
-	&fceumm_overrides,
-	&gambatte_overrides,
-	&gpsp_overrides,
-	&mednafen_pce_fast_overrides,
-	&mednafen_supafaust_overrides,
-	&mednafen_vb_overrides,
-	&mgba_overrides,
-	&pcsx_rearmed_overrides,
-	&picodrive_overrides,
-	&pokemini_overrides,
-	&snes9x2005_plus_overrides,
-	NULL,
-};
 
 ///////////////////////////////////////
 
@@ -98,8 +67,6 @@ static struct Core {
 	const char name[128]; // eg. gambatte
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
 	const char extensions[128]; // eg. gb|gbc|dmg
-	
-	CoreOverrides* overrides;
 	
 	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
 	const char saves_dir[MAX_PATH]; // eg. /mnt/sdcard/Saves/GB
@@ -644,7 +611,7 @@ static const char* device_button_names[LOCAL_BUTTON_COUNT] = {
 	[BTN_ID_L2]		= "L2",
 	[BTN_ID_R2]		= "R2",
 };
-static ButtonMapping default_button_mapping[] = {
+static ButtonMapping default_button_mapping[] = { // used if pak.cfg doesn't exist or doesn't have bindings
 	{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 	{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
 	{"Left",		RETRO_DEVICE_ID_JOYPAD_LEFT,	BTN_ID_LEFT},
@@ -663,7 +630,27 @@ static ButtonMapping default_button_mapping[] = {
 	{"R3 Button",	RETRO_DEVICE_ID_JOYPAD_R3,		BTN_ID_NONE},
 	{NULL,0,0}
 };
-static const char* core_button_names[RETRO_BUTTON_COUNT];
+static ButtonMapping button_label_mapping[] = { // used to lookup the retro_id and local btn_id from button name
+	{"NONE",	-1,								BTN_ID_NONE},
+	{"UP",		RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
+	{"DOWN",	RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
+	{"LEFT",	RETRO_DEVICE_ID_JOYPAD_LEFT,	BTN_ID_LEFT},
+	{"RIGHT",	RETRO_DEVICE_ID_JOYPAD_RIGHT,	BTN_ID_RIGHT},
+	{"A",		RETRO_DEVICE_ID_JOYPAD_A,		BTN_ID_A},
+	{"B",		RETRO_DEVICE_ID_JOYPAD_B,		BTN_ID_B},
+	{"X",		RETRO_DEVICE_ID_JOYPAD_X,		BTN_ID_X},
+	{"Y",		RETRO_DEVICE_ID_JOYPAD_Y,		BTN_ID_Y},
+	{"START",	RETRO_DEVICE_ID_JOYPAD_START,	BTN_ID_START},
+	{"SELECT",	RETRO_DEVICE_ID_JOYPAD_SELECT,	BTN_ID_SELECT},
+	{"L1",		RETRO_DEVICE_ID_JOYPAD_L,		BTN_ID_L1},
+	{"R1",		RETRO_DEVICE_ID_JOYPAD_R,		BTN_ID_R1},
+	{"L2",		RETRO_DEVICE_ID_JOYPAD_L2,		BTN_ID_L2},
+	{"R2",		RETRO_DEVICE_ID_JOYPAD_R2,		BTN_ID_R2},
+	{"L3",		RETRO_DEVICE_ID_JOYPAD_L3,		BTN_ID_NONE},
+	{"R3",		RETRO_DEVICE_ID_JOYPAD_R3,		BTN_ID_NONE},
+	{NULL,0,0}
+};
+static ButtonMapping core_button_mapping[RETRO_BUTTON_COUNT+1] = {0};
 
 // NOTE: these must be in BTN_ID_ order also off by 1 because of NONE (which is -1 in BTN_ID_ land)
 static char* button_labels[] = {
@@ -730,14 +717,14 @@ enum {
 };
 
 static struct Config {
-	// TODO: these would be loaded cfg files
-	// char* plat_overrides; // overrides.cfg based on platform limitations
-	// char* user_overrides; // minarch.cfg or game.cfg based on user preference
+	char* default_cfg; // pak.cfg based on platform limitations
+	char* user_cfg; // minarch.cfg or game.cfg based on user preference
 	OptionList frontend;
 	OptionList core;
 	ButtonMapping* controls;
 	ButtonMapping* shortcuts;
 	int loaded;
+	int initialized;
 } config = {
 	.frontend = (OptionList){
 		.count = FE_OPT_COUNT,
@@ -833,13 +820,14 @@ static struct Config {
 		{NULL}
 	},
 };
-static void Config_getValue(char* cfg, const char* key, char* out_value) {
+static int Config_getValue(char* cfg, const char* key, char* out_value, int* lock) {
 	char* tmp = cfg;
 	while ((tmp = strstr(tmp, key))) {
+		if (lock!=NULL) *lock = (tmp>cfg && *(tmp-1)=='-'); // prefixed with a `-` means lock
 		tmp += strlen(key);
 		if (!strncmp(tmp, " = ", 3)) break;
 	};
-	if (!tmp) return;
+	if (!tmp) return 0;
 	tmp += 3;
 	
 	strncpy(out_value, tmp, 256);
@@ -847,8 +835,9 @@ static void Config_getValue(char* cfg, const char* key, char* out_value) {
 	tmp = strchr(out_value, '\n');
 	if (!tmp) tmp = strchr(out_value, '\r');
 	if (tmp) *tmp = '\0';
-	
-	// LOG_info("%s = %s\n", key, out_value);
+
+	// LOG_info("\t%s = %s\n", key, out_value);
+	return 1;
 }
 
 static void setOverclock(int i) {
@@ -881,34 +870,111 @@ static void Config_getPath(char* filename, int override) {
 	if (override) sprintf(filename, "%s/%s.cfg", core.config_dir, game.name);
 	else sprintf(filename, "%s/minarch.cfg", core.config_dir);
 }
-static void Config_readOptions(char* cfg) {
+static void Config_init(void) {
+	if (!config.default_cfg || config.initialized) return;
+	
+	LOG_info("Config_init\n");
+	char* tmp = config.default_cfg;
+	char* tmp2;
+	char* key;
+	
+	char button_name[128];
+	char button_id[128];
+	int i = 0;
+	while ((tmp = strstr(tmp, "bind "))) {
+		tmp += 5; // tmp now points to the button name (plus the rest of the line)
+		key = tmp;
+		tmp = strstr(tmp, " = ");
+		if (!tmp) break;
+		
+		int len = tmp-key;
+		strncpy(button_name, key, len);
+		button_name[len] = '\0';
+		
+		tmp += 3;
+		strncpy(button_id, tmp, 128);
+		tmp2 = strchr(button_id, '\n');
+		if (!tmp2) tmp2 = strchr(button_id, '\r');
+		if (tmp2) *tmp2 = '\0';
+		
+		int retro_id = -1;
+		int local_id = -1;
+		
+		tmp2 = strrchr(button_id, ':');
+		int remap = 0;
+		if (tmp2) {
+			for (int j=0; button_label_mapping[j].name; j++) {
+				ButtonMapping* button = &button_label_mapping[j];
+				if (!strcmp(tmp2+1,button->name)) {
+					retro_id = button->retro;
+					break;
+				}
+			}
+			*tmp2 = '\0';
+		}
+		for (int j=0; button_label_mapping[j].name; j++) {
+			ButtonMapping* button = &button_label_mapping[j];
+			if (!strcmp(button_id,button->name)) {
+				local_id = button->local;
+				if (retro_id==-1) retro_id = button->retro;
+				break;
+			}
+		}
+		
+		tmp += strlen(button_id); // prepare to continue search
+		
+		LOG_info("\tbind %s (%s) %i:%i\n", button_name, button_id, local_id, retro_id);
+		
+		// TODO: test this without a final line return
+		tmp2 = calloc(strlen(button_name)+1, sizeof(char));
+		strcpy(tmp2, button_name);
+		ButtonMapping* button = &core_button_mapping[i++];
+		button->name = tmp2;
+		button->retro = retro_id;
+		button->local = local_id;
+	};
+	
+	config.initialized = 1;
+}
+static void Config_quit(void) {
+	if (!config.initialized) return;
+	for (int i=0; core_button_mapping[i].name; i++) {
+		free(core_button_mapping[i].name);
+	}
+}
+static void Config_readOptionsString(char* cfg) {
+	if (!cfg) return;
+
 	LOG_info("Config_readOptions\n");
 	char key[256];
 	char value[256];
 	for (int i=0; config.frontend.options[i].key; i++) {
 		Option* option = &config.frontend.options[i];
-		Config_getValue(cfg, option->key, value);
-		// TODO: handle not finding the expected value
+		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.frontend, option->key, value);
 		Config_syncFrontend(i, option->value);
 	}
 	
 	for (int i=0; config.core.options[i].key; i++) {
 		Option* option = &config.core.options[i];
-		Config_getValue(cfg, option->key, value);
-		// TODO: handle not finding the expected value
+		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.core, option->key, value);
 	}
 }
-static void Config_readControls(char* cfg) {
+static void Config_readControlsString(char* cfg) {
+	if (!cfg) return;
+
 	LOG_info("Config_readControls\n");
 	char key[256];
 	char value[256];
+	char* tmp;
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		sprintf(key, "bind %s", mapping->name);
 		sprintf(value, "NONE");
-		Config_getValue(cfg, key, value);
+		if (!Config_getValue(cfg, key, value, NULL)) continue;
+		if ((tmp = strrchr(value, ':'))) *tmp = '\0'; // this is a binding artifact in default.cfg, ignore
+		
 		int id = -1;
 		for (int j=0; button_labels[j]; j++) {
 			if (!strcmp(button_labels[j],value)) {
@@ -916,6 +982,7 @@ static void Config_readControls(char* cfg) {
 				break;
 			}
 		}
+		// LOG_info("\t%s (%i)\n", value, id);
 		mapping->local = id;
 		mapping->mod = 0;
 	}
@@ -924,7 +991,7 @@ static void Config_readControls(char* cfg) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		sprintf(key, "bind %s", mapping->name);
 		sprintf(value, "NONE");
-		Config_getValue(cfg, key, value);
+		if (!Config_getValue(cfg, key, value, NULL)) continue;
 		
 		int id = -1;
 		for (int j=0; shortcut_labels[j]; j++) {
@@ -943,22 +1010,40 @@ static void Config_readControls(char* cfg) {
 		mapping->mod = mod;
 	}
 }
-static char* Config_load(void) {
+static void Config_load(void) {
 	LOG_info("Config_load\n");
+	
+	char default_path[MAX_PATH];
+	getEmuPath((char *)core.tag, default_path);
+	char* tmp = strrchr(default_path, '/');
+	strcpy(tmp,"/default.cfg");
+	
+	if (exists(default_path)) config.default_cfg = allocFile(default_path);
+	else config.default_cfg = NULL;
+	
 	char path[MAX_PATH];
 	config.loaded = CONFIG_NONE;
-
 	int override = 0;
 	Config_getPath(path, CONFIG_WRITE_GAME);
 	if (exists(path)) override = 1; 
 	if (!override) Config_getPath(path, CONFIG_WRITE_ALL);
 	
-	char* cfg = allocFile(path);
-	if (!cfg) return NULL;
+	config.user_cfg = allocFile(path);
+	if (!config.user_cfg) return;
 	
 	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
-	
-	return cfg;
+}
+static void Config_free(void) {
+	if (config.default_cfg) free(config.default_cfg);
+	if (config.user_cfg) free(config.user_cfg);
+}
+static void Config_readOptions(void) {
+	Config_readOptionsString(config.default_cfg);
+	Config_readOptionsString(config.user_cfg);
+}
+static void Config_readControls(void) {
+	Config_readControlsString(config.default_cfg);
+	Config_readControlsString(config.user_cfg);
 }
 static void Config_write(int override) {
 	char path[MAX_PATH];
@@ -1032,10 +1117,10 @@ static void Config_restore(void) {
 		mapping->mod = 0;
 	}
 	
-	char* cfg = Config_load();
-	Config_readOptions(cfg);
-	Config_readControls(cfg);
-	free(cfg);
+	Config_load();
+	Config_readOptions();
+	Config_readControls();
+	Config_free();
 	
 	renderer.src_w = 0;
 }
@@ -1060,7 +1145,7 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 	int count;
 	for (count=0; defs[count].key; count++);
 	
-	LOG_info("count: %i\n", count);
+	// LOG_info("count: %i\n", count);
 	
 	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
 	
@@ -1068,7 +1153,6 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 	if (count) {
 		config.core.options = calloc(count+1, sizeof(Option));
 		
-		int enabled_count = 0;
 		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_core_option_definition *def = &defs[i];
@@ -1081,8 +1165,6 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 			len = strlen(def->desc) + 1;
 			item->name = calloc(len, sizeof(char));
 			strcpy(item->name, def->desc);
-			
-			// LOG_info("\tkey: %s name: %s", item->key, item->name);
 			
 			if (def->info) {
 				len = strlen(def->info) + 1;
@@ -1124,33 +1206,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 				// printf("\t%s\n", item->labels[j]);
 			}
 			
-			const char* default_value = def->default_value;
-			if (core.overrides && core.overrides->option_overrides) {
-				for (int k=0; core.overrides->option_overrides[k].key; k++) {
-					OptionOverride* override = &core.overrides->option_overrides[k];
-					if (!strcmp(override->key, item->key)) {
-						default_value = override->value;
-						item->lock = override->lock;
-						break;
-					}
-				}
-			}
-			
-			// LOG_info("\tdefault: %s\n", default_value);
-			
-			item->value = Option_getValueIndex(item, default_value);
+			item->value = Option_getValueIndex(item, def->default_value);
 			item->default_value = item->value;
 			
-			if (!item->lock) enabled_count += 1;
-		}
-		config.core.enabled_count = enabled_count;
-		config.core.enabled_options = calloc(enabled_count+1, sizeof(Option*));
-		int j = 0;
-		for (int i=0; i<config.core.count; i++) {
-			Option* item = &config.core.options[i];
-			if (item->lock) continue;
-			config.core.enabled_options[j] = item;
-			j += 1;
+			LOG_info("\tINIT %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		}
 	}
 	// fflush(stdout);
@@ -1164,7 +1223,6 @@ static void OptionList_vars(const struct retro_variable *vars) {
 	if (count) {
 		config.core.options = calloc(count+1, sizeof(Option));
 	
-		int enabled_count = 0;
 		for (int i=0; i<config.core.count; i++) {
 			int len;
 			const struct retro_variable *var = &vars[i];
@@ -1206,31 +1264,9 @@ static void OptionList_vars(const struct retro_variable *vars) {
 			item->labels[j] = opt;
 			
 			// no native default_value support for retro vars
-			const char* default_value = NULL;
-			if (core.overrides && core.overrides->option_overrides) {
-				for (int k=0; core.overrides->option_overrides[k].key; k++) {
-					OptionOverride* override = &core.overrides->option_overrides[k];
-					if (!strcmp(override->key, item->key)) {
-						default_value = override->value;
-						item->lock = override->lock;
-						break;
-					}
-				}
-			}
-			
-			item->value = Option_getValueIndex(item, default_value);
+			item->value = 0;
 			item->default_value = item->value;
-			if (!item->lock) enabled_count += 1;
 			// printf("SET %s to %s (%i)\n", item->key, default_value, item->value); fflush(stdout);
-		}
-		config.core.enabled_count = enabled_count;
-		config.core.enabled_options = calloc(enabled_count+1, sizeof(Option*));
-		int j = 0;
-		for (int i=0; i<config.core.count; i++) {
-			Option* item = &config.core.options[i];
-			if (item->lock) continue;
-			config.core.enabled_options[j] = item;
-			j += 1;
 		}
 	}
 	// fflush(stdout);
@@ -1260,7 +1296,8 @@ static void OptionList_reset(void) {
 		free(item->key);
 		free(item->name);
 	}
-	free(config.core.enabled_options);
+	if (config.core.enabled_options) free(config.core.enabled_options);
+	config.core.enabled_count = 0;
 	free(config.core.options);
 }
 
@@ -1273,6 +1310,8 @@ static Option* OptionList_getOption(OptionList* list, const char* key) {
 }
 static char* OptionList_getOptionValue(OptionList* list, const char* key) {
 	Option* item = OptionList_getOption(list, key);
+	if (item) LOG_info("\tGET %s (%s) = %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
+	
 	if (item) return item->values[item->value];
 	else LOG_warn("unknown option %s \n", key);
 	return NULL;
@@ -1282,6 +1321,7 @@ static void OptionList_setOptionRawValue(OptionList* list, const char* key, int 
 	if (item) {
 		item->value = value;
 		list->changed = 1;
+		LOG_info("\tRAW SET %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		// if (list->on_set) list->on_set(list, key);
 	}
 	else printf("unknown option %s \n", key); fflush(stdout);
@@ -1291,6 +1331,7 @@ static void OptionList_setOptionValue(OptionList* list, const char* key, const c
 	if (item) {
 		Option_setValue(item, value);
 		list->changed = 1;
+		LOG_info("\tSET %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		// if (list->on_set) list->on_set(list, key);
 	}
 	else printf("unknown option %s \n", key); fflush(stdout);
@@ -1378,6 +1419,8 @@ static void input_poll_callback(void) {
 		if (btn==BTN_NONE) continue; // present buttons can still be unbound
 		if (PAD_isPressed(btn)) buttons |= 1 << config.controls[i].retro;
 	}
+	
+	if (buttons) LOG_info("buttons: %i\n", buttons);
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	// id == RETRO_DEVICE_ID_JOYPAD_MASK or RETRO_DEVICE_ID_JOYPAD_*
@@ -1389,16 +1432,17 @@ static int16_t input_state_callback(unsigned port, unsigned device, unsigned ind
 }
 ///////////////////////////////
 
-void Input_init(const struct retro_input_descriptor *vars) {
+static void Input_init(const struct retro_input_descriptor *vars) {
 	static int input_initialized = 0;
 	if (input_initialized) return;
 
 	LOG_info("Input_init\n");
 	
-	config.controls = core.overrides && core.overrides->button_mapping ? core.overrides->button_mapping : default_button_mapping;
+	config.controls = core_button_mapping[0].name ? core_button_mapping : default_button_mapping;
 	
 	puts("---------------------------------");
 
+	const char* core_button_names[RETRO_BUTTON_COUNT] = {0};
 	int present[RETRO_BUTTON_COUNT];
 	int core_mapped = 0;
 	if (vars) {
@@ -1440,7 +1484,7 @@ void Input_init(const struct retro_input_descriptor *vars) {
 			mapping->ignore = 1;
 			continue;
 		}
-		LOG_info("%s: <%s>\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]));
+		LOG_info("%s: <%s> (%i:%i)\n", mapping->name, (mapping->local==BTN_ID_NONE ? "NONE" : device_button_names[mapping->local]), mapping->local, mapping->retro);
 	}
 	
 	puts("---------------------------------");
@@ -1494,7 +1538,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
-		puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
+		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 		Input_init((const struct retro_input_descriptor *)data);
 		return false;
 	} break;
@@ -1511,11 +1555,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 
 	// TODO: this is called whether using variables or options
 	case RETRO_ENVIRONMENT_GET_VARIABLE: { /* 15 */
-		puts("RETRO_ENVIRONMENT_GET_VARIABLE");
+		// puts("RETRO_ENVIRONMENT_GET_VARIABLE");
 		struct retro_variable *var = (struct retro_variable *)data;
 		if (var && var->key) {
 			var->value = OptionList_getOptionValue(&config.core, var->key);
-			// printf("%s = %s\n", var->key, var->value);
+			// printf("\t%s = %s\n", var->key, var->value);
 		}
 		break;
 	}
@@ -1523,7 +1567,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: this is called if RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION sets out to 0
 	// TODO: not used by anything yet
 	case RETRO_ENVIRONMENT_SET_VARIABLES: { /* 16 */
-		puts("RETRO_ENVIRONMENT_SET_VARIABLES");
+		// puts("RETRO_ENVIRONMENT_SET_VARIABLES");
 		const struct retro_variable *vars = (const struct retro_variable *)data;
 		if (vars) {
 			OptionList_reset();
@@ -1575,14 +1619,14 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: { /* 52 */
-		puts("RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION");
+		// puts("RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION");
 		unsigned *out = (unsigned *)data;
 		if (out)
 			*out = 1;
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS: { /* 53 */
-		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
 			OptionList_reset();
 			OptionList_init((const struct retro_core_option_definition *)data); 
@@ -1590,7 +1634,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: { /* 54 */
-		puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
+		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
 		const struct retro_core_options_intl *options = (const struct retro_core_options_intl *)data;
 		if (options && options->us) {
 			OptionList_reset();
@@ -1657,11 +1701,10 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// TODO: RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK 69
 	// TODO: used by gambatte for L/R palette switching (seems like it needs to return true even if data is NULL to indicate support)
 	case RETRO_ENVIRONMENT_SET_VARIABLE: {
-		puts("RETRO_ENVIRONMENT_SET_VARIABLE");
-		
+		// puts("RETRO_ENVIRONMENT_SET_VARIABLE");
 		const struct retro_variable *var = (const struct retro_variable *)data;
 		if (var && var->key) {
-			// printf("%s = %s\n", var->key, var->value);
+			// printf("\t%s = %s\n", var->key, var->value);
 			OptionList_setOptionValue(&config.core, var->key, var->value);
 			break;
 		}
@@ -2833,14 +2876,6 @@ void Core_open(const char* core_path, const char* tag_name) {
 	
 	LOG_info("core: %s version: %s tag: %s (valid_extensions: %s need_fullpath: %i)\n", core.name, core.version, core.tag, info.valid_extensions, info.need_fullpath);
 	
-	for (int i=0; overrides[i]; i++) {
-		// LOG_info("override: %s core: %s\n", overrides[i]->core_name, core.name);
-		if (!strcmp(overrides[i]->core_name, core.name)) {
-			core.overrides = overrides[i];
-			break;
-		}
-	}
-	
 	sprintf((char*)core.config_dir, SDCARD_PATH "/.userdata/" PLATFORM "/%s-%s", core.tag, core.name);
 	sprintf((char*)core.saves_dir, SDCARD_PATH "/Saves/%s", core.tag);
 	sprintf((char*)core.bios_dir, SDCARD_PATH "/Bios/%s", core.tag);
@@ -3124,6 +3159,23 @@ static MenuList OptionEmulator_menu = {
 static int OptionEmulator_openMenu(MenuList* list, int i) {
 	if (OptionEmulator_menu.items==NULL) {
 		// TODO: where do I free this?
+		
+		if (!config.core.enabled_count) {
+			int enabled_count = 0;
+			for (int i=0; i<config.core.count; i++) {
+				if (!config.core.options[i].lock) enabled_count += 1;
+			}
+			config.core.enabled_count = enabled_count;
+			config.core.enabled_options = calloc(enabled_count+1, sizeof(Option*));
+			int j = 0;
+			for (int i=0; i<config.core.count; i++) {
+				Option* item = &config.core.options[i];
+				if (item->lock) continue;
+				config.core.enabled_options[j] = item;
+				j += 1;
+			}
+		}
+		
 		OptionEmulator_menu.items = calloc(config.core.enabled_count+1, sizeof(MenuItem));
 		for (int j=0; j<config.core.enabled_count; j++) {
 			Option* option = config.core.enabled_options[j];
@@ -3193,6 +3245,7 @@ static MenuList OptionControls_menu = {
 	.items = NULL
 };
 static int OptionControls_openMenu(MenuList* list, int i) {
+	LOG_info("OptionControls_openMenu\n");
 	if (OptionControls_menu.items==NULL) {
 		// TODO: where do I free this?
 		OptionControls_menu.items = calloc(RETRO_BUTTON_COUNT+1, sizeof(MenuItem));
@@ -3200,6 +3253,8 @@ static int OptionControls_openMenu(MenuList* list, int i) {
 		for (int j=0; config.controls[j].name; j++) {
 			ButtonMapping* button = &config.controls[j];
 			if (button->ignore) continue;
+			
+			LOG_info("\t%s (%i:%i)\n", button->name, button->local, button->retro);
 			
 			MenuItem* item = &OptionControls_menu.items[k++];
 			item->id = j;
@@ -4272,8 +4327,9 @@ int main(int argc , char* argv[]) {
 	if (!game.is_open) goto finish;
 	
 	// restore options
-	char* cfg = Config_load();
-	Config_readOptions(cfg); // cores with boot logo option (eg. gb) need to load options early
+	Config_load();
+	Config_init();
+	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
 	GFX_setVsync(prevent_tearing);
 	
@@ -4286,9 +4342,9 @@ int main(int argc , char* argv[]) {
 	options_menu.items[1].desc = (char*)core.version;
 	
 	Core_load();
-	Config_readOptions(cfg); // but others load and report options later (eg. nes)
-	Config_readControls(cfg); // restore controls (after the core has reported its defaults)
-	free(cfg);
+	Config_readOptions(); // but others load and report options later (eg. nes)
+	Config_readControls(); // restore controls (after the core has reported its defaults)
+	Config_free();
 	Input_init(NULL);
 		
 	SND_init(core.sample_rate, core.fps);
@@ -4320,6 +4376,8 @@ finish:
 	
 	Core_quit();
 	Core_close();
+	
+	Config_quit();
 	
 	SDL_FreeSurface(screen);
 	MSG_quit();
