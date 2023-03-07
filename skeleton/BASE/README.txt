@@ -40,18 +40,18 @@ Following Instructions 101
 ----------------------------------------
 Install
 
-Step 0. MinUI is meant to be installed over a working stock TF1. Anbernic's stock TF1 image can be downloaded here: https://drive.google.com/drive/folders/1HfGCxkratM_zYiYfGWCrHZ1AynO3hIwU If you are using two SD cards, the second one should be formatted FAT32.
+MinUI is meant to be installed over a working stock TF1. Anbernic's stock TF1 image can be downloaded here: https://drive.google.com/drive/folders/1HfGCxkratM_zYiYfGWCrHZ1AynO3hIwU If you are using two SD cards, the second one should be formatted FAT32.
 
-Step 1. Copy "dmenu.bin" to the root of the MISC partition of the SD card that goes in the TF1 slot. 
+Copy "dmenu.bin" to the root of the MISC partition of the SD card that goes in the TF1 slot. 
 
-Step 2. Where you copy "MinUI.zip" will depend on if you are using one or two SD cards (using two SD cards is recommended). If using one SD card, copy "MinUI.zip" to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy "MinUI.zip" to the root of the SD card that goes in the TF2 slot. 
+Where you copy "MinUI.zip" (and the Bios, Roms, and Saves folders) will depend on if you are using one or two SD cards (using two SD cards is recommended). If using one SD card, copy them to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy them to the root of the SD card that goes in the TF2 slot. 
 
 During installation (but not on subsequent updates) MinUI will install a custom boot logo. It will save a backup of your existing "boot_logo.bmp.gz" in a folder named "bak" at the root of the ROMS partition of the SD card that goes into the TF1 slot. 
 
 ----------------------------------------
 Update
 
-Follow Step 2 of the Install instructions above.
+If using one SD card, copy "MinUI.zip" to the root of the ROMS partition of the SD card that goes in the TF1 slot. Otherwise copy "MinUI.zip" to the root of the SD card that goes in the TF2 slot. 
 
 ----------------------------------------
 Shortcuts
