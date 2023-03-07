@@ -5,42 +5,28 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
+- updated various frontend and emulator option default values
 - added press A to see entire (or at least more of) truncated option description
-- fixed controls being overwritten by core defaults
+- fixed controls being overridden by core defaults
 
 **Extras**
+- updated various frontend and emulator option default values
 - disabled TurboGrafx-16 option Alternate Turbo Toggle (device doesn't have the buttons used for it, L3/R3)
 
 -------------------------------
 
 minarch
-	move overrides to a text cfg file that lives in the pak
-		that way I don't have to update minarch to support new cores
-		this will solve the following two (three?) items too
-		will need to make getEmuPath() a util function
-		this will also solve the union platform overrides problem
-	figure out how to handle different button mappings for cores with different modes
-		eg. GG or SMS with picodrive
-	also different defaults
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
-		
-		
-
-
-
-		mid-rewrite
-		GG, SMS, and PKM (at least) all crash on launch
-		add default.cfg to all extra paks
-		revisit default.cfg of all paks that share a core to ensure they have the best defaults for their specific purpose
-			eg. MGBA vs SGB, GB vs GBC, MD vs GG vs SMS
-		finally delete the overrides folder
-		delete CoreOverrides and move OptionOverride and ButtonMapping structs into main.c
-		
-		
-		
-	
-	hide Restore defaults if currently using defaults?
+		Boost FF Off|On
+			Prioritize speed when fast forwarding by disabling tearing prevention and increasing CPU speed.
+			
+			SFC (2x with) (Star Fox still only hits 1.5x with)
+			MGBA (2x with) (SGB is fine without)
+			FC (2x without, 2.66x with)
+			PS (depends on game, without FFVII gets 4x, SotN only 2x, Tekken 3 just crashes)
+			SUPA (Starfox 1.5x with)
+			VB (can't be helped, already needs Performance)
 	
 	can I support changing discs in multi-disc pbps?
 	
@@ -48,6 +34,7 @@ minarch
 		and Shortcuts > Toggle Scanlines to Cycle Effect
 		or don't because my cpu scalers are bad (performance-wise)
 		or flesh them out just because :sweat_smile:
+		
 	eggs implemented mixed scale neon scalers, hook those up
 		I should probably rewrite the entire render pipeline now that I better understand
 		the requirements for resolution independence...
@@ -62,6 +49,7 @@ hdmi
 			just need to downsample to a cropped region of the source
 	ignore brightness shortcut when on hdmi
 		still getting through somehow...
+		
 	audio
 
 
@@ -86,13 +74,11 @@ cores
 		disable Alternate Turbo Hotkey (we don't have L3/R3)
 	vb
 		launching directly into native scaling has normal performance
-		but launching into aspect and switching to native tanks the
-		framerate
+		but launching into aspect and switching to native tanks the framerate
 		conversely aspect runs terrible on hdmi (~45fps) but native runs fine
 	pcsx-rearmed
 		reset hangs the PlayStation emulator core
-		Tekken freezes PlayStation emulator core while fast-forwarding
-			actually, ff may be an issue for this core across the board
+		Tekken 3 freezes PlayStation emulator core while fast-forwarding after a while
 
 	
 Union-ize this?
