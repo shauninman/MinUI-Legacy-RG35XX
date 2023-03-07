@@ -20,7 +20,6 @@
 #include "utils.h"
 #include "api.h"
 #include "scaler_neon.h"
-#include "overrides.h"
 
 ///////////////////////////////////////
 
@@ -611,6 +610,16 @@ static const char* device_button_names[LOCAL_BUTTON_COUNT] = {
 	[BTN_ID_L2]		= "L2",
 	[BTN_ID_R2]		= "R2",
 };
+
+typedef struct ButtonMapping { 
+	char* name;
+	int retro;
+	int local; // TODO: dislike this name...
+	int mod;
+	int default_;
+	int ignore;
+} ButtonMapping;
+
 static ButtonMapping default_button_mapping[] = { // used if pak.cfg doesn't exist or doesn't have bindings
 	{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_UP},
 	{"Down",		RETRO_DEVICE_ID_JOYPAD_DOWN,	BTN_ID_DOWN},
@@ -1420,7 +1429,7 @@ static void input_poll_callback(void) {
 		if (PAD_isPressed(btn)) buttons |= 1 << config.controls[i].retro;
 	}
 	
-	if (buttons) LOG_info("buttons: %i\n", buttons);
+	// if (buttons) LOG_info("buttons: %i\n", buttons);
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	// id == RETRO_DEVICE_ID_JOYPAD_MASK or RETRO_DEVICE_ID_JOYPAD_*
@@ -3202,7 +3211,7 @@ static int OptionEmulator_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionEmulator_menu);
 	}
 	else {
-		Menu_message("This core doesn't have any options.", (char*[]){ "B","BACK", NULL });
+		Menu_message("This core has no options.", (char*[]){ "B","BACK", NULL });
 	}
 	
 	return MENU_CALLBACK_NOP;
