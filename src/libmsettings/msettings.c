@@ -98,6 +98,8 @@ int GetBrightness(void) { // 0-10
 	return settings->brightness;
 }
 void SetBrightness(int value) {
+	if (settings->hdmi) return;
+	
 	int raw;
 	switch (value) {
 		case 0: raw=16; break; 		//   0
@@ -130,15 +132,14 @@ void SetVolume(int value) {
 }
 
 void SetRawBrightness(int val) { // 0 - 1024
+	if (settings->hdmi) return;
+	
 	// printf("SetRawBrightness(%i)\n", val); fflush(stdout);
 	int fd = open(BRIGHTNESS_PATH, O_WRONLY);
 	if (fd>=0) {
 		dprintf(fd,"%d",val);
 		close(fd);
 	}
-	
-	// this prevents exiting/launching from turning the screen back on
-	// SetHDMI(GetHDMI()); // TODO: isn't working
 }
 void SetRawVolume(int val) { // 0 - 40
 	int fd = open(VOLUME_PATH, O_WRONLY);
@@ -157,18 +158,9 @@ void SetJack(int value) {
 	
 	settings->jack = value;
 	SetVolume(GetVolume());
-	
-	// TODO: tmp, testing hdmi without an hdmi output
-	// int fd = open(BACKLIGHT_PATH, O_WRONLY);
-	// if (fd>=0) {
-	// 	dprintf(fd,"%d",value ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK);
-	// 	close(fd);
-	// }
 }
 
 int GetHDMI(void) {	
-	// TODO: tmp, testing hdmi without an hdmi output
-	// return settings->jack;
 	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
 	return settings->hdmi;
 }

@@ -15,6 +15,8 @@ export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
 
 #######################################
 
+echo noop > /sys/devices/b0238000.mmc/mmc_host/mmc0/emmc_boot_card/block/mmcblk0/queue/scheduler
+echo noop > /sys/devices/b0230000.mmc/mmc_host/mmc1/sd_card/block/mmcblk1/queue/scheduler
 echo on > /sys/devices/b0238000.mmc/mmc_host/mmc0/power/control
 echo on > /sys/devices/b0230000.mmc/mmc_host/mmc1/power/control
 
@@ -30,12 +32,12 @@ mkdir -p "$LOGS_PATH"
 mkdir -p "$USERDATA_PATH/.minui"
 AUTO_PATH=$USERDATA_PATH/auto.sh
 if [ -f "$AUTO_PATH" ]; then
-	"$AUTO_PATH"
+	"$AUTO_PATH" # &> $LOGS_PATH/auto.txt
 fi
 
 #######################################
 
-keymon.elf & # &> /mnt/sdcard/keymon.txt &
+keymon.elf & # &> $LOGS_PATH/keymon.txt &
 # ./batmon.sh &> /mnt/sdcard/batmon.txt &
 
 #######################################

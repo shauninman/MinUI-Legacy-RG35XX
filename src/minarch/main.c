@@ -594,22 +594,6 @@ enum {
 
 #define LOCAL_BUTTON_COUNT 14
 #define RETRO_BUTTON_COUNT 16 // allow L3/R3 to be remapped by user if desired, eg. Virtual Boy uses extra buttons for right d-pad
-static const char* device_button_names[LOCAL_BUTTON_COUNT] = {
-	[BTN_ID_UP]		= "UP",
-	[BTN_ID_DOWN]	= "DOWN",
-	[BTN_ID_LEFT]	= "LEFT",
-	[BTN_ID_RIGHT]	= "RIGHT",
-	[BTN_ID_SELECT]	= "SELECT",
-	[BTN_ID_START]	= "START",
-	[BTN_ID_Y]		= "Y",
-	[BTN_ID_X]		= "X",
-	[BTN_ID_B]		= "B",
-	[BTN_ID_A]		= "A",
-	[BTN_ID_L1]		= "L1",
-	[BTN_ID_R1]		= "R1",
-	[BTN_ID_L2]		= "L2",
-	[BTN_ID_R2]		= "R2",
-};
 
 typedef struct ButtonMapping { 
 	char* name;
@@ -660,6 +644,24 @@ static ButtonMapping button_label_mapping[] = { // used to lookup the retro_id a
 	{NULL,0,0}
 };
 static ButtonMapping core_button_mapping[RETRO_BUTTON_COUNT+1] = {0};
+
+static const char* device_button_names[LOCAL_BUTTON_COUNT] = {
+	[BTN_ID_UP]		= "UP",
+	[BTN_ID_DOWN]	= "DOWN",
+	[BTN_ID_LEFT]	= "LEFT",
+	[BTN_ID_RIGHT]	= "RIGHT",
+	[BTN_ID_SELECT]	= "SELECT",
+	[BTN_ID_START]	= "START",
+	[BTN_ID_Y]		= "Y",
+	[BTN_ID_X]		= "X",
+	[BTN_ID_B]		= "B",
+	[BTN_ID_A]		= "A",
+	[BTN_ID_L1]		= "L1",
+	[BTN_ID_R1]		= "R1",
+	[BTN_ID_L2]		= "L2",
+	[BTN_ID_R2]		= "R2",
+};
+
 
 // NOTE: these must be in BTN_ID_ order also off by 1 because of NONE (which is -1 in BTN_ID_ land)
 static char* button_labels[] = {
