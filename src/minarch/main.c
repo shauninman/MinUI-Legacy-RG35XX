@@ -823,7 +823,7 @@ static struct Config {
 static int Config_getValue(char* cfg, const char* key, char* out_value, int* lock) {
 	char* tmp = cfg;
 	while ((tmp = strstr(tmp, key))) {
-		if (lock!=NULL) *lock = (tmp>cfg && *(tmp-1)=='-'); // prefixed with a `-` means lock
+		if (lock!=NULL && tmp>cfg && *(tmp-1)=='-') *lock = 1; // prefixed with a `-` means lock
 		tmp += strlen(key);
 		if (!strncmp(tmp, " = ", 3)) break;
 	};
