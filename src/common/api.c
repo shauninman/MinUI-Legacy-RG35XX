@@ -1321,6 +1321,7 @@ void POW_warn(int enable) {
 void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep) {
 	int dirty = _dirty ? *_dirty : 0;
 	int show_setting = _show_setting ? *_show_setting : 0;
+	int ignore_menu = GetHDMI();
 	
 	static uint32_t cancel_start = 0;
 	static uint32_t power_start = 0;
@@ -1381,10 +1382,10 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	}
 	
 	#define MENU_DELAY 250 // also in PAD_tappedMenu()
-	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY && !GetHDMI())) {
+	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY && !ignore_menu)) {
 		setting_start = now;
 		if (PAD_isPressed(BTN_MENU)) {
-			show_setting = 1;
+			if (!ignore_menu) show_setting = 1;
 		}
 		else {
 			show_setting = 2;

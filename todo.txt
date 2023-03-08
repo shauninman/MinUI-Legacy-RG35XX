@@ -38,23 +38,28 @@ minarch
 	eggs implemented mixed scale neon scalers, hook those up
 		I should probably rewrite the entire render pipeline now that I better understand
 		the requirements for resolution independence...
+		and because I'll need a self-contained implementation to be able to address the unique quirks of each platform I want to support
 
 add most recent uImage/kernel changes
 	wait till things settle
+	keep an eye on gpu work
+		not interested in tripling boot time for gpu access
+		I would never pick up the device again if it took that long to boot
 
 hdmi
+	prevent sleep (auto or manual) when on hdmi (or turn off mirroring?)
 	minarch menu
 		need to figure out how to create a 4:3 thumb from a distorted framebuffer
 		should be able to reconstruct it with screen->w|h and renderer.(src|dst)_(w|h)
 			just need to downsample to a cropped region of the source
 	ignore brightness shortcut when on hdmi
 		still getting through somehow...
-		
 	audio
+	usb contollers
 
 
 create a clean image to flash and install over
-	advanced users seem to be confused about how simple it is to install :sweat_smile:
+	advanced users seem to be confused about how simple it is tow install :sweat_smile:
 	this might be difficult with the gpio revs on newer devices
 
 
@@ -70,8 +75,6 @@ checkout eggs tools
 	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
 
 cores
-	pce
-		disable Alternate Turbo Hotkey (we don't have L3/R3)
 	vb
 		launching directly into native scaling has normal performance
 		but launching into aspect and switching to native tanks the framerate
