@@ -54,6 +54,7 @@ static struct Renderer {
 	int dst_p;
 
 	scale_neon_t scaler;
+	const void* data;
 } renderer;
 
 ///////////////////////////////////////
@@ -2742,6 +2743,7 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	// eg. PS@10 60/240
 	
 	if (!data) return;
+	renderer.data = data; // this pointer isn't guaranteed to hang around but this approach worked on the Mini
 
 	// force resize when hdmi status changes
 	static int had_hdmi = -1;
@@ -4311,6 +4313,9 @@ static void limitFF(void) {
 }
 
 int main(int argc , char* argv[]) {
+	LOG_info("MinArch\n");
+	InitSettings();
+
 	setOverclock(overclock); // default to normal
 	// force a stack overflow to ensure asan is linked and actually working
 	// char tmp[2];
@@ -4329,7 +4334,6 @@ int main(int argc , char* argv[]) {
 	POW_init();
 	
 	MSG_init();
-	InitSettings();
 	
 	// Overrides_init();
 	

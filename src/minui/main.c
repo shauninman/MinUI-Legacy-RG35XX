@@ -1160,10 +1160,10 @@ int main (int argc, char *argv[]) {
 	if (autoResume()) return 0; // nothing to do
 	
 	LOG_info("MinUI\n");
+	InitSettings();
 	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	POW_init();
-	InitSettings();
 	PAD_reset();
 	
 	SDL_Surface* version = NULL;
