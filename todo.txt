@@ -15,6 +15,9 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
+cave story core?
+	would need to set up disabling autosleep and warning about lack of autosave and update ui for lack of save states, etc
+	
 minarch
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
@@ -47,15 +50,31 @@ add most recent uImage/kernel changes
 		I would never pick up the device again if it took that long to boot
 
 hdmi
-	prevent sleep (auto or manual) when on hdmi (or turn off mirroring?)
+	I might this off as a novelty
+		it's a distraction
+		my time is better spent unionizing this for the Mini
 	minarch menu
 		need to figure out how to create a 4:3 thumb from a distorted framebuffer
 		should be able to reconstruct it with screen->w|h and renderer.(src|dst)_(w|h)
 			just need to downsample to a cropped region of the source
-	ignore brightness shortcut when on hdmi
-		still getting through somehow...
+			or keep the libretro buffer data and use that to create the snapshot and resized backing
+				
 	audio
+		the following works if we boot with hdmi attached but hangs/crashes when we disconnect hdmi
+			I imagine the crash is because SDL is trying to write to a device that is no longer present
+			the hang is the result of the audio callback stopping maybe?
+			no, it's hanging in SDL_CloseAudio()
+				could this have something to do with env vars?
+				eggs had a similar crash with another (something like NO BLANK ON QUIT) flag
+		
+			if (GetHDMI()) SDL_putenv("AUDIODEV=plughw:0,1");
+			else SDL_putenv("AUDIODEV=default");
+		
 	usb contollers
+	prevent sleep (auto or manual) when on hdmi
+		should show a message saying sleep is disabled on hdmi or
+		turn off mirroring while asleep
+		I still think sleep on HDMI is a bad idea unless connected to power...
 
 
 create a clean image to flash and install over
@@ -110,7 +129,4 @@ keymon
 		would be useful for Files.pak and third-party binaries
 	jack
 		instead of manually polling once a second use poll()?
-	hdmi
-		turn off screen when connected
-		fb changes... eek
 
