@@ -34,6 +34,38 @@ framebuffer to png
 	
 	adb pull /dev/fb0 && magick -size 640x3840 "RGB565:fb0" fb0.png && open fb0.png
 
+---------------------------------------------------------------------------------------------------------
+
 remove file from repo and history
 
 	git filter-repo --path file.ext --invert-paths --force
+
+---------------------------------------------------------------------------------------------------------
+
+prepare a stock TF1.img (on macOS)
+	
+	/dev/disk4 for me (use `diskutil list` to identify correct devices)
+	add ` && say done` to commands that take a while for audio feedback upon completion
+	
+	download the official release or backup a fresh stock sd card
+	flash the initial img to a new card
+	use gdisk to delete and recreate partition 4 (ROMS)
+		set size to +3G
+	erase the ROMS partition in Disk Utility
+	zero all free space on the accessible parititions
+		
+		diskutil secureErase freespace 0 disk4s1
+		diskutil secureErase freespace 0 disk4s4
+	
+	delete all hidden macOS files and folders
+	unmount and use dd to create a clean image (use rdisk* for faster raw reads)
+	
+		sudo dd if=/dev/rdisk4 of=TF1-raw.dmg bs=1m count=1152
+	
+	removing trailing null bytes
+	
+		python3 -c "open('TF1.img', 'wb').write(open('TF1-raw.img', 'rb').read().rstrip(b'\0'))"
+	
+	zip img file (macOS Compress contextual menu is somehow smaller than command line)
+
+---------------------------------------------------------------------------------------------------------
