@@ -5,19 +5,24 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
-- updated various frontend and emulator option default values
-- added press A to see entire (or at least more of) truncated option description
-- fixed controls being overridden by core defaults
+- 
 
 **Extras**
-- updated various frontend and emulator option default values
-- disabled TurboGrafx-16 option Alternate Turbo Toggle (device doesn't have the buttons used for it, L3/R3)
+- 
 
 -------------------------------
 
-cave story core?
-	would need to set up disabling autosleep and warning about lack of autosave and update ui for lack of save states, etc
+hardware rev
+	volumn and menu buttons no longer work
+	headphone jack detection no longer works
+	booting doesn't work reliably
 	
+	all of the above works fine on stock firmware
+	eggs cooked up ways to 
+		under/overclock the cpu and 
+		access more physical memory for the framebuffer 
+	on unmodified stock :tada:
+
 minarch
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
@@ -102,6 +107,11 @@ cores
 		reset hangs the PlayStation emulator core
 		Tekken 3 freezes PlayStation emulator core while fast-forwarding after a while
 
+	cave story
+		would need to set up disabling autosleep and 
+		warning about lack of autosave and 
+		update ui for lack of save states, etc
+	
 	
 Union-ize this?
 	Mini?
