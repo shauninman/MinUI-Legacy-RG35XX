@@ -18,10 +18,7 @@ if [ ! -f $FLAG_PATH ]; then
 	echo "backing up"
 	BAK_PATH=$TF1_PATH/bak
 	mkdir -p $BAK_PATH
-	cp /misc/modules/gpio_keys_polled.ko $BAK_PATH
 	cp /misc/boot_logo.bmp.gz $BAK_PATH
-	cp /misc/kernel.dtb $BAK_PATH
-	cp /misc/uImage $BAK_PATH
 fi
 
 was_updated() {
@@ -53,15 +50,11 @@ was_updated() {
 if [ ! -f $FLAG_PATH ] || was_updated; then
 	echo "updating misc partition"
 	mount -o remount,rw /dev/block/actb /misc
-	rm -f /misc/uImage
-	cp $SYSTEM_PATH/dat/uImage /misc
 	cp $SYSTEM_PATH/dat/dmenu.bin /misc
 	if [ ! -f $FLAG_PATH ]; then
 		# only replace boot logo on install not update!
 		cp $SYSTEM_PATH/dat/boot_logo.bmp.gz /misc
 	fi
-	cp $SYSTEM_PATH/dat/kernel.dtb /misc
-	cp $SYSTEM_PATH/dat/gpio_keys_polled.ko /misc/modules
 	touch $FLAG_PATH
 	sync && reboot
 fi
