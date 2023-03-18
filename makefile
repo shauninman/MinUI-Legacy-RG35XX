@@ -32,6 +32,7 @@ sys:
 	cd ./src/keymon && make
 	cd ./src/minarch && make
 	cd ./src/minui && make
+	cd ./src/overclock && make
 	cd ./src/boot && ./build.sh
 
 all-cores:
@@ -63,6 +64,7 @@ bundle:
 	cp ./src/libmsettings/libmsettings.so ./build/SYSTEM/rg35xx/lib
 	cp ./src/keymon/keymon.elf ./build/SYSTEM/rg35xx/bin
 	cp ./src/minarch/minarch.elf ./build/SYSTEM/rg35xx/bin
+	cp ./src/overclock/overclock.elf ./build/SYSTEM/rg35xx/bin
 	cp ./src/minui/minui.elf ./build/SYSTEM/rg35xx/paks/MinUI.pak
 	cp ./src/clock/clock.elf ./build/EXTRAS/Tools/rg35xx/Clock.pak
 	
