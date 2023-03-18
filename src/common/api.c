@@ -991,7 +991,17 @@ static void SND_selectResampler(void) { // plat_sound_select_resampler
 }
 size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_sound_write / plat_sound_write_resample
 	if (snd.frame_count==0) return 0;
-
+	
+	// static int had_hdmi = -1;
+	// int has_hdmi = GetHDMI();
+	// if (had_hdmi<0) had_hdmi = has_hdmi;
+	// if (has_hdmi!=had_hdmi) {
+	// 	had_hdmi = has_hdmi;
+	// 	if (has_hdmi) sleep(2);
+	// 	SND_quit();
+	// 	SND_init(snd.sample_rate_in, snd.frame_rate);
+	// }
+	
 	SDL_LockAudio();
 
 	int consumed = 0;
@@ -1019,6 +1029,10 @@ size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_s
 }
 
 void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
+	LOG_info("SND_init\n");
+	
+	// SDL_putenv(GetHDMI()?"AUDIODEV=plughw:0,1":"default");
+	
 	SDL_InitSubSystem(SDL_INIT_AUDIO);
 	
 	snd.frame_rate = frame_rate;
