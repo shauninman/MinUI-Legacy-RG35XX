@@ -23,7 +23,6 @@ echo on > /sys/devices/b0230000.mmc/mmc_host/mmc1/power/control
 export CPU_SPEED_MENU=504000
 export CPU_SPEED_GAME=1296000
 export CPU_SPEED_PERF=1488000
-export CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
 #######################################
@@ -43,19 +42,20 @@ keymon.elf & # &> $LOGS_PATH/keymon.txt &
 #######################################
 
 cd $(dirname "$0")
-export EXEC_PATH=/tmp/minui_exec
+
+EXEC_PATH=/tmp/minui_exec
+NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 while [ -f "$EXEC_PATH" ]; do
-	echo $CPU_SPEED_PERF > "$CPU_PATH"
+	overclock.elf $CPU_SPEED_PERF
 	./minui.elf &> $LOGS_PATH/minui.txt
 	sync
 	
-	NEXT="/tmp/next"
-	if [ -f $NEXT ]; then
-		CMD=`cat $NEXT`
+	if [ -f $NEXT_PATH ]; then
+		CMD=`cat $NEXT_PATH`
 		eval $CMD
-		rm -f $NEXT
-		echo $CPU_SPEED_PERF > "$CPU_PATH"
+		rm -f $NEXT_PATH
+		overclock.elf $CPU_SPEED_PERF
 		sync
 	fi
 done

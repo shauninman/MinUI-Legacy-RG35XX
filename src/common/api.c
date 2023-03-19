@@ -1311,7 +1311,6 @@ static void* POW_monitorBattery(void *arg) {
 
 void POW_init(void) {
 	pow.can_poweroff = 1;
-	pow.previous_speed = CPU_SPEED_NORMAL;
 	pow.can_autosleep = 1;
 	pow.should_warn = 0;
 	pow.charge = POW_LOW_CHARGE;
@@ -1430,12 +1429,11 @@ void POW_powerOff(void) {
 }
 
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
-#define CPU_SPEED_SET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
-#define CPU_SPEED_GET_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
 
 void POW_setCPUSpeed(int speed) {
-	putInt(CPU_SPEED_SET_PATH, speed);
-	sync();
+	char cmd[32];
+	sprintf(cmd,"overclock.elf %d\n", speed);
+	system(cmd);
 }
 
 static void POW_enterSleep(void) {
@@ -1443,9 +1441,6 @@ static void POW_enterSleep(void) {
 	putInt(BACKLIGHT_PATH, FB_BLANK_POWERDOWN);
 	system("killall -STOP keymon.elf");
 	
-	// TODO: not sure this is necessary
-	// pow.previous_speed = getInt(CPU_SPEED_GET_PATH);
-	// POW_setCPUSpeed(CPU_SPEED_MENU);
 	sync();
 }
 static void POW_exitSleep(void) {
@@ -1453,9 +1448,6 @@ static void POW_exitSleep(void) {
 	
 	putInt(BACKLIGHT_PATH, FB_BLANK_UNBLANK);
 	SetVolume(GetVolume());
-	
-	// TODO: not sure this is necessary
-	// POW_setCPUSpeed(pow.previous_speed);
 	
 	sync();
 }

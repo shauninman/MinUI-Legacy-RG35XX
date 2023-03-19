@@ -9,11 +9,6 @@ FLAG_PATH=/misc/.minstalled
 
 echo "installing/updating"
 
-# old rootfs.img (alpha-only)
-if [ -f $SYSTEM_PATH/rootfs.img ]; then
-	rm $SYSTEM_PATH/rootfs.img
-fi
-
 if [ ! -f $FLAG_PATH ]; then
 	echo "backing up"
 	BAK_PATH=$TF1_PATH/bak

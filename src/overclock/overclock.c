@@ -65,7 +65,6 @@ static struct cpu_opp {
 	int volt;
 	char* desc;
 } cpu_opps[] = {
-	{ CLKMAX, VOLTMAX}, // just a smidge above 1.5GHz
 	{1488000, 1375000}, // 1.5GHz, MinUI Performance + launch
 	{1392000, 1325000}, // 1.4GHz
 	{1296000, 1275000}, // 1.3GHz, MinUI Normal
@@ -74,7 +73,7 @@ static struct cpu_opp {
 	{1008000, 1100000}, // 1.0GHz, Anbernic default max, overvolted to stabilize
 	{ 840000, 1075000}, // 840MHz, overvolted to stabilize
 	{ 720000, 1025000}, // 720MHz, overvolted to stabilize
-	{ 504000, 1000000}, // 500MHz, overvolted to stabilize, MinUI Menus
+	{ 504000, 1000000}, // 500MHz, overvolted to stabilize, MinUI menus
 	{ 240000,  975000}, // 240MHz, overvolted to stabilize
 	{      0,       0},
 };
@@ -101,10 +100,10 @@ int main(int argc, char* argv[]) {
 		if (clk>=cpu->clk) {
 			setcpu( cpu->clk, cpu->volt );
 			// TODO: this doesn't work...
-			// char cmd[128];
-			// sprintf(cmd, "echo %i > /tmp/cpu_freq", cpu->clk);
-			// puts(cmd);
-			// system(cmd);
+			char cmd[128];
+			sprintf(cmd, "echo %i > /tmp/cpu_freq\n", cpu->clk);
+			puts(cmd);
+			system(cmd);
 			break;
 		}
 	}
