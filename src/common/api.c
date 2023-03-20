@@ -72,7 +72,7 @@ static void ion_alloc(int fd_ion, ion_alloc_info_t* info) {
 	iad.len = info->size;
 	iad.align = sysconf(_SC_PAGESIZE);
 	iad.heap_id_mask = (1<<ION_HEAP_ID_PMEM);
-	iad.flags = ION_FLAG_CACHED_NEEDS_SYNC;
+	iad.flags = 0;
 	if (ioctl(fd_ion, ION_IOC_ALLOC, &iad)<0) fprintf(stderr, "ION_ALLOC failed %s\n",strerror(errno));
 	icd.cmd = OWL_ION_GET_PHY;
 	icd.arg = (uintptr_t)&ipd;
@@ -310,6 +310,7 @@ static struct GFX_Context {
 	int width;
 	int height;
 	int pitch;
+	int cleared;
 } gfx;
 
 static SDL_Rect asset_rects[] = {
@@ -466,8 +467,8 @@ void GFX_clear(SDL_Surface* screen) {
 	memset(screen->pixels, 0, PAGE_SIZE); 
 }
 void GFX_clearAll(void) {
-	// TODO: one buffer is onscreen when cleared producing tearing
-	memset(gfx.fb_info.vadd, 0, PAGE_SIZE * PAGE_COUNT);
+	GFX_clear(gfx.screen); // clear backbuffer
+	gfx.cleared = 1; // defer clearing frontbuffer until offscreen
 }
 
 void GFX_setMode(int mode) {
@@ -542,10 +543,14 @@ void GFX_flip(SDL_Surface* screen) {
 		}
 	}
 
-
 	// swap backbuffer
 	gfx.page ^= 1;
 	gfx.screen->pixels = gfx.fb_info.vadd + gfx.page * PAGE_SIZE;
+	
+	if (gfx.cleared) {
+		GFX_clear(gfx.screen);
+		gfx.cleared = 0;
+	}
 }
 void GFX_sync(void) {
 	if (gfx.vsync!=VSYNC_OFF) {
