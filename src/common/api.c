@@ -13,8 +13,14 @@
 #include <SDL/SDL_ttf.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <msettings.h>
+
+#include "ion.h"
+#include "ion-owl.h"
+#include "de_atm7059.h"
+
 #include "api.h"
 #include "utils.h"
 #include "defines.h"
@@ -27,7 +33,6 @@ void LOG_note(int level, const char* fmt, ...) {
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-
 	switch(level) {
 #ifdef DEBUG
 	case LOG_DEBUG:
@@ -47,6 +52,125 @@ void LOG_note(int level, const char* fmt, ...) {
 		break;
 	}
 	fflush(stdout);
+}
+
+///////////////////////////////
+
+typedef struct ion_alloc_info {
+	uint32_t			size;
+	struct ion_handle	*handle;
+	int					fd;
+	void*				padd;
+	void*				vadd;
+} ion_alloc_info_t;
+static void ion_alloc(int fd_ion, ion_alloc_info_t* info) {
+	struct ion_allocation_data	iad;
+	struct ion_fd_data		ifd;
+	struct ion_custom_data		icd;
+	struct owl_ion_phys_data 	ipd;
+
+	iad.len = info->size;
+	iad.align = sysconf(_SC_PAGESIZE);
+	iad.heap_id_mask = (1<<ION_HEAP_ID_PMEM);
+	iad.flags = ION_FLAG_CACHED_NEEDS_SYNC;
+	if (ioctl(fd_ion, ION_IOC_ALLOC, &iad)<0) fprintf(stderr, "ION_ALLOC failed %s\n",strerror(errno));
+	icd.cmd = OWL_ION_GET_PHY;
+	icd.arg = (uintptr_t)&ipd;
+	ipd.handle = iad.handle;
+	if (ioctl(fd_ion, ION_IOC_CUSTOM, &icd)<0) printf("ION_GET_PHY failed %s\n",strerror(errno));
+	ifd.handle = iad.handle;
+	if (ioctl(fd_ion, ION_IOC_MAP, &ifd)<0) fprintf(stderr, "ION_MAP failed %s\n",strerror(errno));
+
+	info->handle = (void*)iad.handle;
+	info->fd = ifd.fd;
+	info->padd = (void*)ipd.phys_addr;
+	info->vadd = mmap(0, info->size, PROT_READ|PROT_WRITE, MAP_SHARED, info->fd, 0);
+
+}
+static void ion_free(int fd_ion, ion_alloc_info_t* info) {
+	struct ion_handle_data	ihd;
+	munmap(info->vadd, info->size);
+	ihd.handle = (uintptr_t)info->handle;
+	if (ioctl(fd_ion, ION_IOC_FREE, &ihd)<0) fprintf(stderr, "ION_FREE failed %s\n",strerror(errno));
+	fflush(stdout);
+}
+
+///////////////////////////////
+
+#define	DE		(0xB02E0000)
+#define	DE_SIZE	(0x00002000)
+enum {
+	DE_SCOEF_NONE,
+	DE_SCOEF_CRISPY,
+	DE_SCOEF_ZOOMIN,
+	DE_SCOEF_HALF_ZOOMOUT,
+	DE_SCOEF_SMALLER_ZOOMOUT,
+	DE_SCOEF_MAX
+};
+static void DE_setScaleCoef(uint32_t* de_mem, int plane, int scale) {
+	switch(scale) {
+		case DE_SCOEF_NONE:	// for integer scale	  < L R > (0x40=100%) Applies to the following pixels:
+			de_mem[DE_OVL_SCOEF0(plane)/4]= 0x00400000; // L 100%  R 0%
+			de_mem[DE_OVL_SCOEF1(plane)/4]= 0x00400000; // L 87.5% R 12.5%
+			de_mem[DE_OVL_SCOEF2(plane)/4]= 0x00400000; // L 75%   R 25%
+			de_mem[DE_OVL_SCOEF3(plane)/4]= 0x00400000; // L 62.5% R 37.5%
+			de_mem[DE_OVL_SCOEF4(plane)/4]= 0x00004000; // L 50%   R 50%
+			de_mem[DE_OVL_SCOEF5(plane)/4]= 0x00004000; // L 37.5% R 62.5%
+			de_mem[DE_OVL_SCOEF6(plane)/4]= 0x00004000; // L 25%   R 75%
+			de_mem[DE_OVL_SCOEF7(plane)/4]= 0x00004000; // L 12.5% R 87.5%
+			break;
+		case DE_SCOEF_CRISPY:	// crispy setting for upscale
+			de_mem[DE_OVL_SCOEF0(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF1(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF2(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF3(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF4(plane)/4]= 0x00202000;
+			de_mem[DE_OVL_SCOEF5(plane)/4]= 0x00004000;
+			de_mem[DE_OVL_SCOEF6(plane)/4]= 0x00004000;
+			de_mem[DE_OVL_SCOEF7(plane)/4]= 0x00004000;
+			break;
+		case DE_SCOEF_ZOOMIN:
+			de_mem[DE_OVL_SCOEF0(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF1(plane)/4]= 0xFC3E07FF;
+			de_mem[DE_OVL_SCOEF2(plane)/4]= 0xFA3810FE;
+			de_mem[DE_OVL_SCOEF3(plane)/4]= 0xF9301BFC;
+			de_mem[DE_OVL_SCOEF4(plane)/4]= 0xFA2626FA;
+			de_mem[DE_OVL_SCOEF5(plane)/4]= 0xFC1B30F9;
+			de_mem[DE_OVL_SCOEF6(plane)/4]= 0xFE1038FA;
+			de_mem[DE_OVL_SCOEF7(plane)/4]= 0xFF073EFC;
+			break;
+		case DE_SCOEF_HALF_ZOOMOUT:
+			de_mem[DE_OVL_SCOEF0(plane)/4]= 0x00400000;
+			de_mem[DE_OVL_SCOEF1(plane)/4]= 0x00380800;
+			de_mem[DE_OVL_SCOEF2(plane)/4]= 0x00301000;
+			de_mem[DE_OVL_SCOEF3(plane)/4]= 0x00281800;
+			de_mem[DE_OVL_SCOEF4(plane)/4]= 0x00202000;
+			de_mem[DE_OVL_SCOEF5(plane)/4]= 0x00182800;
+			de_mem[DE_OVL_SCOEF6(plane)/4]= 0x00103000;
+			de_mem[DE_OVL_SCOEF7(plane)/4]= 0x00083800;
+			break;
+		case DE_SCOEF_SMALLER_ZOOMOUT:
+			de_mem[DE_OVL_SCOEF0(plane)/4]= 0x10201000;
+			de_mem[DE_OVL_SCOEF1(plane)/4]= 0x0E1E1202;
+			de_mem[DE_OVL_SCOEF2(plane)/4]= 0x0C1C1404;
+			de_mem[DE_OVL_SCOEF3(plane)/4]= 0x0A1A1606;
+			de_mem[DE_OVL_SCOEF4(plane)/4]= 0x08181808;
+			de_mem[DE_OVL_SCOEF5(plane)/4]= 0x06161A0A;
+			de_mem[DE_OVL_SCOEF6(plane)/4]= 0x04141C0C;
+			de_mem[DE_OVL_SCOEF7(plane)/4]= 0x02121E0E;
+			break;
+		default:
+			break;
+	}
+}
+static void DE_enableLayer(uint32_t* de_mem) {
+	de_mem[DE_PATH_CTL(0)/4] = 0x30100000 | (de_mem[DE_PATH_CTL(0)/4] & 0xCF0FFFFF);
+}
+static void DE_setRect(uint32_t* de_mem, int x, int y, int w, int h) {
+	de_mem[(DE_OVL_OSIZE(0))/4] = ((w-1)&0xFFFF) | ((h-1)<<16);
+	de_mem[(DE_OVL_SR(0))/4] = ((0x2000*((de_mem[(DE_OVL_ISIZE(0))/4]&0xFFFF)+1)/w)&0xFFFF) |
+						((0x2000*((de_mem[(DE_OVL_ISIZE(0))/4]>>16)+1)/h)<<16);
+	de_mem[(DE_OVL_COOR(0,0))/4] = (y<<16) | (x&0xFFFF);
 }
 
 ///////////////////////////////
@@ -166,20 +290,26 @@ uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 
 static struct GFX_Context {
-	int fb0_fd;
-	int page;
-	int resized;
-	
-	int mode;
-	int vsync;
-
-	struct fb_fix_screeninfo finfo;
-	struct fb_var_screeninfo vinfo;
-	
-	void* fb0_buffer;
-
 	SDL_Surface* screen;
 	SDL_Surface* assets;
+
+	int mode;
+	int vsync;
+	
+	int fd_fb;
+	int fd_ion;
+	int fd_mem;
+	
+	uint32_t* de_mem;
+	
+	struct fb_fix_screeninfo finfo;
+	struct fb_var_screeninfo vinfo;
+	ion_alloc_info_t fb_info;
+	
+	int page;
+	int width;
+	int height;
+	int pitch;
 } gfx;
 
 static SDL_Rect asset_rects[] = {
@@ -216,7 +346,6 @@ GFX_Fonts font;
 
 static struct POW_Context {
 	int can_poweroff;
-	int previous_speed; // TODO: unused
 	int can_autosleep;
 	
 	pthread_t battery_pt;
@@ -233,51 +362,49 @@ static struct POW_Context {
 ///////////////////////////////
 
 static int _;
+
 SDL_Surface* GFX_init(int mode) {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
-	TTF_Init();
+	SDL_SetVideoMode(0,0,FIXED_DEPTH,0);
 	
-	//////////////////////////////
+	////////
 	
-	SDL_SetVideoMode(FIXED_WIDTH, FIXED_HEIGHT, FIXED_DEPTH, SDL_SWSURFACE);
+	gfx.fd_fb = open("/dev/fb0", O_RDWR);
+	gfx.fd_ion = open("/dev/ion", O_RDWR);
+	gfx.fd_mem = open("/dev/mem", O_RDWR);
+	gfx.de_mem = mmap(0, DE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, gfx.fd_mem, DE);
 	
-	gfx.fb0_fd = open("/dev/fb0", O_RDWR);
+	ioctl(gfx.fd_fb, FBIOGET_FSCREENINFO, &gfx.finfo);
+	ioctl(gfx.fd_fb, FBIOGET_VSCREENINFO, &gfx.vinfo);
 	
-	ioctl(gfx.fb0_fd, FBIOGET_FSCREENINFO, &gfx.finfo);
-	ioctl(gfx.fb0_fd, FBIOGET_VSCREENINFO, &gfx.vinfo);
-	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = FIXED_WIDTH;
-	gfx.vinfo.yres = FIXED_HEIGHT;
-	gfx.vinfo.xres_virtual = VIRTUAL_WIDTH;
-	gfx.vinfo.yres_virtual = VIRTUAL_HEIGHT;
-	gfx.vinfo.xoffset = 0;
-	gfx.vinfo.yoffset = 0;
-	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
+	gfx.page = 1;
+	gfx.width = FIXED_WIDTH;
+	gfx.height = FIXED_HEIGHT;
+	gfx.pitch = FIXED_PITCH;
 	
-	// printf("bits_per_pixel: %i\n", gfx.vinfo.bits_per_pixel);
-	// printf("xres: %i\n", gfx.vinfo.xres);
-	// printf("yres: %i\n", gfx.vinfo.yres);
-	// printf("xres_virtual: %i\n", gfx.vinfo.xres_virtual);
-	// printf("yres_virtual: %i\n", gfx.vinfo.yres_virtual);
-	// printf("xoffset: %i\n", gfx.vinfo.xoffset);
-	// printf("yoffset: %i\n", gfx.vinfo.yoffset);
-	// printf("activate: %i\n", gfx.vinfo.activate);
-	// printf("vmode: %i\n", gfx.vinfo.vmode);
-	// printf("sync: %i\n", gfx.vinfo.sync);
-	// fflush(stdout);
+	gfx.fb_info.size = PAGE_SIZE * PAGE_COUNT;
+	ion_alloc(gfx.fd_ion, &gfx.fb_info);
+
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb_info.vadd+PAGE_SIZE, gfx.width,gfx.height,FIXED_DEPTH,gfx.pitch, RGBA_MASK_AUTO);
+	memset(gfx.screen->pixels, 0, gfx.pitch * gfx.height);
 	
 	struct owlfb_sync_info sinfo;
 	sinfo.enabled = 1;
-	if (ioctl(gfx.fb0_fd, OWLFB_VSYNC_EVENT_EN, &sinfo)) LOG_info("OWLFB_VSYNC_EVENT_EN failed %s\n", strerror(errno));
+	sinfo.disp_id = 2;
+	if (ioctl(gfx.fd_fb, OWLFB_VSYNC_EVENT_EN, &sinfo)<0) fprintf(stderr, "VSYNC_EVENT_EN failed %s\n",strerror(errno));
 	
-	gfx.page = 1; // start on the backbuffer
-	gfx.fb0_buffer = mmap(0, gfx.finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, gfx.fb0_fd, 0);
-	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE); // clear both buffers
+	int vw = (gfx.de_mem[DE_PATH_SIZE(0)/4]&0xFFFF)+1;
+	int vh = (gfx.de_mem[DE_PATH_SIZE(0)/4]>>16)+1;
 	
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), FIXED_WIDTH,FIXED_HEIGHT, FIXED_DEPTH,FIXED_PITCH, 0,0,0,0);
+	gfx.de_mem[DE_OVL_ISIZE(0)/4] = gfx.de_mem[DE_OVL_ISIZE(2)/4] = ((gfx.width-1) & 0xFFFF) | ((gfx.height-1) << 16);
+	gfx.de_mem[DE_OVL_SR(0)/4] = gfx.de_mem[DE_OVL_SR(2)/4] = ((0x2000*gfx.width/vw)&0xFFFF) | ((0x2000*gfx.height/vh)<<16);
+	gfx.de_mem[DE_OVL_STR(0)/4] = gfx.de_mem[DE_OVL_STR(2)/4] = gfx.pitch / 8;
+	gfx.de_mem[DE_OVL_BA0(0)/4] = (uintptr_t)(gfx.fb_info.padd + PAGE_SIZE);
 	
-	//////////////////////////////
+	GFX_setNearestNeighbor(0);
+	
+	////////
 	
 	gfx.vsync = VSYNC_STRICT;
 	gfx.mode = mode;
@@ -306,6 +433,7 @@ SDL_Surface* GFX_init(int mode) {
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", SCREEN_SCALE);
 	gfx.assets = IMG_Load(asset_path);
 	
+	TTF_Init();
 	font.large 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_LARGE));
 	font.medium = TTF_OpenFont(FONT_PATH, SCALE1(FONT_MEDIUM));
 	font.small 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_SMALL));
@@ -322,33 +450,24 @@ void GFX_quit(void) {
 	
 	SDL_FreeSurface(gfx.assets);
 	
-	ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_);
-
 	GFX_clearAll();
-	munmap(gfx.fb0_buffer, VIRTUAL_SIZE);
 
-	// restore for other binaries
-	gfx.vinfo.bits_per_pixel = FIXED_DEPTH;
-	gfx.vinfo.xres = FIXED_WIDTH;
-	gfx.vinfo.yres = FIXED_HEIGHT;
-	gfx.vinfo.xres_virtual = FIXED_WIDTH;
-	gfx.vinfo.yres_virtual = FIXED_HEIGHT;
-	gfx.vinfo.xoffset = 0;
-	gfx.vinfo.yoffset = 0;
-	if (ioctl(gfx.fb0_fd, FBIOPUT_VSCREENINFO, &gfx.vinfo)) LOG_info("FBIOPUT_VSCREENINFO failed %s\n", strerror(errno));
-
-	close(gfx.fb0_fd);
+	ion_free(gfx.fd_ion, &gfx.fb_info);
+	munmap(gfx.de_mem, DE_SIZE);
+	close(gfx.fd_mem);
+	close(gfx.fd_ion);
+	close(gfx.fd_fb);
+	SDL_FreeSurface(gfx.screen);
 	SDL_Quit();
 }
 
 void GFX_clear(SDL_Surface* screen) {
-	memset(screen->pixels, 0, PAGE_SIZE); // this buffer is offscreen when cleared
+	// this buffer is offscreen when cleared
+	memset(screen->pixels, 0, PAGE_SIZE); 
 }
 void GFX_clearAll(void) {
-	// TODO: one of the buffers is onscreen when cleared producing tearing
-	// so clear our working buffer immediately (screen->pixels)
-	// then set a flag and clear the other two after vsync?
-	memset(gfx.fb0_buffer, 0, VIRTUAL_SIZE);
+	// TODO: one buffer is onscreen when cleared producing tearing
+	memset(gfx.fb_info.vadd, 0, PAGE_SIZE * PAGE_COUNT);
 }
 
 void GFX_setMode(int mode) {
@@ -367,62 +486,72 @@ void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
 SDL_Surface* GFX_resize(int w, int h, int pitch) {
-	LOG_info("resize: %ix%i (%i)\n", w,h, pitch);
-	// callee should decide if resizing is actually necessary
+	gfx.width = w;
+	gfx.height = h;
+	gfx.pitch = pitch;
+
+	SDL_FreeSurface(gfx.screen);
+	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb_info.vadd + gfx.page*PAGE_SIZE, gfx.width,gfx.height,FIXED_DEPTH,gfx.pitch, RGBA_MASK_AUTO);
+	memset(gfx.screen->pixels, 0, gfx.pitch * gfx.height);
 	
-	if (gfx.screen) SDL_FreeSurface(gfx.screen);
+	int vw = (gfx.de_mem[DE_PATH_SIZE(0)/4]&0xFFFF)+1;
+	int vh = (gfx.de_mem[DE_PATH_SIZE(0)/4]>>16)+1;
 	
-	gfx.screen = SDL_CreateRGBSurfaceFrom(gfx.fb0_buffer + (gfx.page * PAGE_SIZE), w,h, FIXED_DEPTH,pitch, 0,0,0,0);
-	memset(gfx.screen->pixels, 0, PAGE_SIZE);
-	
-	gfx.vinfo.xres = w;
-	gfx.vinfo.yres = h;
-	
-	// triggers FBIOPUT_VSCREENINFO instead 
-	// of FBIOPAN_DISPLAY in GFX_flip()
-	gfx.resized = 1;
+	gfx.de_mem[DE_OVL_ISIZE(0)/4] = gfx.de_mem[DE_OVL_ISIZE(2)/4] = ((gfx.width-1) & 0xFFFF) | ((gfx.height-1) << 16);
+	gfx.de_mem[DE_OVL_SR(0)/4] = gfx.de_mem[DE_OVL_SR(2)/4] = ((0x2000*gfx.width/vw)&0xFFFF) | ((0x2000*gfx.height/vh)<<16);
+	gfx.de_mem[DE_OVL_STR(0)/4] = gfx.de_mem[DE_OVL_STR(2)/4] = gfx.pitch / 8;
+	gfx.de_mem[DE_OVL_BA0(0)/4] = (uintptr_t)(gfx.fb_info.padd + gfx.page * PAGE_SIZE);
 	
 	return gfx.screen;
 }
+void GFX_setScaleClip(int x, int y, int width, int height) {
+	DE_setRect(gfx.de_mem, x,y,width,height);
+}
+void GFX_setNearestNeighbor(int enabled) {
+	int scale_coef = enabled ? DE_SCOEF_NONE : DE_SCOEF_HALF_ZOOMOUT;
+	DE_setScaleCoef(gfx.de_mem, 0, scale_coef);
+	DE_setScaleCoef(gfx.de_mem, 1, scale_coef);
+	DE_setScaleCoef(gfx.de_mem, 2, scale_coef);
+	DE_setScaleCoef(gfx.de_mem, 3, scale_coef);
+}
 int GFX_autosize(SDL_Surface** screen, int* dirty) {
-	static int had_hdmi = -1;
-	int has_hdmi = GetHDMI();
-	if (had_hdmi==has_hdmi) return 0;
+	// TODO: remove this entirely?
+	return 0;
 	
-	*dirty = 1;
-	if (has_hdmi) 	*screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
-	else 			*screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
-	had_hdmi = has_hdmi;
-
-	return 1;
+	// static int had_hdmi = -1;
+	// int has_hdmi = GetHDMI();
+	// if (had_hdmi==has_hdmi) return 0;
+	//
+	// *dirty = 1;
+	// if (has_hdmi) 	*screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
+	// else 			*screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
+	// had_hdmi = has_hdmi;
+	//
+	// return 1;
 }
 static void POW_flipOverlay(void);
 void GFX_flip(SDL_Surface* screen) {
-	// point framebuffer at the first line of the backbuffer
-	gfx.vinfo.yoffset = gfx.page * PAGE_HEIGHT;
-	if (ioctl(gfx.fb0_fd, gfx.resized ? FBIOPUT_VSCREENINFO : FBIOPAN_DISPLAY, &gfx.vinfo)) LOG_info("%s failed %s\n", (gfx.resized ? "FBIOPUT_VSCREENINFO" : "FBIOPAN_DISPLAY"), strerror(errno));
-	gfx.resized = 0;
+	gfx.de_mem[DE_OVL_BA0(0)/4] = gfx.de_mem[DE_OVL_BA0(2)/4] = (uintptr_t)(gfx.fb_info.padd + gfx.page * PAGE_SIZE);
+	DE_enableLayer(gfx.de_mem);
 	POW_flipOverlay();
 
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			if (ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
+			if (ioctl(gfx.fd_fb, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
 		}
 	}
-	
+
 
 	// swap backbuffer
-	gfx.page += 1;
-	if (gfx.page>=PAGE_COUNT) gfx.page -= PAGE_COUNT;
-	gfx.screen->pixels = gfx.fb0_buffer + (gfx.page * PAGE_SIZE);
-
+	gfx.page ^= 1;
+	gfx.screen->pixels = gfx.fb_info.vadd + gfx.page * PAGE_SIZE;
 }
 void GFX_sync(void) {
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
 		if (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET) { // only wait if we're under frame budget
-			if (ioctl(gfx.fb0_fd, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
+			if (ioctl(gfx.fd_fb, OWLFB_WAITFORVSYNC, &_)) LOG_info("OWLFB_WAITFORVSYNC failed %s\n", strerror(errno));
 		}
 	}
 	else {
@@ -435,7 +564,7 @@ SDL_Surface* GFX_getBufferCopy(void) { // must be freed by caller
 	int buffer = gfx.page - 1;
 	if (buffer<0) buffer += PAGE_COUNT;
 	SDL_Surface* copy = SDL_CreateRGBSurface(SDL_SWSURFACE, gfx.screen->w,gfx.screen->h,FIXED_DEPTH,0,0,0,0);
-	SDL_BlitSurface(gfx.screen, NULL, copy, NULL);
+	SDL_BlitSurface(gfx.screen, NULL, copy, NULL); // TODO: this is just copying screen! :facepalm:
 	return copy;
 }
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
@@ -454,8 +583,6 @@ int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int ma
 	return text_width;
 }
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
-	// TODO: this is "kinda" a buggy mess...but possibly fixed now!
-	
 	if (!str) return 0;
 	
 	int line_width;
@@ -1224,62 +1351,62 @@ int VIB_getStrength(void) {
 #define OVERLAY_FB 0
 #define OVERLAY_ID 1
 static void POW_initOverlay(void) {
-	// setup surface
-	pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
-	uint32_t size = pow.overlay->h * pow.overlay->pitch;
-	uint32_t offset = (gfx.finfo.smem_len - size)&(~4095);
-	pow.overlay->pixels = gfx.fb0_buffer + offset;
-	
-	// draw battery
-	SDL_SetAlpha(gfx.assets, 0,0);
-	GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
-	SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
-	GFX_blitBattery(pow.overlay, NULL);
-		
-	// setup overlay
-	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	pow.oargs.fb_id = OVERLAY_FB;
-	pow.oargs.overlay_id = OVERLAY_ID;
-	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
-	pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
-	
-	int x,y,w,h;
-	w = h = pow.overlay->w;
-	x = SCREEN_WIDTH - SCALE1(PADDING) - w;
-	y = SCALE1(PADDING);
-	
-	pow.oinfo.mem_off = offset;
-	pow.oinfo.mem_size = size;
-	pow.oinfo.screen_width = VIRTUAL_WIDTH; // ???
-	pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
-	pow.oinfo.img_width = w;
-	pow.oinfo.img_height = h;
-	pow.oinfo.xoff = 0;
-	pow.oinfo.yoff = 0;
-	pow.oinfo.width = w;
-	pow.oinfo.height = h;
-	pow.oinfo.rotation = 0;
-	pow.oinfo.pos_x = x;	// position
-	pow.oinfo.pos_y = y;	//
-	pow.oinfo.out_width = w;	// scaled size
-	pow.oinfo.out_height = h;	//
-	pow.oinfo.global_alpha_en = 0;
-	pow.oinfo.global_alpha = 0;
-	pow.oinfo.pre_mult_alpha_en = 0;
-	pow.oinfo.zorder = 3;
+	// // setup surface
+	// pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
+	// uint32_t size = pow.overlay->h * pow.overlay->pitch;
+	// uint32_t offset = (gfx.finfo.smem_len - size)&(~4095);
+	// pow.overlay->pixels = gfx.fb0_buffer + offset;
+	//
+	// // draw battery
+	// SDL_SetAlpha(gfx.assets, 0,0);
+	// GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
+	// SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
+	// GFX_blitBattery(pow.overlay, NULL);
+	//
+	// // setup overlay
+	// memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	// pow.oargs.fb_id = OVERLAY_FB;
+	// pow.oargs.overlay_id = OVERLAY_ID;
+	// pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	// pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
+	//
+	// int x,y,w,h;
+	// w = h = pow.overlay->w;
+	// x = SCREEN_WIDTH - SCALE1(PADDING) - w;
+	// y = SCALE1(PADDING);
+	//
+	// pow.oinfo.mem_off = offset;
+	// pow.oinfo.mem_size = size;
+	// pow.oinfo.screen_width = VIRTUAL_WIDTH; // ???
+	// pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
+	// pow.oinfo.img_width = w;
+	// pow.oinfo.img_height = h;
+	// pow.oinfo.xoff = 0;
+	// pow.oinfo.yoff = 0;
+	// pow.oinfo.width = w;
+	// pow.oinfo.height = h;
+	// pow.oinfo.rotation = 0;
+	// pow.oinfo.pos_x = x;	// position
+	// pow.oinfo.pos_y = y;	//
+	// pow.oinfo.out_width = w;	// scaled size
+	// pow.oinfo.out_height = h;	//
+	// pow.oinfo.global_alpha_en = 0;
+	// pow.oinfo.global_alpha = 0;
+	// pow.oinfo.pre_mult_alpha_en = 0;
+	// pow.oinfo.zorder = 3;
 }
 static void POW_flipOverlay(void) {
-	if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fb0_fd, OWLFB_OVERLAY_SETINFO, &pow.oargs);
+	// if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fb0_fd, OWLFB_OVERLAY_SETINFO, &pow.oargs);
 }
 static void POW_quitOverlay(void) {
-	if (pow.overlay) SDL_FreeSurface(pow.overlay);
-	
-	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	pow.oargs.fb_id = OVERLAY_FB;
-	pow.oargs.overlay_id = OVERLAY_ID;
-	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
-	pow.oargs.uintptr_overly_info = 0;
-	ioctl(gfx.fb0_fd, OWLFB_OVERLAY_DISABLE, &pow.oargs);
+	// if (pow.overlay) SDL_FreeSurface(pow.overlay);
+	//
+	// memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	// pow.oargs.fb_id = OVERLAY_FB;
+	// pow.oargs.overlay_id = OVERLAY_ID;
+	// pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	// pow.oargs.uintptr_overly_info = 0;
+	// ioctl(gfx.fb0_fd, OWLFB_OVERLAY_DISABLE, &pow.oargs);
 }
 
 static void POW_updateBatteryStatus(void) {

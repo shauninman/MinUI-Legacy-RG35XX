@@ -14,6 +14,10 @@ Please see the README.txt in the zip file for installation and update instructio
 
 BUG:
 	minui.elf treats bare tag rom folders as empty
+	
+rip out hdmi code
+insert new de+ion code
+test test test
 
 hardware rev
 	volumn and menu buttons no longer work

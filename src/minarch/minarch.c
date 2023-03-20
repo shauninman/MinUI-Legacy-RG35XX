@@ -2568,12 +2568,12 @@ static void selectScaler_PAR(int width, int height, int pitch) {
 		}
 		else {
 			switch (scale) {
-				case 6: 	renderer.scaler = scale6x_n16; break;
-				case 5: 	renderer.scaler = scale5x_n16; break;
-				case 4: 	renderer.scaler = scale4x_n16; break;
-				case 3: 	renderer.scaler = scale3x_n16; break;
-				case 2: 	renderer.scaler = scale2x_n16; break;
-				default:	renderer.scaler = scale1x_n16; break;
+				case 6: 	renderer.scaler = scale6x6_n16; break;
+				case 5: 	renderer.scaler = scale5x5_n16; break;
+				case 4: 	renderer.scaler = scale4x4_n16; break;
+				case 3: 	renderer.scaler = scale3x3_n16; break;
+				case 2: 	renderer.scaler = scale2x2_n16; break;
+				default:	renderer.scaler = scale1x1_n16; break;
 
 				// my lesser scalers :sweat_smile:
 				// case 4: 	renderer.scaler = scale4x; break;
@@ -2710,12 +2710,12 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	if (has_hdmi) LOG_warn("dst offset: %i,%i (%i)\n", dx,dy, renderer.dst_offset);
 	
 	switch (scale) {
-		case 6: renderer.scaler = scale6x_n16; break;
-		case 5: renderer.scaler = scale5x_n16; break;
-		case 4: renderer.scaler = scale4x_n16; break;
-		case 3: renderer.scaler = scale3x_n16; break;
-		case 2: renderer.scaler = scale2x_n16; break;
-		default: renderer.scaler = scale1x_n16; break;
+		case 6: renderer.scaler = scale6x6_n16; break;
+		case 5: renderer.scaler = scale5x5_n16; break;
+		case 4: renderer.scaler = scale4x4_n16; break;
+		case 3: renderer.scaler = scale3x3_n16; break;
+		case 2: renderer.scaler = scale2x2_n16; break;
+		default: renderer.scaler = scale1x1_n16; break;
 	}
 	
 	// DEBUG HUD
