@@ -1336,7 +1336,7 @@ static void OptionList_setOptionRawValue(OptionList* list, const char* key, int 
 		LOG_info("\tRAW SET %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		// if (list->on_set) list->on_set(list, key);
 	}
-	else printf("unknown option %s \n", key); fflush(stdout);
+	else LOG_info("unknown option %s \n", key);
 }
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value) {
 	Option* item = OptionList_getOption(list, key);
@@ -1346,7 +1346,7 @@ static void OptionList_setOptionValue(OptionList* list, const char* key, const c
 		LOG_info("\tSET %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		// if (list->on_set) list->on_set(list, key);
 	}
-	else printf("unknown option %s \n", key); fflush(stdout);
+	else LOG_info("unknown option %s \n", key);
 }
 // static void OptionList_setOptionVisibility(OptionList* list, const char* key, int visible) {
 // 	Option* item = OptionList_getOption(list, key);
@@ -1506,6 +1506,7 @@ static void Input_init(const struct retro_input_descriptor *vars) {
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
 	VIB_setStrength(strength);
+	return 1;
 }
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// LOG_info("environment_callback: %i\n", cmd);
@@ -1779,7 +1780,7 @@ static void MSG_init(void) {
 	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".","%","x","(",")", NULL };
 	char* c;
 	int i = 0;
-	while (c = chars[i]) {
+	while ((c = chars[i])) {
 		digit = TTF_RenderUTF8_Blended(font.tiny, c, COLOR_WHITE);
 		SDL_BlitSurface(digit, NULL, digits, &(SDL_Rect){ (i * DIGIT_WIDTH) + (DIGIT_WIDTH - digit->w)/2, (DIGIT_HEIGHT - digit->h)/2});
 		SDL_FreeSurface(digit);
@@ -3115,6 +3116,7 @@ static int MenuList_freeItems(MenuList* list, int i) {
 static int OptionFrontend_optionChanged(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
 	Config_syncFrontend(i, item->value);
+	return MENU_CALLBACK_NOP;
 }
 static MenuList OptionFrontend_menu = {
 	.type = MENU_VAR,
@@ -3156,6 +3158,7 @@ static int OptionEmulator_optionChanged(MenuList* list, int i) {
 		item->values[item->value], option->values[item->value]
 	);
 	OptionList_setOptionRawValue(&config.core, item->key, item->value);
+	return MENU_CALLBACK_NOP;
 }
 static int OptionEmulator_optionDetail(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
@@ -3232,7 +3235,7 @@ int OptionControls_bind(MenuList* list, int i) {
 		
 		// NOTE: off by one because of the initial NONE value
 		for (int id=0; id<=LOCAL_BUTTON_COUNT; id++) {
-			if (PAD_justPressed(1 << id-1)) {
+			if (PAD_justPressed(1 << (id-1))) {
 				item->value = id;
 				button->local = id - 1;
 				bound = 1;
@@ -3302,7 +3305,7 @@ static int OptionShortcuts_bind(MenuList* list, int i) {
 		
 		// NOTE: off by one because of the initial NONE value
 		for (int id=0; id<=LOCAL_BUTTON_COUNT; id++) {
-			if (PAD_justPressed(1 << id-1)) {
+			if (PAD_justPressed(1 << (id-1))) {
 				fflush(stdout);
 				item->value = id;
 				button->local = id - 1;
@@ -3342,6 +3345,7 @@ static char* getSaveDesc(void) {
 		case CONFIG_CONSOLE:	return "Using console config."; break;
 		case CONFIG_GAME:		return "Using game config."; break;
 	}
+	return NULL;
 }
 static int OptionShortcuts_openMenu(MenuList* list, int i) {
 	if (OptionShortcuts_menu.items==NULL) {
@@ -3639,8 +3643,8 @@ static int Menu_options(MenuList* list) {
 			else if (type==MENU_FIXED) {
 				// NOTE: no need to calculate max width
 				int mw = screen->w - SCALE1(PADDING*2);
-				int lw,rw;
-				lw = rw = mw / 2;
+				// int lw,rw;
+				// lw = rw = mw / 2;
 				int ox,oy;
 				ox = oy = SCALE1(PADDING);
 				oy += SCALE1(PILL_SIZE);
@@ -4394,7 +4398,6 @@ finish:
 	
 	Config_quit();
 	
-	SDL_FreeSurface(screen);
 	MSG_quit();
 	QuitSettings();
 	POW_quit();

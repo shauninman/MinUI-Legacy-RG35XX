@@ -99,10 +99,8 @@ int main(int argc, char* argv[]) {
 		struct cpu_opp* cpu = &cpu_opps[i];
 		if (clk>=cpu->clk) {
 			setcpu( cpu->clk, cpu->volt );
-			// TODO: this doesn't work...
 			char cmd[128];
 			sprintf(cmd, "echo %i > /tmp/cpu_freq\n", cpu->clk);
-			puts(cmd);
 			system(cmd);
 			break;
 		}

@@ -586,7 +586,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 	if (!str) return 0;
 	
 	int line_width;
-	int max_line_width;
+	int max_line_width = 0;
 	char* line = str;
 	char buffer[MAX_PATH];
 	
@@ -597,7 +597,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 		return line_width;
 	}
 	
-	char* prev;
+	char* prev = NULL;
 	char* tmp = line;
 	int lines = 1;
 	int i = 0;
@@ -1354,8 +1354,9 @@ static void POW_initOverlay(void) {
 	// // setup surface
 	// pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
 	// uint32_t size = pow.overlay->h * pow.overlay->pitch;
-	// uint32_t offset = (gfx.finfo.smem_len - size)&(~4095);
-	// pow.overlay->pixels = gfx.fb0_buffer + offset;
+	// uint32_t offset = (gfx.fb_info.size - size)&(~4095);
+	// pow.overlay->pixels = gfx.fb_info.vadd + offset;
+	// memset(pow.overlay->pixels, 0xff, size);
 	//
 	// // draw battery
 	// SDL_SetAlpha(gfx.assets, 0,0);
@@ -1377,7 +1378,7 @@ static void POW_initOverlay(void) {
 	//
 	// pow.oinfo.mem_off = offset;
 	// pow.oinfo.mem_size = size;
-	// pow.oinfo.screen_width = VIRTUAL_WIDTH; // ???
+	// pow.oinfo.screen_width = PAGE_WIDTH; // ???
 	// pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
 	// pow.oinfo.img_width = w;
 	// pow.oinfo.img_height = h;
@@ -1396,7 +1397,7 @@ static void POW_initOverlay(void) {
 	// pow.oinfo.zorder = 3;
 }
 static void POW_flipOverlay(void) {
-	// if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fb0_fd, OWLFB_OVERLAY_SETINFO, &pow.oargs);
+	// if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fd_fb, OWLFB_OVERLAY_SETINFO, &pow.oargs);
 }
 static void POW_quitOverlay(void) {
 	// if (pow.overlay) SDL_FreeSurface(pow.overlay);
@@ -1406,7 +1407,7 @@ static void POW_quitOverlay(void) {
 	// pow.oargs.overlay_id = OVERLAY_ID;
 	// pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
 	// pow.oargs.uintptr_overly_info = 0;
-	// ioctl(gfx.fb0_fd, OWLFB_OVERLAY_DISABLE, &pow.oargs);
+	// ioctl(gfx.fd_fb, OWLFB_OVERLAY_DISABLE, &pow.oargs);
 }
 
 static void POW_updateBatteryStatus(void) {

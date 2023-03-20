@@ -12,23 +12,27 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
+return to alpha
+	upload TF1 image to github
+
+regressions:
+	hdmi is an unknown
+	lost in-game low battery overlay
+
+
 BUG:
 	minui.elf treats bare tag rom folders as empty
 	
 rip out hdmi code
 insert new de+ion code
 test test test
+rewrite
+	selectScaler
+restore overlay
 
-hardware rev
-	volumn and menu buttons no longer work
-	headphone jack detection no longer works
-	booting doesn't work reliably
-	
-	all of the above works fine on stock firmware
-	eggs cooked up ways to 
-		under/overclock the cpu and 
-		access more physical memory for the framebuffer 
-	on unmodified stock :tada:
+seeing weird crashes i wasn't seeing before
+	SUPA on launch
+	P8 on quit
 
 minarch
 	some cores can only fast forward with prevent tearing off
