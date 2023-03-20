@@ -51,6 +51,7 @@ prepare a stock TF1.img (on macOS)
 	add ` && say done` to commands that take a while for audio feedback upon completion
 	
 	download the official release or backup a fresh stock sd card
+		https://drive.google.com/drive/folders/1HfGCxkratM_zYiYfGWCrHZ1AynO3hIwU (last updated 2023-03-09)
 	flash the initial img to a new card
 	use gdisk to delete and recreate partition 4 (ROMS)
 		set End (sector) to +3G
