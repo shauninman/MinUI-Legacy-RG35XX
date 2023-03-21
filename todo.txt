@@ -5,7 +5,9 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
-- 
+- added support for newer hardware revisions which:
+- broke preliminary hdmi support
+- broke in-game low battery icon
 
 **Extras**
 - 
@@ -13,26 +15,17 @@ Please see the README.txt in the zip file for installation and update instructio
 -------------------------------
 
 return to alpha
-	upload TF1 image to github
 
 regressions:
 	hdmi is an unknown
 	lost in-game low battery overlay
 
-
 BUG:
 	minui.elf treats bare tag rom folders as empty
 	
-rip out hdmi code
-insert new de+ion code
-test test test
 rewrite
 	selectScaler
 restore overlay
-
-seeing weird crashes i wasn't seeing before
-	SUPA on launch
-	P8 on quit
 
 minarch
 	some cores can only fast forward with prevent tearing off
