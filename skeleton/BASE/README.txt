@@ -46,7 +46,7 @@ MinUI is meant to be installed over a working stock TF1. The official Anbernic i
   
 Or you can download a reduced image that can be flashed to a 4GB SD card:
 
-  https://github.com/shauninman/union-minui/releases/tag/stock-tf1-20230309 
+  https://github.com/shauninman/union-minui/releases/tag/stock-tf1-20230309
 
 If you are using two SD cards (recommended), the second one should be formatted FAT32.
 

@@ -6,8 +6,9 @@ Please see the README.txt in the zip file for installation and update instructio
 
 **Base**
 - added support for newer hardware revisions which:
-- broke preliminary hdmi support
+- broke already incomplete hdmi support
 - broke in-game low battery icon
+- increased how long boot feels (power LED doesn't come on as early as previous versions of MinUI which used a custom uImage)
 
 **Extras**
 - 
