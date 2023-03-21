@@ -2441,10 +2441,9 @@ static void scaleNN_text_scanline(void* __restrict src, void* __restrict dst, ui
 
 static SDL_Surface* scaler_surface;
 static void selectScaler_PAR(int width, int height, int pitch) {
-	int has_hdmi = GetHDMI();
-	int device_width = has_hdmi ? HDMI_WIDTH : SCREEN_WIDTH;
-	int device_height = has_hdmi ? HDMI_HEIGHT : SCREEN_HEIGHT;
-	int device_pitch = has_hdmi ? HDMI_PITCH : SCREEN_PITCH;
+	int device_width = SCREEN_WIDTH;
+	int device_height = SCREEN_HEIGHT;
+	int device_pitch = SCREEN_PITCH;
 
 	renderer.scaler = scaleNull;
 	renderer.dst_p = device_pitch;
@@ -2603,9 +2602,8 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	int src_w = width;
 	int src_h = height;
 	
-	int has_hdmi = GetHDMI();
-	int scale_x = CEIL_DIV(has_hdmi ? HDMI_WIDTH : SCREEN_WIDTH, src_w);
-	int scale_y = CEIL_DIV(has_hdmi ? HDMI_HEIGHT: SCREEN_HEIGHT,src_h);
+	int scale_x = CEIL_DIV(SCREEN_WIDTH, src_w);
+	int scale_y = CEIL_DIV(SCREEN_HEIGHT,src_h);
 	int scale = MAX(scale_x, scale_y);
 	
 	// TODO: this "logic" is a disaster
@@ -2628,14 +2626,13 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	
 	char scaler_name[8];
 #define FOUR_THREE 4.0f / 3
-#define SIXTEEN_NINE 16.0 / 9
 	
-	double target_ratio =  has_hdmi ? SIXTEEN_NINE : FOUR_THREE;
+	double target_ratio = FOUR_THREE;
 	
 	// TODO: sotn moon is busted 512x240 ends up 2x but targeting 864x480
 	
 	if (screen_scaling==1) {
-		sprintf(scaler_name, "AR_%iX%s", scale, has_hdmi?"W":"R");
+		sprintf(scaler_name, "AR_%iX%s", scale, "R");
 		if (core.aspect_ratio==target_ratio) {
 			LOG_info("already correct ratio\n");
 		}
@@ -2643,10 +2640,10 @@ static void selectScaler_AR(int width, int height, int pitch) {
 			// TODO: is this ignoring the core's desired aspect ratio?
 			// see snes or SotN
 			// I think it's acting more like PAR
-			sprintf(scaler_name, "AR_%iX%sR", scale, has_hdmi?"W":"R");
+			sprintf(scaler_name, "AR_%iX%sR", scale, "R");
 			
-			int ratio_left  = target_ratio==SIXTEEN_NINE ? 16 : 4;
-			int ratio_right = target_ratio==SIXTEEN_NINE ? 9 : 3;
+			int ratio_left  = 4;
+			int ratio_right = 3;
 			
 			// TODO: why do these use CEIL_DIV?
 			if (core.aspect_ratio<target_ratio) {
@@ -2708,8 +2705,6 @@ static void selectScaler_AR(int width, int height, int pitch) {
 	renderer.dst_p = target_pitch;
 	renderer.dst_offset = (dy * target_pitch) + (dx * FIXED_BPP);
 	
-	if (has_hdmi) LOG_warn("dst offset: %i,%i (%i)\n", dx,dy, renderer.dst_offset);
-	
 	switch (scale) {
 		case 6: renderer.scaler = scale6x6_n16; break;
 		case 5: renderer.scaler = scale5x5_n16; break;
@@ -2745,14 +2740,6 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
 	
 	if (!data) return;
 	renderer.data = data; // this pointer isn't guaranteed to hang around but this approach worked on the Mini
-
-	// force resize when hdmi status changes
-	static int had_hdmi = -1;
-	int has_hdmi = GetHDMI();
-	if (had_hdmi!=has_hdmi) {
-		renderer.src_w = 0;
-		had_hdmi = has_hdmi;
-	}
 
 	fps_ticks += 1;
 	
@@ -3024,7 +3011,7 @@ static SDL_Surface* Menu_thumbnail(SDL_Surface* src_img) {
 }
 
 void Menu_init(void) {
-	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, HDMI_WIDTH, HDMI_HEIGHT, FIXED_DEPTH, 0, 0, 0, 0);
+	menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, FIXED_WIDTH, FIXED_HEIGHT, FIXED_DEPTH, 0, 0, 0, 0);
 	SDL_SetAlpha(menu.overlay, SDL_SRCALPHA, 0x80);
 	SDL_FillRect(menu.overlay, NULL, 0);
 }
@@ -3088,9 +3075,7 @@ static int Menu_message(char* message, char** pairs) {
 		
 		POW_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
 		
-		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			if (!resized) GFX_clear(screen); // resizing clears the screen
 			GFX_clear(screen);
 			GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){0,SCALE1(PADDING),screen->w,screen->h-SCALE1(PILL_SIZE+PADDING)});
 			GFX_blitButtonGroup(pairs, screen, 1);
@@ -3583,10 +3568,7 @@ static int Menu_options(MenuList* list) {
 		
 		POW_update(&dirty, &show_settings, Menu_beforeSleep, Menu_afterSleep);
 		
-		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			if (!resized) GFX_clear(screen); // resizing clears the screen
-			
 			GFX_clear(screen);
 			GFX_blitHardwareGroup(screen, show_settings);
 			
@@ -3835,7 +3817,6 @@ static void downsample(void* __restrict src, void* __restrict dst, uint32_t w, u
 static void Menu_loop(void) {
 	// current screen is on the previous buffer
 	
-	// TODO: can we use renderer.src_w/h to reverse the stretch regardless of HDMI status?
 	// because we need an undeformed copy for save state screenshots
 	SDL_Surface* backing = GFX_getBufferCopy();
 	SDL_Surface* snapshot = SDL_CreateRGBSurface(SDL_SWSURFACE, FIXED_WIDTH,FIXED_HEIGHT,FIXED_DEPTH,0,0,0,0);
@@ -3847,24 +3828,13 @@ static void Menu_loop(void) {
 		downsample(backing->pixels,snapshot->pixels,backing->w,backing->h,backing->pitch,snapshot->pitch);
 	}
 	
-	// TODO: move this to right before if (dirty) {} like in minui.elf
-	// TODO: could move to a GFX_autosize(&dirty) -> has_hdmi
-	int has_hdmi = GetHDMI();
-	
-	int target_w = has_hdmi ? HDMI_MENU_WIDTH : FIXED_WIDTH; // 640 * 480 / 720 rounded up to nearest 8
+	int target_w = FIXED_WIDTH; // 640 * 480 / 720 rounded up to nearest 8
 	int target_h = FIXED_HEIGHT;
 	int target_p = target_w * FIXED_BPP;
 	
-	LOG_info("hdmi: %i %ix%i (%i)\n", has_hdmi,target_w,target_h,target_p);
-
-	if (has_hdmi && (screen->w!=target_w || screen->h!=target_h)) {
-		screen = GFX_resize(target_w,target_h,target_p);
-	}
-	else if (screen->w!=SCREEN_WIDTH || screen->h!=SCREEN_HEIGHT) {
+	if (screen->w!=SCREEN_WIDTH || screen->h!=SCREEN_HEIGHT) {
 		screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_PITCH);
 	}
-	
-	// TODO: attempt to draw menu in center of screen when in hdmi
 	
 	POW_warn(0);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
@@ -4077,9 +4047,8 @@ static void Menu_loop(void) {
 
 		POW_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
 		
-		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			if (!resized) GFX_clear(screen); // resizing clears the screen
+			GFX_clear(screen);
 			
 			SDL_BlitSurface(snapshot, NULL, screen, NULL);
 			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
@@ -4227,10 +4196,7 @@ static void Menu_loop(void) {
 
 	GFX_clearAll();
 	if (!quit) {
-		if (GetHDMI() && screen_scaling==SCALE_NATIVE) {
-			screen = GFX_resize(HDMI_WIDTH,HDMI_HEIGHT, HDMI_PITCH);
-		}
-		else if (backing->w!=FIXED_WIDTH || backing->h!=FIXED_HEIGHT) {
+		if (backing->w!=FIXED_WIDTH || backing->h!=FIXED_HEIGHT) {
 			screen = GFX_resize(renderer.dst_w,renderer.dst_h, renderer.dst_p);
 		}
 		

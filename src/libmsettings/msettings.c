@@ -22,7 +22,6 @@ typedef struct Settings {
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
-	int hdmi;
 } Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
@@ -30,7 +29,6 @@ static Settings DefaultSettings = {
 	.headphones = 4,
 	.speaker = 8,
 	.jack = 0,
-	.hdmi = 0,
 };
 static Settings* settings;
 
@@ -43,7 +41,6 @@ static int shm_size = sizeof(Settings);
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
 #define BRIGHTNESS_PATH "/sys/class/backlight/backlight.2/brightness"
 #define VOLUME_PATH "/sys/class/volume/value"
-#define MIRROR_PATH "/sys/class/graphics/fb0/mirror_to_hdmi"
 
 void InitSettings(void) {
 	// sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
@@ -74,12 +71,11 @@ void InitSettings(void) {
 		
 		// these shouldn't be persisted
 		// settings->jack = 0;
-		// settings->hdmi = 0;
 	}
 	printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
 	
 	SetVolume(GetVolume());
-	SetBrightness(GetBrightness()); // also sets HDMI
+	SetBrightness(GetBrightness());
 }
 void QuitSettings(void) {
 	munmap(settings, shm_size);
@@ -98,8 +94,6 @@ int GetBrightness(void) { // 0-10
 	return settings->brightness;
 }
 void SetBrightness(int value) {
-	if (settings->hdmi) return;
-	
 	int raw;
 	switch (value) {
 		case 0: raw=16; break; 		//   0
@@ -132,8 +126,6 @@ void SetVolume(int value) {
 }
 
 void SetRawBrightness(int val) { // 0 - 1024
-	if (settings->hdmi) return;
-	
 	// printf("SetRawBrightness(%i)\n", val); fflush(stdout);
 	int fd = open(BRIGHTNESS_PATH, O_WRONLY);
 	if (fd>=0) {
@@ -158,25 +150,4 @@ void SetJack(int value) {
 	
 	settings->jack = value;
 	SetVolume(GetVolume());
-}
-
-int GetHDMI(void) {	
-	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
-	return settings->hdmi;
-}
-void SetHDMI(int value) {
-	// printf("SetHDMI(%i)\n", value); fflush(stdout);
-
-	settings->hdmi = value;
-	int fd = open(MIRROR_PATH, O_WRONLY);
-	if (fd>=0) {
-		dprintf(fd,"%d",value);
-		close(fd);
-	}
-	
-	fd = open(BACKLIGHT_PATH, O_WRONLY);
-	if (fd>=0) {
-		dprintf(fd,"%d",value ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK);
-		close(fd);
-	}
 }

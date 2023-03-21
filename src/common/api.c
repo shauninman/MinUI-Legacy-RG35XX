@@ -515,21 +515,6 @@ void GFX_setNearestNeighbor(int enabled) {
 	DE_setScaleCoef(gfx.de_mem, 2, scale_coef);
 	DE_setScaleCoef(gfx.de_mem, 3, scale_coef);
 }
-int GFX_autosize(SDL_Surface** screen, int* dirty) {
-	// TODO: remove this entirely?
-	return 0;
-	
-	// static int had_hdmi = -1;
-	// int has_hdmi = GetHDMI();
-	// if (had_hdmi==has_hdmi) return 0;
-	//
-	// *dirty = 1;
-	// if (has_hdmi) 	*screen = GFX_resize(HDMI_MENU_WIDTH,FIXED_HEIGHT,HDMI_MENU_WIDTH*FIXED_BPP);
-	// else 			*screen = GFX_resize(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH);
-	// had_hdmi = has_hdmi;
-	//
-	// return 1;
-}
 static void POW_flipOverlay(void);
 void GFX_flip(SDL_Surface* screen) {
 	gfx.de_mem[DE_OVL_BA0(0)/4] = gfx.de_mem[DE_OVL_BA0(2)/4] = (uintptr_t)(gfx.fb_info.padd + gfx.page * PAGE_SIZE);
@@ -1124,16 +1109,6 @@ static void SND_selectResampler(void) { // plat_sound_select_resampler
 size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_sound_write / plat_sound_write_resample
 	if (snd.frame_count==0) return 0;
 	
-	// static int had_hdmi = -1;
-	// int has_hdmi = GetHDMI();
-	// if (had_hdmi<0) had_hdmi = has_hdmi;
-	// if (has_hdmi!=had_hdmi) {
-	// 	had_hdmi = has_hdmi;
-	// 	if (has_hdmi) sleep(2);
-	// 	SND_quit();
-	// 	SND_init(snd.sample_rate_in, snd.frame_rate);
-	// }
-	
 	SDL_LockAudio();
 
 	int consumed = 0;
@@ -1162,8 +1137,6 @@ size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_s
 
 void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
 	LOG_info("SND_init\n");
-	
-	// SDL_putenv(GetHDMI()?"AUDIODEV=plughw:0,1":"default");
 	
 	SDL_InitSubSystem(SDL_INIT_AUDIO);
 	
@@ -1417,6 +1390,8 @@ static void POW_quitOverlay(void) {
 
 static void POW_updateBatteryStatus(void) {
 	pow.is_charging = getInt("/sys/class/power_supply/battery/charger_online");
+	
+	// TODO: newer batteries have a different range, ???-420
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
 	i -= 310; 	// ~0-100
 
@@ -1467,7 +1442,6 @@ void POW_warn(int enable) {
 void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep) {
 	int dirty = _dirty ? *_dirty : 0;
 	int show_setting = _show_setting ? *_show_setting : 0;
-	int has_hdmi = GetHDMI();
 	
 	static uint32_t cancel_start = 0;
 	static uint32_t power_start = 0;
@@ -1528,10 +1502,10 @@ void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, PO
 	}
 	
 	#define MENU_DELAY 250 // also in PAD_tappedMenu()
-	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY && !has_hdmi)) {
+	if (PAD_justRepeated(BTN_PLUS) || PAD_justRepeated(BTN_MINUS) || (PAD_isPressed(BTN_MENU) && now-menu_start>=MENU_DELAY)) {
 		setting_start = now;
 		if (PAD_isPressed(BTN_MENU)) {
-			if (!has_hdmi) show_setting = 1;
+			show_setting = 1;
 		}
 		else {
 			show_setting = 2;

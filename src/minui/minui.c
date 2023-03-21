@@ -1320,9 +1320,8 @@ int main (int argc, char *argv[]) {
 		
 		POW_update(&dirty, &show_setting, NULL, NULL);
 		
-		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
-			if (!resized) GFX_clear(screen); // resizing clears the screen
+			GFX_clear(screen);
 			
 			int ox;
 			int oy;

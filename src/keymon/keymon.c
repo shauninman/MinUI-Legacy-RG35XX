@@ -31,7 +31,6 @@ static int jack_fd;
 static pthread_t ports_pt;
 
 #define JACK_STATE_PATH "/sys/class/switch/h2w/state"
-#define HDMI_STATE_PATH "/sys/class/switch/hdmi/state"
 #define BACKLIGHT_PATH "/sys/class/backlight/backlight.2/bl_power"
 
 int getInt(char* path) {
@@ -44,16 +43,12 @@ int getInt(char* path) {
 	return i;
 }
 
-// TODO: test HDMI connect/disconnect
 // TODO: still resetting between launches
 static void* watchPorts(void *arg) {
 	int has_headphones,had_headphones;
-	int has_hdmi,had_hdmi;
 	
 	has_headphones = had_headphones = getInt(JACK_STATE_PATH);
-	has_hdmi = had_hdmi = getInt(HDMI_STATE_PATH);
 	SetJack(has_headphones);
-	SetHDMI(has_hdmi);
 	
 	while(1) {
 		sleep(1);
@@ -63,17 +58,6 @@ static void* watchPorts(void *arg) {
 			had_headphones = has_headphones;
 			SetJack(has_headphones);
 		}
-		
-		has_hdmi = getInt(HDMI_STATE_PATH);
-		if (had_hdmi!=has_hdmi) {
-			had_hdmi = has_hdmi;
-			SetHDMI(has_hdmi);
-		}
-		else if (has_hdmi && !getInt(BACKLIGHT_PATH)) {
-			SetHDMI(has_hdmi);
-		}
-		
-		
 	}
 	
 	return 0;

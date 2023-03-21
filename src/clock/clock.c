@@ -232,11 +232,10 @@ int main(int argc , char* argv[]) {
 		
 		POW_update(&dirty, &show_setting, NULL,NULL);
 		
-		int resized = GFX_autosize(&screen, &dirty);
 		if (dirty) {
 			validate();
 
-			if (!resized) GFX_clear(screen); // resizing clears the screen
+			GFX_clear(screen);
 			
 			GFX_blitHardwareGroup(screen, show_setting);
 			

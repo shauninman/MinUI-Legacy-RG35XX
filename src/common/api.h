@@ -27,12 +27,6 @@ void LOG_note(int level, const char* fmt, ...);
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
 #define FIXED_SIZE		(FIXED_PITCH * FIXED_HEIGHT)
 
-#define HDMI_WIDTH 1280
-#define HDMI_HEIGHT 720
-#define HDMI_PITCH HDMI_WIDTH * FIXED_BPP
-#define HDMI_SIZE HDMI_HEIGHT * HDMI_PITCH
-#define HDMI_MENU_WIDTH 856 // FIXED_WIDTH * FIXED_HEIGHT / HDMI_HEIGHT rounded up to nearest 8
-
 #define PAGE_COUNT	2
 #define PAGE_SCALE	3
 #define PAGE_WIDTH	(FIXED_WIDTH * PAGE_SCALE)
@@ -101,7 +95,6 @@ SDL_Surface* GFX_init(int mode);
 SDL_Surface* GFX_resize(int width, int height, int pitch);
 void GFX_setScaleClip(int x, int y, int width, int height);
 void GFX_setNearestNeighbor(int enabled);
-int GFX_autosize(SDL_Surface** screen, int* dirty);
 void GFX_setMode(int mode);
 void GFX_clear(SDL_Surface* screen);
 void GFX_clearAll(void);
