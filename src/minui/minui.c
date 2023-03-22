@@ -1493,7 +1493,6 @@ int main (int argc, char *argv[]) {
 	}
 	
 	if (version) SDL_FreeSurface(version);
-	SDL_FreeSurface(screen);
 
 	Menu_quit();
 	POW_quit();
