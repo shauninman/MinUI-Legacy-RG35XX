@@ -1391,7 +1391,7 @@ static void POW_quitOverlay(void) {
 static void POW_updateBatteryStatus(void) {
 	pow.is_charging = getInt("/sys/class/power_supply/battery/charger_online");
 	
-	// TODO: newer batteries have a different range, ???-420
+	// TODO: newer batteries have a different range, ???-???
 	int i = getInt("/sys/class/power_supply/battery/voltage_now") / 10000; // 310-410
 	i -= 310; 	// ~0-100
 

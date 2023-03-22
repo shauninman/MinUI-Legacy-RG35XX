@@ -40,11 +40,11 @@ Following Instructions 101
 ----------------------------------------
 Install
 
-MinUI is meant to be installed over a working stock TF1. The official Anbernic image requires a 64GB SD card: 
+MinUI is meant to be installed over a working stock TF1. The official Anbernic image requires a 64GB or larger SD card: 
 
   https://drive.google.com/drive/folders/1HfGCxkratM_zYiYfGWCrHZ1AynO3hIwU 
   
-Or you can download a reduced image that can be flashed to a 4GB SD card:
+Or you can download a reduced image that can be flashed to a 4GB or larger SD card:
 
   https://github.com/shauninman/union-minui/releases/tag/stock-tf1-20230309
 
@@ -66,7 +66,9 @@ Shortcuts
 
 Reduce/increase brightness:
 
-MENU + VOLUME UP or VOLUME DOWN
+  MENU + VOLUME UP or VOLUME DOWN
+
+The remaining emulation shortcuts are all user defined.
 
 ----------------------------------------
 Roms

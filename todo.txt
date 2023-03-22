@@ -5,29 +5,26 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
-- added support for newer hardware revisions which:
-- broke already incomplete hdmi support
-- broke in-game low battery icon
-- increased how long boot feels (power LED doesn't come on as early as previous versions of MinUI which used a custom uImage)
+- removed incomplete hdmi support (won't support codepath I won't use, ergonomics are all wrong)
 
 **Extras**
 - 
 
 -------------------------------
 
-return to alpha
-
-regressions:
-	hdmi is an unknown
-	lost in-game low battery overlay
+api
+	battery ramp is wrong for bigger battery
+	rewrite scaling logic
+	rewrite overlay
+	move scanlines/grid to overlay?
+	
+more regressions
+	slow power led
+	prevents power on with more than enough power
 
 BUG:
 	minui.elf treats bare tag rom folders as empty
 	
-rewrite
-	selectScaler
-restore overlay
-
 minarch
 	some cores can only fast forward with prevent tearing off
 		can this be set as an override preference?
@@ -53,45 +50,6 @@ minarch
 		the requirements for resolution independence...
 		and because I'll need a self-contained implementation to be able to address the unique quirks of each platform I want to support
 
-add most recent uImage/kernel changes
-	wait till things settle
-	keep an eye on gpu work
-		not interested in tripling boot time for gpu access
-		I would never pick up the device again if it took that long to boot
-
-hdmi
-	I might this off as a novelty
-		it's a distraction
-		my time is better spent unionizing this for the Mini
-	minarch menu
-		need to figure out how to create a 4:3 thumb from a distorted framebuffer
-		should be able to reconstruct it with screen->w|h and renderer.(src|dst)_(w|h)
-			just need to downsample to a cropped region of the source
-			or keep the libretro buffer data and use that to create the snapshot and resized backing
-				
-	audio
-		the following works if we boot with hdmi attached but hangs/crashes when we disconnect hdmi
-			I imagine the crash is because SDL is trying to write to a device that is no longer present
-			the hang is the result of the audio callback stopping maybe?
-			no, it's hanging in SDL_CloseAudio()
-				could this have something to do with env vars?
-				eggs had a similar crash with another (something like NO BLANK ON QUIT) flag
-		
-			if (GetHDMI()) SDL_putenv("AUDIODEV=plughw:0,1");
-			else SDL_putenv("AUDIODEV=default");
-		
-	usb contollers
-	prevent sleep (auto or manual) when on hdmi
-		should show a message saying sleep is disabled on hdmi or
-		turn off mirroring while asleep
-		I still think sleep on HDMI is a bad idea unless connected to power...
-
-
-create a clean image to flash and install over
-	advanced users seem to be confused about how simple it is tow install :sweat_smile:
-	this might be difficult with the gpio revs on newer devices
-
-
 minui
 	- 
 
@@ -100,14 +58,13 @@ misc
 	port say, show, blank, and confirm
 	make my own simple file browser? :sweat_smile:
 
-checkout eggs tools
-	I wonder if I could patch in Commander-11, BPreplayBold is too bold at that size
+commander
+	create a commander-11-mono for text views?
 
 cores
 	vb
 		launching directly into native scaling has normal performance
 		but launching into aspect and switching to native tanks the framerate
-		conversely aspect runs terrible on hdmi (~45fps) but native runs fine
 	pcsx-rearmed
 		reset hangs the PlayStation emulator core
 		Tekken 3 freezes PlayStation emulator core while fast-forwarding after a while
