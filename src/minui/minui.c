@@ -781,26 +781,27 @@ static Array* getEntries(char* path){
 		char collated_path[256];
 		strcpy(collated_path, path);
 		char* tmp = strrchr(collated_path, '(');
-		if (tmp) {
-			tmp[1] = '\0'; // 1 because we want to keep the opening parenthesis to avoid collating "Game Boy Color" and "Game Boy Advance" into "Game Boy"
-
-			DIR *dh = opendir(ROMS_PATH);
-			if (dh!=NULL) {
-				struct dirent *dp;
-				char full_path[256];
-				sprintf(full_path, "%s/", ROMS_PATH);
-				tmp = full_path + strlen(full_path);
-				// while loop so we can collate paths, see above
-				while((dp = readdir(dh)) != NULL) {
-					if (hide(dp->d_name)) continue;
-					if (dp->d_type!=DT_DIR) continue;
-					strcpy(tmp, dp->d_name);
-				
-					if (!prefixMatch(collated_path, full_path)) continue;
-					addEntries(entries, full_path);
-				}
-				closedir(dh);
+		// 1 because we want to keep the opening parenthesis to avoid collating "Game Boy Color" and "Game Boy Advance" into "Game Boy"
+		// but conditional so we can continue to support a bare tag name as a folder name
+		if (tmp) tmp[1] = '\0'; 
+		
+		DIR *dh = opendir(ROMS_PATH);
+		if (dh!=NULL) {
+			struct dirent *dp;
+			char full_path[256];
+			sprintf(full_path, "%s/", ROMS_PATH);
+			tmp = full_path + strlen(full_path);
+			LOG_info("%s\n", full_path);
+			// while loop so we can collate paths, see above
+			while((dp = readdir(dh)) != NULL) {
+				if (hide(dp->d_name)) continue;
+				if (dp->d_type!=DT_DIR) continue;
+				strcpy(tmp, dp->d_name);
+			
+				if (!prefixMatch(collated_path, full_path)) continue;
+				addEntries(entries, full_path);
 			}
+			closedir(dh);
 		}
 	}
 	else addEntries(entries, path); // just a subfolder
