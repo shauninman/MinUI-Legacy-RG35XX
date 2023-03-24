@@ -791,7 +791,6 @@ static Array* getEntries(char* path){
 			char full_path[256];
 			sprintf(full_path, "%s/", ROMS_PATH);
 			tmp = full_path + strlen(full_path);
-			LOG_info("%s\n", full_path);
 			// while loop so we can collate paths, see above
 			while((dp = readdir(dh)) != NULL) {
 				if (hide(dp->d_name)) continue;

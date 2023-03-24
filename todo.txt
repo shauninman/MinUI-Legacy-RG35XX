@@ -12,8 +12,12 @@ Please see the README.txt in the zip file for installation and update instructio
 
 -------------------------------
 
+bugs
+	- 
+
 api
 	battery ramp is wrong for bigger battery
+		need to log drain
 	rewrite scaling logic
 	rewrite overlay
 	move scanlines/grid to overlay?
@@ -22,8 +26,6 @@ more regressions
 	slow power led
 	prevents power on with more than enough power
 
-BUG:
-	minui.elf treats bare tag rom folders as empty
 	
 minarch
 	some cores can only fast forward with prevent tearing off
