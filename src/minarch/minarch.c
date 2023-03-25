@@ -3019,6 +3019,7 @@ void Menu_quit(void) {
 	SDL_FreeSurface(menu.overlay);
 }
 void Menu_beforeSleep(void) {
+	SRAM_write();
 	State_autosave();
 	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
 	POW_setCPUSpeed(CPU_SPEED_MENU);
@@ -3836,6 +3837,7 @@ static void Menu_loop(void) {
 		screen = GFX_resize(SCREEN_WIDTH,SCREEN_HEIGHT,SCREEN_PITCH);
 	}
 	
+	SRAM_write();
 	POW_warn(0);
 	POW_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 	GFX_setVsync(VSYNC_STRICT);

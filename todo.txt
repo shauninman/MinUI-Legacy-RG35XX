@@ -5,14 +5,20 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
+- fixed mistaking bare tag name folders as empty
 - removed incomplete hdmi support (won't support codepaths I won't use, ergonomics are all wrong)
 - restored low battery overlay
+- fixed disappearing in-game save data that may occur after quicksave/auto-resume
 
 **Extras**
 - 
 
 -------------------------------
 
+review the original Union for workflows 
+	for building multiple platforms 
+	from a single make call
+	
 bugs
 	- 
 
@@ -106,3 +112,14 @@ keymon
 	jack
 		instead of manually polling once a second use poll()?
 
+tired ramblings
+	why did I include the extension in save names?
+		the rare case where one core/TAG emulate multiple platforms with games of the same name but different extension
+			eg. picodrive
+				Sonic The Hedgehog (USA, Europe).md
+				Sonic The Hedgehog (USA, Europe).sms
+		the rare case you have two versions of the same game with different extensions?
+			eg. ffiii.fig / ffiii.sfc / ffiii.smc
+		concerns about removing too much of a filename when stripping the extension and creating collisions that way?
+		or was it just easier to not have to remove the extension when building paths
+			I mean yes but taken in aggregate I think the above issues justify the decision
