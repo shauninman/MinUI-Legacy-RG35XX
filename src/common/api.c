@@ -99,6 +99,7 @@ static void ion_free(int fd_ion, ion_alloc_info_t* info) {
 
 #define	DE		(0xB02E0000)
 #define	DE_SIZE	(0x00002000)
+static int de_enable_overlay = 0;
 enum {
 	DE_SCOEF_NONE,
 	DE_SCOEF_CRISPY,
@@ -164,7 +165,7 @@ static void DE_setScaleCoef(uint32_t* de_mem, int plane, int scale) {
 	}
 }
 static void DE_enableLayer(uint32_t* de_mem) {
-	de_mem[DE_PATH_CTL(0)/4] = 0x30100000 | (de_mem[DE_PATH_CTL(0)/4] & 0xCF0FFFFF);
+	de_mem[DE_PATH_CTL(0)/4] = (de_enable_overlay?0x30300000:0x30100000) | (de_mem[DE_PATH_CTL(0)/4] & 0xCF0FFFFF);
 }
 static void DE_setRect(uint32_t* de_mem, int x, int y, int w, int h) {
 	de_mem[(DE_OVL_OSIZE(0))/4] = ((w-1)&0xFFFF) | ((h-1)<<16);
@@ -358,6 +359,7 @@ static struct POW_Context {
 	struct owlfb_overlay_info oinfo;
 
 	SDL_Surface* overlay;
+	ion_alloc_info_t ov_info;
 } pow;
 
 ///////////////////////////////
@@ -519,7 +521,6 @@ static void POW_flipOverlay(void);
 void GFX_flip(SDL_Surface* screen) {
 	gfx.de_mem[DE_OVL_BA0(0)/4] = gfx.de_mem[DE_OVL_BA0(2)/4] = (uintptr_t)(gfx.fb_info.padd + gfx.page * PAGE_SIZE);
 	DE_enableLayer(gfx.de_mem);
-	POW_flipOverlay();
 
 	if (gfx.vsync!=VSYNC_OFF) {
 		// this limiting condition helps SuperFX chip games
@@ -1329,63 +1330,62 @@ int VIB_getStrength(void) {
 #define OVERLAY_FB 0
 #define OVERLAY_ID 1
 static void POW_initOverlay(void) {
-	// // setup surface
-	// pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
-	// uint32_t size = pow.overlay->h * pow.overlay->pitch;
-	// uint32_t offset = (gfx.fb_info.size - size)&(~4095);
-	// pow.overlay->pixels = gfx.fb_info.vadd + offset;
-	// memset(pow.overlay->pixels, 0xff, size);
-	//
-	// // draw battery
-	// SDL_SetAlpha(gfx.assets, 0,0);
-	// GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
-	// SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
-	// GFX_blitBattery(pow.overlay, NULL);
-	//
-	// // setup overlay
-	// memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	// pow.oargs.fb_id = OVERLAY_FB;
-	// pow.oargs.overlay_id = OVERLAY_ID;
-	// pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
-	// pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
-	//
-	// int x,y,w,h;
-	// w = h = pow.overlay->w;
-	// x = SCREEN_WIDTH - SCALE1(PADDING) - w;
-	// y = SCALE1(PADDING);
-	//
-	// pow.oinfo.mem_off = offset;
-	// pow.oinfo.mem_size = size;
-	// pow.oinfo.screen_width = PAGE_WIDTH; // ???
-	// pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
-	// pow.oinfo.img_width = w;
-	// pow.oinfo.img_height = h;
-	// pow.oinfo.xoff = 0;
-	// pow.oinfo.yoff = 0;
-	// pow.oinfo.width = w;
-	// pow.oinfo.height = h;
-	// pow.oinfo.rotation = 0;
-	// pow.oinfo.pos_x = x;	// position
-	// pow.oinfo.pos_y = y;	//
-	// pow.oinfo.out_width = w;	// scaled size
-	// pow.oinfo.out_height = h;	//
-	// pow.oinfo.global_alpha_en = 0;
-	// pow.oinfo.global_alpha = 0;
-	// pow.oinfo.pre_mult_alpha_en = 0;
-	// pow.oinfo.zorder = 3;
-}
-static void POW_flipOverlay(void) {
-	// if (pow.should_warn && pow.charge<=POW_LOW_CHARGE) ioctl(gfx.fd_fb, OWLFB_OVERLAY_SETINFO, &pow.oargs);
+	// setup surface
+	pow.overlay = SDL_CreateRGBSurfaceFrom(NULL,SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,SCALE1(OVERLAY_PITCH), OVERLAY_RGBA_MASK);
+	uint32_t size = pow.overlay->h * pow.overlay->pitch;
+	pow.ov_info.size = size;
+	ion_alloc(gfx.fd_ion, &pow.ov_info);
+	pow.overlay->pixels = pow.ov_info.vadd;
+	memset(pow.overlay->pixels, 0xff, size);
+
+	// draw battery
+	SDL_SetAlpha(gfx.assets, 0,0);
+	GFX_blitAsset(ASSET_BLACK_PILL, NULL, pow.overlay, NULL);
+	SDL_SetAlpha(gfx.assets, SDL_SRCALPHA,0);
+	GFX_blitBattery(pow.overlay, NULL);
+
+	// setup overlay
+	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	pow.oargs.fb_id = OVERLAY_FB;
+	pow.oargs.overlay_id = OVERLAY_ID;
+	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	pow.oargs.uintptr_overly_info = (uintptr_t)&pow.oinfo;
+
+	int x,y,w,h;
+	w = h = pow.overlay->w;
+	x = SCREEN_WIDTH - SCALE1(PADDING) - w;
+	y = SCALE1(PADDING);
+
+	pow.oinfo.mem_off = (uintptr_t)pow.ov_info.padd - gfx.finfo.smem_start;
+	pow.oinfo.mem_size = size;
+	pow.oinfo.screen_width = PAGE_WIDTH; // ???
+	pow.oinfo.color_mode = OWL_DSS_COLOR_ARGB32;
+	pow.oinfo.img_width = w;
+	pow.oinfo.img_height = h;
+	pow.oinfo.xoff = 0;
+	pow.oinfo.yoff = 0;
+	pow.oinfo.width = w;
+	pow.oinfo.height = h;
+	pow.oinfo.rotation = 0;
+	pow.oinfo.pos_x = x;	// position
+	pow.oinfo.pos_y = y;	//
+	pow.oinfo.out_width = w;	// scaled size
+	pow.oinfo.out_height = h;	//
+	pow.oinfo.global_alpha_en = 0;
+	pow.oinfo.global_alpha = 0;
+	pow.oinfo.pre_mult_alpha_en = 0;
+	pow.oinfo.zorder = 3;
 }
 static void POW_quitOverlay(void) {
-	// if (pow.overlay) SDL_FreeSurface(pow.overlay);
-	//
-	// memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
-	// pow.oargs.fb_id = OVERLAY_FB;
-	// pow.oargs.overlay_id = OVERLAY_ID;
-	// pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
-	// pow.oargs.uintptr_overly_info = 0;
-	// ioctl(gfx.fd_fb, OWLFB_OVERLAY_DISABLE, &pow.oargs);
+	if (pow.overlay) SDL_FreeSurface(pow.overlay);
+	ion_free(gfx.fd_ion, &pow.ov_info);
+
+	memset(&pow.oargs, 0, sizeof(struct owlfb_overlay_args));
+	pow.oargs.fb_id = OVERLAY_FB;
+	pow.oargs.overlay_id = OVERLAY_ID;
+	pow.oargs.overlay_type = OWLFB_OVERLAY_VIDEO;
+	pow.oargs.uintptr_overly_info = 0;
+	ioctl(gfx.fd_fb, OWLFB_OVERLAY_DISABLE, &pow.oargs);
 }
 
 static void POW_updateBatteryStatus(void) {
@@ -1405,6 +1405,8 @@ static void POW_updateBatteryStatus(void) {
 	
 	// LOG_info("battery charge: %i (%i) charging: %i\n", pow.charge, i, pow.is_charging);
 	// pow.charge = POW_LOW_CHARGE;
+	
+	de_enable_overlay = pow.should_warn && pow.charge<=POW_LOW_CHARGE;
 }
 
 static void* POW_monitorBattery(void *arg) {
@@ -1437,6 +1439,7 @@ void POW_quit(void) {
 }
 void POW_warn(int enable) {
 	pow.should_warn = enable;
+	de_enable_overlay = pow.should_warn && pow.charge<=POW_LOW_CHARGE;
 }
 
 void POW_update(int* _dirty, int* _show_setting, POW_callback_t before_sleep, POW_callback_t after_sleep) {

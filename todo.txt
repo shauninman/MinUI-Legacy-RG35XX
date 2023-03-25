@@ -5,7 +5,8 @@
 Please see the README.txt in the zip file for installation and update instructions.
 
 **Base**
-- removed incomplete hdmi support (won't support codepath I won't use, ergonomics are all wrong)
+- removed incomplete hdmi support (won't support codepaths I won't use, ergonomics are all wrong)
+- restored low battery overlay
 
 **Extras**
 - 
@@ -75,6 +76,7 @@ cores
 		would need to set up disabling autosleep and 
 		warning about lack of autosave and 
 		update ui for lack of save states, etc
+		blech, getting pretty tired of all of this
 	
 	
 Union-ize this?
