@@ -20,7 +20,7 @@ review the original Union for workflows
 	from a single make call
 	
 bugs
-	- 
+	- mgba needs deferred resume patch on rg35xx after all :grimace:
 
 api
 	battery ramp is wrong for bigger battery

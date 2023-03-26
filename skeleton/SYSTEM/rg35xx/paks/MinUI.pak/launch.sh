@@ -34,14 +34,14 @@ if [ -f "$AUTO_PATH" ]; then
 	"$AUTO_PATH" # &> $LOGS_PATH/auto.txt
 fi
 
+cd $(dirname "$0")
+
 #######################################
 
 keymon.elf & # &> $LOGS_PATH/keymon.txt &
 # ./batmon.sh &> /mnt/sdcard/batmon.txt &
 
 #######################################
-
-cd $(dirname "$0")
 
 EXEC_PATH=/tmp/minui_exec
 NEXT_PATH="/tmp/next"
